@@ -5,7 +5,7 @@ extends RefCounted
 
 signal changed
 
-var match_ref                      # WQMatch (ไม่ประกาศ type เพื่อเลี่ยง cyclic dependency)
+var match_ref: WQMatch             # Godot 4 ผูก class_name ผ่าน global class cache จึงประกาศ type ตรงๆ ได้
 var pname: String = ""
 var is_ai := false
 var job: Dictionary = {}
@@ -191,13 +191,13 @@ func close_deal(deal_id: int) -> Dictionary:
 	if i < 0: return _fail("ดีลนี้ถูกคนอื่นคว้าไปแล้ว")
 	var d: Dictionary = match_ref.deals[i]
 	var price: float = round(d.price * 0.9) if job.perkId == "discount" else float(d.price)
-	var down := round(price * (float(d.down) / float(d.price)))
+	var down := roundf(price * (float(d.down) / float(d.price)))
 	var debt := price - down
 	if cash < down: return _fail("เงินสดไม่พอจ่ายเงินดาวน์")
 	if debt > get_credit_left(): return _fail("วงเงินกู้ไม่พอ ต้องลดหนี้ก่อน")
 	hours -= h
 	cash -= down
-	var income := round(d.income * (price / float(d.price)))
+	var income := roundf(d.income * (price / float(d.price)))
 	if debt > 0:
 		liabilities.append({"name": "สินเชื่อ: " + d.name, "balance": debt,
 			"rate": float(WQData.cfg.mortgage), "linked": d.id})
@@ -225,7 +225,7 @@ func sell_asset(asset_id: int) -> Dictionary:
 		if liabilities[k].get("linked", -1) == a.id:
 			liabilities.remove_at(k); break
 	assets.remove_at(i)
-	var gain := price - a.value
+	var gain: float = price - float(a.value)
 	_log("ขาย %s %s ได้ %d บาท" % [a.icon, a.name, int(price)], "sell" if gain >= 0 else "bad")
 	changed.emit()
 	return {"ok": true}
@@ -237,7 +237,7 @@ func take_loan(amount: float) -> Dictionary:
 	if amount <= 0: return _fail("จำนวนไม่ถูกต้อง")
 	if amount > get_credit_left(): return _fail("เกินวงเงินกู้")
 	hours -= c
-	var soft := job.perkId == "credit" or job.perkId == "stable"
+	var soft: bool = job.perkId == "credit" or job.perkId == "stable"
 	var rate: float = float(WQData.cfg.loan_rate_soft) if soft else float(WQData.cfg.loan_rate)
 	liabilities.append({"name": "สินเชื่อส่วนบุคคล", "balance": amount, "rate": rate})
 	cash += amount
@@ -252,7 +252,7 @@ func repay_debt(index: int, amount: float) -> Dictionary:
 	var d: Dictionary = liabilities[index]
 	amount = floor(min(amount, min(d.balance, cash)))
 	if amount <= 0: return _fail("จำนวนไม่ถูกต้อง")
-	var saved := amount * d.rate * match_ref.get_mods().rate
+	var saved: float = amount * float(d.rate) * match_ref.get_mods().rate
 	cash -= amount
 	d.balance -= amount
 	var closed: bool = d.balance < 1
@@ -270,7 +270,7 @@ func side_job() -> Dictionary:
 	if side_used >= int(WQData.cfg.side_job_max_count): return _fail("รับงานเสริมได้สูงสุด 3 ครั้ง/เดือน")
 	hours -= c; side_used += 1
 	var mul := 1.5 if job.perkId == "hustle" else 1.0
-	var gain := round(salary * match_ref.rng.range_f(WQData.cfg.side_job_min, WQData.cfg.side_job_max) * mul)
+	var gain := roundf(salary * match_ref.rng.range_f(WQData.cfg.side_job_min, WQData.cfg.side_job_max) * mul)
 	cash += gain
 	if not is_ai: _log("รับงานเสริม %d ชม. ได้ %d บาท" % [c, int(gain)], "work")
 	changed.emit()
@@ -290,7 +290,7 @@ func scout() -> Dictionary:
 func study() -> Dictionary:
 	var c := int(WQData.cfg.action_cost.study)
 	if not can_spend(c): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % c)
-	var fee := round(salary * float(WQData.cfg.study_fee_ratio))
+	var fee := roundf(salary * float(WQData.cfg.study_fee_ratio))
 	if cash < fee: return _fail("ค่าเรียน %d บาท — เงินสดไม่พอ" % int(fee))
 	hours -= c; cash -= fee
 	study_progress += 1.5 if job.perkId == "hustle" else 1.0
@@ -377,7 +377,7 @@ func settle() -> void:
 	health = clampf(health + dh, 0, 100)
 
 	if health < 25 and r.next() < 0.30:
-		var bill := round(get_total_expenses() * (1.2 + r.next() * 1.6) * get_med_factor())
+		var bill := roundf(get_total_expenses() * (1.2 + r.next() * 1.6) * get_med_factor())
 		cash -= bill
 		downsize_left = maxi(downsize_left, 1)
 		time_penalty += 90
@@ -396,7 +396,7 @@ func settle() -> void:
 			a.sick = 2 + r.range_i(3)
 
 	if cash < 0:
-		var need := ceil(-cash / 10000.0) * 10000.0
+		var need := ceilf(-cash / 10000.0) * 10000.0
 		liabilities.append({"name": "บัตรกดเงินสด (ดอกโหด)", "balance": need, "rate": float(cfg.emergency_rate)})
 		cash += need
 		_log("🚨 เงินสดไม่พอ! ต้องกดบัตรเงินสด %d บาท" % int(need), "bad")
@@ -451,11 +451,11 @@ func roll_event() -> void:
 	var med := get_med_factor() if ev.get("health", false) else 1.0
 
 	if ev.has("costMul"):
-		var c := round(base * r.range_f(ev.costMul[0], ev.costMul[1]) * frugal * med)
+		var c := roundf(base * r.range_f(ev.costMul[0], ev.costMul[1]) * frugal * med)
 		cash -= c
 		_log("❗ %s −%d บาท" % [ev.text, int(c)], "bad")
 	elif ev.has("gainMul"):
-		var g := round(base * r.range_f(ev.gainMul[0], ev.gainMul[1]))
+		var g := roundf(base * r.range_f(ev.gainMul[0], ev.gainMul[1]))
 		cash += g
 		_log("✨ %s +%d บาท" % [ev.text, int(g)], "good"); return
 	elif ev.has("raise"):
@@ -468,7 +468,7 @@ func roll_event() -> void:
 		match_ref.market_index = clampf(match_ref.market_index * (1.0 + mk), 0.55, 1.9)
 		_log(ev.text, "good" if mk > 0 else "bad"); return
 	elif ev.has("childMul"):
-		var cc := round(base * r.range_f(ev.childMul[0], ev.childMul[1]))
+		var cc := roundf(base * r.range_f(ev.childMul[0], ev.childMul[1]))
 		child_cost += cc
 		if ev.has("childHours"): child_hours += int(ev.childHours)
 		_log("👶 %s" % ev.text, "bad"); return

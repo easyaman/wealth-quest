@@ -40,8 +40,8 @@ static func take_turn(p) -> void:
 			var price: float = d.price * 0.9 if p.job.perkId == "discount" else float(d.price)
 			var down := price * (float(d.down) / float(d.price))
 			var debt := price - down
-			var cf := d.income * (price / float(d.price)) - debt * float(cfg.mortgage)
-			var roi := 0.022 if d.kind == "speculation" else cf / maxf(1.0, down)
+			var cf: float = d.income * (price / float(d.price)) - debt * float(cfg.mortgage)
+			var roi: float = 0.022 if d.kind == "speculation" else cf / maxf(1.0, down)
 			if p.cash - down > p.get_total_expenses() * 0.5 and debt <= p.get_credit_left() and roi > best_roi:
 				best_roi = roi; best_deal = d
 		if best_deal != null and p.can_spend(p.action_cost(int(cfg.action_cost.deal))):

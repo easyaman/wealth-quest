@@ -76,16 +76,22 @@ func begin_month() -> void:
 	run_ai_turns()
 
 func run_ai_turns() -> void:
-	while state == "playing" and turn < players.size():
-		var p = get_current()
-		if p.is_ai:
-			if not p.bankrupt and p.phase < 3: WQAi.take_turn(p)
-			turn += 1
-		elif p.bankrupt or p.phase == 3:
-			turn += 1
-		else:
-			break
-	if turn >= players.size(): end_month()
+	# ต้องเป็นลูป ไม่ใช่การเรียกซ้อน — เดิม begin_month → run_ai_turns → end_month → begin_month
+	# วนซ้อนกันเดือนละชั้น พอเป็นเกมบอทล้วนที่ยาว 100+ เดือน stack ของ GDScript ก็ล้น
+	# (ฝั่ง JS รอดเพราะ stack ของ V8 ใหญ่กว่ามาก แต่โครงสร้างเดียวกัน)
+	while true:
+		while state == "playing" and turn < players.size():
+			var p = get_current()
+			if p.is_ai:
+				if not p.bankrupt and p.phase < 3: WQAi.take_turn(p)
+				turn += 1
+			elif p.bankrupt or p.phase == 3:
+				turn += 1
+			else:
+				return          # ถึงตาคนจริงแล้ว — หยุดรอ
+		if turn < players.size(): return
+		if not end_month(): return   # เกมจบ
+		# end_month ตั้งเดือนใหม่ให้แล้ว วนต่อในลูปเดิมโดยไม่กิน stack เพิ่ม
 
 func end_turn() -> void:
 	if state != "playing": return
@@ -131,7 +137,7 @@ func tick_disasters() -> void:
 			p.food_base = round(p.food_base * (1.0 + float(def.inflate)))
 		if def.has("cashCostMul"):
 			var frugal := 0.6 if p.job.perkId == "frugal" else 1.0
-			var c := round(p.get_total_expenses() * rng.range_f(def.cashCostMul[0], def.cashCostMul[1]) * frugal)
+			var c := roundf(p.get_total_expenses() * rng.range_f(def.cashCostMul[0], def.cashCostMul[1]) * frugal)
 			p.cash -= c
 			log_line("%s ผลกระทบจาก%s −%d บาท" % [def.icon, def.name, int(c)], "bad", p)
 		if def.get("burnAsset", false):
@@ -169,10 +175,10 @@ func make_deal(force_big := false, max_down := 0.0) -> Dictionary:
 
 	if max_down <= 0 and any_phase2 and rng.next() < 0.38:
 		var t: Dictionary = WQData.mega_deals[rng.range_i(WQData.mega_deals.size())]
-		var price := maxf(1000000.0, round(richest * (0.15 + rng.next() * 0.5) / 100000.0) * 100000.0)
+		var price := maxf(1000000.0, roundf(richest * (0.15 + rng.next() * 0.5) / 100000.0) * 100000.0)
 		var dp := rng.range_f(t.downPct[0], t.downPct[1])
-		var down := round(price * dp)
-		var income := round(price * rng.range_f(t.yield[0], t.yield[1]))
+		var down := roundf(price * dp)
+		var income := roundf(price * rng.range_f(t.yield[0], t.yield[1]))
 		return _deal(t, price, down, price - down, income, true, true)
 
 	var big := force_big or (max_down <= 0 and richest > 4000000.0 and rng.next() < 0.30)
@@ -181,9 +187,9 @@ func make_deal(force_big := false, max_down := 0.0) -> Dictionary:
 	var step := 100000.0 if float(t2.min) >= 1000000 else (10000.0 if float(t2.min) >= 100000 else 1000.0)
 	var hi := float(t2.max)
 	if max_down > 0: hi = minf(hi, maxf(float(t2.min), max_down / float(t2.downPct[0])))
-	var price2 := round(rng.range_f(float(t2.min), hi) / step) * step
-	var down2 := round(price2 * rng.range_f(t2.downPct[0], t2.downPct[1]))
-	var income2 := round(price2 * rng.range_f(t2.yield[0], t2.yield[1]))
+	var price2 := roundf(rng.range_f(float(t2.min), hi) / step) * step
+	var down2 := roundf(price2 * rng.range_f(t2.downPct[0], t2.downPct[1]))
+	var income2 := roundf(price2 * rng.range_f(t2.yield[0], t2.yield[1]))
 	return _deal(t2, price2, down2, price2 - down2, income2, big, false)
 
 func _deal(t: Dictionary, price: float, down: float, debt: float, income: float, big: bool, mega: bool) -> Dictionary:
@@ -218,8 +224,9 @@ func _count_cheap(limit: float) -> int:
 	return n
 
 # ========== สิ้นเดือน ==========
-func end_month() -> void:
-	if month >= MAX_MONTHS: state = "over"; match_over.emit(); return
+func end_month() -> bool:
+	## คืน true ถ้าขึ้นเดือนใหม่แล้วเล่นต่อได้ · false ถ้าแมตช์จบ
+	if month >= MAX_MONTHS: state = "over"; match_over.emit(); return false
 	market_trend = market_trend * 0.6 + (rng.next() - 0.5) * 0.04
 	market_index = clampf(market_index * (1.0 + market_trend), 0.55, 1.9)
 
@@ -242,11 +249,12 @@ func end_month() -> void:
 	for p in watch:
 		if not p.bankrupt and p.phase < 3: still += 1
 	if still == 0:
-		state = "over"; match_over.emit(); return
+		state = "over"; match_over.emit(); return false
 
 	month += 1
 	start_index = (start_index + 1) % players.size()
-	begin_month()
+	turn = 0
+	return true
 
 func standings() -> Array:
 	var arr := players.duplicate()

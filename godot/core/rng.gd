@@ -12,9 +12,12 @@ func next() -> float:
 	var a := (s + 0x6D2B79F5) & 0xFFFFFFFF
 	s = a
 	var t := _imul(a ^ (a >> 15), 1 | a)
-	t = (t + _imul(t ^ (t >> 7), 61 | t)) & 0xFFFFFFFF
-	t = t ^ (t >> 14)
-	return float(t & 0xFFFFFFFF) / 4294967296.0
+	# JS: t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+	# ต้องตัดผลบวกให้เหลือ 32 บิตก่อน แล้วค่อย XOR กับ t (เหมือนที่ ^ ของ JS บังคับ ToInt32)
+	# เดิมพอร์ตมาเป็น & 0xFFFFFFFF เฉยๆ ทำให้ ^ t หายไป ตัวสุ่มจึงไม่ตรงกับ JS เลย
+	t = (((t + _imul(t ^ (t >> 7), 61 | t)) & 0xFFFFFFFF) ^ t) & 0xFFFFFFFF
+	t = (t ^ (t >> 14)) & 0xFFFFFFFF
+	return float(t) / 4294967296.0
 
 func range_f(lo: float, hi: float) -> float:
 	return lo + next() * (hi - lo)

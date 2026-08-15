@@ -17,3 +17,6 @@ Thumbs.db
 node_modules/
 /tmp/
 *.log
+
+# Godot import cache (สร้างใหม่ได้ด้วย godot --headless --import)
+godot/.godot/

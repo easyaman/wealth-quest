@@ -752,6 +752,11 @@ class Player {
   }
 
   /* ---------- Phase 2 ---------- */
+  /* ทอยเต๋าสุ่มความฝัน — ต้องใช้ตัวสุ่มของแมตช์เท่านั้น ห้ามใช้ Math.random ใน UI
+     เพราะ state ของตัวสุ่มอยู่ในไฟล์เซฟ (ข้อ 14.2) ถ้าไม่ผูกกัน ผู้เล่นจะเซฟแล้ว
+     โหลดทอยใหม่จนกว่าจะได้ความฝันที่ถูกที่สุด — ต่างกันได้ถึง 2.3 เท่า (×30 กับ ×70) */
+  rollDream() { return 1 + Math.floor(this.rng() * DREAMS.length); }
+
   enterPhase2(dream, retire) {
     this.phase = 2; this.pendingDream = false;
     const exp = this.totalExpenses;

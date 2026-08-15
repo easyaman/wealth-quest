@@ -144,6 +144,28 @@ test('โหลดแล้วเล่นต่อได้โดยไม่ c
   assert.ok(b.month > m.month, 'เกมต้องเดินหน้าต่อได้หลังโหลด');
 });
 
+test('ทอยความฝันต้องผูกกับตัวสุ่มของแมตช์ — เซฟแล้วโหลดทอยใหม่ต้องได้ผลเดิม', () => {
+  const m = humanMatch(8080);
+  const save = JSON.stringify(m.serialize());
+
+  // ผู้เล่นที่พยายาม save-scum: โหลดไฟล์เดิมสิบครั้ง แล้วทอยความฝันใหม่ทุกครั้ง
+  const rolls = [];
+  for (let i = 0; i < 10; i++) {
+    rolls.push(E.Match.load(JSON.parse(save)).players[0].rollDream());
+  }
+  assert.strictEqual(new Set(rolls).size, 1,
+    `โหลดไฟล์เดิมแล้วทอยได้ผลต่างกัน (${[...new Set(rolls)].join(',')}) — ผู้เล่นทอยใหม่จนได้ความฝันที่ถูกที่สุดได้`);
+
+  const n = rolls[0];
+  assert.ok(Number.isInteger(n) && n >= 1 && n <= E.DREAMS.length, `แต้มความฝันหลุดช่วง: ${n}`);
+});
+
+test('ทอยความฝันเดินตัวสุ่มไปข้างหน้า — ทอยใหม่ในเกมเดียวกันได้ผลต่างกันได้', () => {
+  const p = humanMatch(9090).players[0];
+  const rolls = Array.from({ length: 40 }, () => p.rollDream());
+  assert.ok(new Set(rolls).size > 1, 'ทอย 40 ครั้งในเกมเดียวกันได้ค่าเดิมตลอด — ตัวสุ่มไม่เดิน');
+});
+
 test('ปฏิเสธไฟล์เซฟคนละเวอร์ชันอย่างสุภาพ', () => {
   const save = humanMatch().serialize();
   save.v = 3;

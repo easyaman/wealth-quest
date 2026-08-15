@@ -481,7 +481,7 @@ function showDreamRoll(p){
 }
 
 function rollDreamResult(p){
-  const n = 1+Math.floor(Math.random()*6);
+  const n = p.rollDream();          // ตัวสุ่มของแมตช์ ไม่ใช่ Math.random — กันเซฟแล้วโหลดทอยใหม่
   drawDie('die2', n);
   const dm = DREAMS[n-1];
   dreamPicked = dm;

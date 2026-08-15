@@ -1,0 +1,163 @@
+{
+  "hours_per_month": 720,
+  "chores_hours": 40,
+  "mortgage": 0.005,
+  "travel_rate": 0.11,
+  "action_cost": {
+    "deal": 18,
+    "sell": 12,
+    "loan": 8,
+    "scout": 14,
+    "side": 30,
+    "study": 40,
+    "exercise": 13,
+    "rest": 10
+  },
+  "sleep_options": [
+    {
+      "h": 5,
+      "hours": 150,
+      "health": -4.5,
+      "penalty": 0.22,
+      "label": "นอน 5 ชม./คืน",
+      "note": "ได้เวลาว่างเยอะสุด แต่สุขภาพพังเร็วและประสิทธิภาพตกหนัก"
+    },
+    {
+      "h": 6,
+      "hours": 180,
+      "health": -2,
+      "penalty": 0.1,
+      "label": "นอน 6 ชม./คืน",
+      "note": "พอไหวช่วงสั้นๆ แต่ประสิทธิภาพเริ่มตก"
+    },
+    {
+      "h": 7,
+      "hours": 210,
+      "health": 0,
+      "penalty": 0,
+      "label": "นอน 7 ชม./คืน",
+      "note": "ค่ามาตรฐาน — สมดุลระหว่างเวลากับสุขภาพ"
+    },
+    {
+      "h": 8,
+      "hours": 240,
+      "health": 1.5,
+      "penalty": 0,
+      "label": "นอน 8 ชม./คืน",
+      "note": "เสียเวลาว่าง 30 ชม./เดือน แลกกับสุขภาพที่ดีขึ้นเรื่อยๆ"
+    }
+  ],
+  "food_options": [
+    {
+      "id": "fast",
+      "icon": "🍔",
+      "hours": 21,
+      "costMul": 1.3,
+      "health": -2.5,
+      "label": "เดลิเวอรี / ฟาสต์ฟู้ด",
+      "note": "เร็วที่สุด (0.7 ชม./วัน) แต่ค่าอาหารแพงขึ้น 30% และสุขภาพลดเร็ว"
+    },
+    {
+      "id": "street",
+      "icon": "🍜",
+      "hours": 30,
+      "costMul": 1,
+      "health": -0.5,
+      "label": "ข้าวแกง / สตรีทฟู้ด",
+      "note": "ทางสายกลางแบบคนไทย (1 ชม./วัน) — ค่ามาตรฐาน"
+    },
+    {
+      "id": "cook",
+      "icon": "🥗",
+      "hours": 75,
+      "costMul": 0.75,
+      "health": 2.5,
+      "label": "ทำกินเอง / อาหารคลีน",
+      "note": "ถูกที่สุด (−25%) และสุขภาพดีที่สุด แต่กิน 2.5 ชม./วัน = 75 ชม./เดือน"
+    }
+  ],
+  "roll_table": {
+    "1": {
+      "count": 2,
+      "tiers": [
+        1
+      ],
+      "bonusHours": 45,
+      "label": "เกิดมาแทบไม่มีทางเลือก"
+    },
+    "2": {
+      "count": 3,
+      "tiers": [
+        1,
+        2
+      ],
+      "bonusHours": 30,
+      "label": "ทางเลือกจำกัด"
+    },
+    "3": {
+      "count": 4,
+      "tiers": [
+        1,
+        2
+      ],
+      "bonusHours": 20,
+      "label": "พอมีทางให้เลือกบ้าง"
+    },
+    "4": {
+      "count": 5,
+      "tiers": [
+        1,
+        2,
+        3
+      ],
+      "bonusHours": 10,
+      "label": "โอกาสระดับกลาง"
+    },
+    "5": {
+      "count": 6,
+      "tiers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "bonusHours": 0,
+      "label": "โอกาสดี"
+    },
+    "6": {
+      "count": 7,
+      "tiers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "bonusHours": 0,
+      "label": "เกิดมาพร้อมทางเลือกเต็มมือ"
+    }
+  },
+  "bot_names": [
+    "พี่เอ๋ (บอท)",
+    "เจ๊หมวย (บอท)",
+    "น้องบีม (บอท)",
+    "ลุงวิรัช (บอท)"
+  ],
+  "loan_rate": 0.015,
+  "loan_rate_soft": 0.011,
+  "emergency_rate": 0.023,
+  "credit_multiple": 30,
+  "credit_perk_bonus": 1.5,
+  "inflation_yearly": 1.05,
+  "event_chance": 0.42,
+  "rest_event_reduction": 0.07,
+  "offer_chance": 0.11,
+  "business_slump_chance": 0.05,
+  "disaster_min": 10,
+  "disaster_max": 18,
+  "sell_fee": 0.94,
+  "side_job_min": 0.16,
+  "side_job_max": 0.26,
+  "side_job_max_count": 3,
+  "study_fee_ratio": 0.55,
+  "study_raise": 0.13
+}

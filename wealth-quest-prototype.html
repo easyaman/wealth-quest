@@ -1,0 +1,2466 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WEALTH QUEST — ต้นแบบระบบเกม</title>
+<style>
+:root{
+  --bg:#0d1420; --panel:#1b2a3d; --panel2:#22344b;
+  --edge:#4d78a8; --edge2:#0a1119;
+  --gold:#ffd76a; --green:#7ee08a; --red:#ff8080; --cyan:#7fd8ff; --purple:#c8a6ff; --pink:#ff9ad1; --orange:#ffb27a;
+  --txt:#dbe7f5; --dim:#8ba3bf;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+  font-family:Tahoma,"Leelawadee UI","Noto Sans Thai",Verdana,sans-serif;font-size:13px}
+body{background-image:radial-gradient(circle at 50% 0%,#1a2b40 0%,#0d1420 70%);min-height:100vh}
+button{font-family:inherit;font-size:12px;cursor:pointer;color:#fff;
+  background:linear-gradient(#39557a,#22344b);border:1px solid var(--edge);
+  border-top-color:#7ba3cf;border-left-color:#7ba3cf;border-radius:2px;padding:5px 10px}
+button:hover:not(:disabled){background:linear-gradient(#4a6d99,#2b415c)}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.35;cursor:not-allowed}
+button.primary{background:linear-gradient(#c9962e,#8a6414);border-color:#ffd76a;border-top-color:#ffe9a8;
+  border-left-color:#ffe9a8;color:#2a1c00;font-weight:bold}
+button.primary:hover:not(:disabled){background:linear-gradient(#e5ae3c,#a3771a)}
+button.good{background:linear-gradient(#2f7a45,#1d4b2b);border-color:#7ee08a;border-top-color:#a8f0b3;border-left-color:#a8f0b3}
+button.tiny{padding:2px 7px;font-size:11px}
+button.opt{padding:6px 9px;text-align:left;line-height:1.35}
+button.opt.on{background:linear-gradient(#c9962e,#8a6414);color:#2a1c00;border-color:#ffd76a;font-weight:bold}
+input{background:#0d1a26;color:var(--gold);border:1px solid #3d5c80;padding:5px;font-family:inherit;font-size:12px}
+
+.win{background:var(--panel);border:2px solid var(--edge2);border-radius:3px;
+  box-shadow:inset 0 0 0 1px #46688f, 0 4px 14px rgba(0,0,0,.55);margin-bottom:10px}
+.win>h3{margin:0;padding:5px 9px;font-size:12px;background:linear-gradient(#4d78a8,#2b4262);
+  border-bottom:1px solid var(--edge2);color:#fff;text-shadow:0 1px 0 #16283b;
+  display:flex;justify-content:space-between;align-items:center;gap:8px}
+.win>.body{padding:9px}
+.wrap{max-width:1420px;margin:0 auto;padding:12px}
+.grid{display:grid;grid-template-columns:310px 1fr 320px;gap:10px;align-items:start}
+@media(max-width:1180px){.grid{grid-template-columns:1fr}}
+
+.hud{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+  background:linear-gradient(#22344b,#162333);border:2px solid var(--edge2);
+  box-shadow:inset 0 0 0 1px #46688f;border-radius:3px;padding:7px 10px;margin-bottom:10px}
+.chip{background:#0f1b28;border:1px solid #3d5c80;border-radius:2px;padding:4px 9px}
+.chip b{color:var(--gold)}
+#town{width:100%;height:130px;display:block;background:#0a1420;border:2px solid var(--edge2);
+  box-shadow:inset 0 0 0 1px #46688f;border-radius:3px;margin-bottom:10px}
+
+.row{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dotted #2f4358}
+.row:last-child{border-bottom:0}
+.row .v{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.g{color:var(--green)}.r{color:var(--red)}.y{color:var(--gold)}.c{color:var(--cyan)}.d{color:var(--dim)}.o{color:var(--orange)}
+.sub{font-size:11px;color:var(--dim)}
+.bar{height:16px;background:#0d1a26;border:1px solid #3d5c80;border-radius:2px;overflow:hidden;position:relative}
+.bar>div{height:100%;background:linear-gradient(90deg,#2f7a45,#7ee08a);transition:width .4s}
+.bar>span{position:absolute;inset:0;text-align:center;font-size:11px;line-height:16px;text-shadow:0 1px 2px #000;font-weight:bold}
+.bar.hp>div{background:linear-gradient(90deg,#7a2f2f,#ff8080)}
+.bar.hp.ok>div{background:linear-gradient(90deg,#2f7a45,#7ee08a)}
+.bar.hp.mid>div{background:linear-gradient(90deg,#8a6414,#ffd76a)}
+.bar.time>div{background:linear-gradient(90deg,#2f5a7a,#7fd8ff)}
+.bar.dream>div{background:linear-gradient(90deg,#8a6414,#ffd76a)}
+
+/* time breakdown */
+.tb{display:flex;height:22px;border:1px solid #3d5c80;border-radius:2px;overflow:hidden;margin:4px 0 6px}
+.tb i{display:block;height:100%}
+.tbl{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:2px 10px;font-size:11px}
+.tbl span::before{content:'';display:inline-block;width:9px;height:9px;margin-right:5px;border-radius:1px;background:var(--k)}
+
+.deals{display:grid;grid-template-columns:repeat(auto-fill,minmax(234px,1fr));gap:8px}
+.deal{background:linear-gradient(#22344b,#1a293b);border:1px solid #3d5c80;border-radius:3px;padding:8px;position:relative}
+.deal.hot{border-color:#c9962e}
+.deal.mega{border-color:#c8a6ff;box-shadow:0 0 0 1px #5a3a7a inset}
+.deal .nm{font-weight:bold;font-size:12px;margin-bottom:4px;line-height:1.3}
+.deal .tag{position:absolute;top:-7px;right:6px;font-size:10px;padding:1px 6px;border-radius:8px;background:#3d5c80;border:1px solid #7ba3cf}
+.deal.k-realestate .tag{background:#2f5a7a}
+.deal.k-business .tag,.deal.k-micro .tag{background:#6b4d12;border-color:#c9962e}
+.deal.k-speculation .tag{background:#5a3a7a;border-color:#c8a6ff}
+.deal.k-fund .tag{background:#2f5a4a;border-color:#7ee08a}
+.deal .mini{font-size:11px;color:var(--dim);display:flex;justify-content:space-between}
+.deal .cf{font-size:14px;font-weight:bold;margin:5px 0 6px}
+
+.acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:7px}
+.act{background:linear-gradient(#2b415c,#1e2f43);border:1px solid #3d5c80;border-radius:3px;padding:7px 9px;
+  cursor:pointer;text-align:left;color:#fff;font-family:inherit;font-size:12px;line-height:1.35}
+.act:hover:not(:disabled){background:linear-gradient(#3a577a,#26394f)}
+.act:disabled{opacity:.35;cursor:not-allowed}
+.act b{display:block;font-size:12.5px;margin-bottom:2px}
+.act .hh{color:var(--cyan);font-size:11px}
+
+#log{height:250px;overflow-y:auto;font-size:11.5px;line-height:1.5;background:#0d1a26;border:1px solid #2f4358;padding:6px}
+#log div{padding:2px 0;border-bottom:1px dotted #1e2f42}
+#log .m{color:#6c8199;margin-right:4px}
+#log .who{color:var(--pink)}
+.t-bad{color:var(--red)}.t-good,.t-payday{color:var(--green)}.t-buy{color:var(--cyan)}
+.t-sell,.t-offer{color:var(--gold)}.t-win{color:var(--gold);font-weight:bold}
+.t-debt{color:var(--orange)}.t-sys{color:var(--purple)}
+.t-disaster{color:#fff;background:#6b1414;padding:4px 6px!important;border-left:3px solid #ff8080;font-weight:bold}
+.tip{background:#14283a;border-left:3px solid var(--cyan);padding:6px 9px;font-size:11.5px;color:#bcd6ec;margin-bottom:9px}
+/* ---------- แผนที่ / สถานที่ ---------- */
+#town{cursor:pointer}
+.places{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.pl{background:linear-gradient(#22344b,#1a293b);border:1px solid #3d5c80;border-radius:3px;padding:5px 8px;
+  cursor:pointer;font-size:11.5px;color:#fff;font-family:inherit;text-align:left;line-height:1.35;min-width:118px}
+.pl:hover:not(:disabled){background:linear-gradient(#3a577a,#26394f)}
+.pl.here{border-color:var(--gold);background:linear-gradient(#4a3a12,#2c2410);box-shadow:0 0 0 1px var(--gold) inset}
+.pl:disabled{opacity:.4;cursor:not-allowed}
+.pl b{display:block;font-size:12px}
+.pl .th{color:var(--cyan);font-size:10.5px}
+.here-box{background:#14283a;border:1px solid var(--gold);border-left:4px solid var(--gold);
+  padding:7px 10px;border-radius:2px;margin-bottom:9px}
+.venue{font-size:10px;padding:1px 5px;border-radius:8px;background:#2a3d55;border:1px solid #4d78a8;color:#bcd6ec;margin-left:4px}
+.venue.ok{background:#1d4b2b;border-color:#7ee08a;color:#c9f5d2}
+.shopgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:7px}
+.shopcard{background:linear-gradient(#22344b,#1a293b);border:1px solid #3d5c80;border-radius:3px;padding:8px}
+.shopcard.own{border-color:var(--green);box-shadow:0 0 0 1px #1d4b2b inset}
+.shopcard h5{margin:0 0 3px;font-size:12.5px;color:var(--gold)}
+.alarm{background:#3a1414;border:1px solid #ff8080;border-left:4px solid #ff8080;padding:7px 10px;margin-bottom:10px;border-radius:2px}
+.champ{background:#2b2413;border:1px solid #c9962e;border-left:4px solid var(--gold);padding:7px 10px;margin-bottom:10px;border-radius:2px}
+
+.screen{max-width:1120px;margin:0 auto;padding:24px 14px}
+.logo{text-align:center;margin-bottom:4px}
+.logo h1{font-size:40px;margin:0;letter-spacing:6px;color:var(--gold);text-shadow:0 0 18px rgba(255,215,106,.45),0 3px 0 #6b4d12}
+.logo p{margin:4px 0 0;color:var(--dim);letter-spacing:2px;font-size:12px}
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin:22px 0}
+.mode{background:linear-gradient(#22344b,#18263a);border:2px solid var(--edge2);box-shadow:inset 0 0 0 1px #46688f;
+  border-radius:4px;padding:18px;cursor:pointer;transition:.15s;text-align:center}
+.mode:hover{transform:translateY(-3px);box-shadow:inset 0 0 0 1px #7ba3cf,0 8px 20px rgba(0,0,0,.6)}
+.mode.dis{opacity:.55;cursor:default}.mode.dis:hover{transform:none;box-shadow:inset 0 0 0 1px #46688f}
+.mode .ic{font-size:40px}.mode h4{margin:8px 0 4px;color:var(--gold);font-size:17px}
+
+.dicebox{text-align:center;margin:16px 0}
+.die{width:92px;height:92px;margin:0 auto;background:linear-gradient(145deg,#fdfaf2,#d9d2c2);border-radius:14px;
+  box-shadow:0 8px 22px rgba(0,0,0,.6),inset 0 -4px 0 rgba(0,0,0,.15);display:grid;
+  grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:12px;gap:2px}
+.die b{width:15px;height:15px;background:#20242c;border-radius:50%;align-self:center;justify-self:center}
+.die.roll{animation:sh .5s ease-in-out infinite}
+@keyframes sh{0%{transform:rotate(-8deg) translateY(0)}50%{transform:rotate(9deg) translateY(-10px)}100%{transform:rotate(-8deg) translateY(0)}}
+.rollres{margin-top:12px;font-size:15px}.rollres b{color:var(--gold);font-size:20px}
+
+.jobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(206px,1fr));gap:10px;margin:16px 0}
+.job{background:linear-gradient(#22344b,#18263a);border:2px solid var(--edge2);box-shadow:inset 0 0 0 1px #46688f;
+  border-radius:3px;padding:11px;cursor:pointer;transition:.15s}
+.job:hover{transform:translateY(-3px);box-shadow:inset 0 0 0 1px #7ba3cf,0 6px 18px rgba(0,0,0,.6)}
+.job .ic{font-size:30px;text-align:center}
+.job h4{margin:4px 0 1px;text-align:center;font-size:14px;color:var(--gold)}
+.job .tierbadge{text-align:center;font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:6px}
+.job .pk{font-size:11px;color:var(--cyan);margin-top:6px;line-height:1.45}
+.job .nt{font-size:10.5px;color:#9db4cc;margin-top:5px;line-height:1.4;font-style:italic}
+
+.standings{display:grid;gap:5px}
+.stand{background:#12202f;border:1px solid #2f4358;padding:5px 7px;border-radius:2px}
+.stand.me{border-color:var(--gold);background:#1c2a1a}
+
+#modal,#dreamwin{position:fixed;inset:0;background:rgba(3,8,14,.86);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+#modal>div,#dreamwin>div{max-width:680px;width:100%;background:var(--panel);border:2px solid var(--gold);
+  box-shadow:0 0 60px rgba(255,215,106,.25);border-radius:4px;padding:22px;text-align:center;max-height:92vh;overflow:auto}
+#modal h2,#dreamwin h2{margin:0 0 8px;color:var(--gold);font-size:24px;letter-spacing:1px}
+#pass{position:fixed;inset:0;background:#08111c;display:none;align-items:center;justify-content:center;z-index:60;text-align:center}
+/* ---------- tutorial ---------- */
+#tut-ring{position:absolute;display:none;border:3px solid var(--gold);border-radius:5px;pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(4,9,16,.72), 0 0 22px rgba(255,215,106,.8);z-index:70;transition:all .25s ease}
+#tut-card{position:fixed;display:none;right:18px;bottom:18px;width:370px;max-width:calc(100vw - 36px);z-index:71;
+  background:linear-gradient(#22344b,#16243a);border:2px solid var(--gold);border-radius:5px;
+  box-shadow:0 12px 40px rgba(0,0,0,.75);padding:14px}
+#tut-card h4{margin:0 0 6px;color:var(--gold);font-size:15px}
+#tut-card .txt{font-size:12.5px;line-height:1.7;color:#dbe7f5}
+#tut-card .ft{display:flex;justify-content:space-between;align-items:center;margin-top:11px;gap:8px}
+#tut-dots{display:flex;gap:3px}#tut-dots i{width:6px;height:6px;border-radius:50%;background:#3d5c80;display:block}
+#tut-dots i.on{background:var(--gold)}
+.tut-wait{color:var(--cyan);font-size:11.5px;font-style:italic}
+</style>
+</head>
+<body>
+
+<!-- ============ MODE ============ -->
+<div id="s-mode" class="screen">
+  <div class="logo"><h1>WEALTH QUEST</h1><p>ต้นแบบระบบเกม — Cashflow ที่ไม่มีลูกเต๋าใน core loop</p></div>
+  <div class="tip" style="max-width:840px;margin:16px auto">
+    <b>ทรัพยากรจริงในเกมนี้มีสามอย่าง: เงิน • เวลา • สุขภาพ</b> — หนึ่งเดือนมี 720 ชั่วโมงเท่ากันทุกคน
+    หักนอน/งาน/เดินทาง/กิน/ธุระแล้วเหลือเท่าไหร่ นั่นคือเวลาที่คุณเอาไปสร้างความมั่งคั่งได้จริง<br>
+    ชนะด่านแรกเมื่อ <b>รายได้จากทรัพย์สิน ≥ รายจ่ายรวม</b> → แล้วทอยเต๋าสุ่ม <b>เป้าหมายชีวิตใหม่</b> เล่นต่อในด่านสอง
+  </div>
+  <div class="modes">
+    <div class="mode" id="m-solo"><div class="ic">🤖</div><h4>SOLO</h4>
+      <div class="sub">สู้กับบอท AI 3 ตัว<br>บอทแย่งดีลจริง เล่นตามกลยุทธ์จริง</div></div>
+    <div class="mode" id="m-multi"><div class="ic">👥</div><h4>MULTIPLAYER</h4>
+      <div class="sub">2–4 คน ผลัดกันเล่นบนเครื่องเดียว<br>ตลาดเดียวกัน แย่งดีลกันจริง</div></div>
+    <div class="mode dis" id="m-online"><div class="ic">🌐</div><h4>ONLINE <span class="sub">(ยังไม่เปิด)</span></h4>
+      <div class="sub">ต้องมีเซิร์ฟเวอร์ก่อน<br><button class="tiny" id="specbtn" style="margin-top:6px">ดูสเปกที่ต้องทำ</button></div></div>
+  </div>
+  <div style="text-align:center;margin:-6px 0 18px">
+    <button id="loadbtn" style="padding:9px 26px">📂 โหลดเกมที่บันทึกไว้ (.json)</button>
+    <div class="sub" style="margin-top:6px">เซฟเป็นไฟล์ในเครื่องคุณ — เอาไปเปิดต่อเครื่องไหนก็ได้ และส่งให้เพื่อนดูสถานการณ์เดียวกันได้</div>
+  </div>
+  <input type="file" id="fileinput" accept=".json,application/json" style="display:none">
+  <div id="spec" style="display:none" class="win"><h3>สิ่งที่ต้องทำเพิ่มเพื่อเปิด Online</h3><div class="body sub" style="line-height:1.8">
+    เอนจินแยก <code>Match</code> (ตลาดกลาง + ลำดับตา + ภัยพิบัติ) ออกจาก <code>Player</code> ไว้แล้ว ย้าย <code>Match</code> ขึ้นเซิร์ฟเวอร์ได้เลย<br>
+    <b class="y">1.</b> Authoritative server — ห้ามให้ client คำนวณเงินเอง ไม่งั้นแก้ตัวเลขใน DevTools ได้ใน 5 วินาที<br>
+    <b class="y">2.</b> client ส่งแค่ action → เซิร์ฟเวอร์ตรวจสิทธิ์ → broadcast state กลับ<br>
+    <b class="y">3.</b> WebSocket + ห้อง + lobby + reconnect<br>
+    <b class="y">4.</b> นาฬิกาจับตา 60–90 วินาที หมดเวลา auto-pass<br>
+    <b class="y">5.</b> บอทเสียบแทนคนที่หลุด (โค้ด AI เขียนเสร็จแล้ว)<br>
+    <b class="y">6.</b> ฐานข้อมูลผู้เล่น สถิติ ranking ประจำซีซัน<br>
+    <span class="d">ประเมิน 3–5 สัปดาห์สำหรับคนเดียว ถ้า core loop นิ่งแล้ว</span>
+  </div></div>
+</div>
+
+<!-- ============ SETUP ============ -->
+<div id="s-setup" class="screen" style="display:none">
+  <div class="logo"><h1 style="font-size:26px" id="setup-title">ทอยเต๋าเปิดโอกาสของคุณ</h1></div>
+  <div id="setup-body"></div>
+</div>
+
+<!-- ============ GAME ============ -->
+<div id="s-game" class="wrap" style="display:none">
+  <div class="hud">
+    <span class="chip">เดือนที่ <b id="h-month">1</b></span>
+    <span class="chip" id="h-who"></span>
+    <span class="chip">เงินสด <b id="h-cash">0</b>฿</span>
+    <span class="chip">สุทธิ <b id="h-nw">0</b>฿</span>
+    <span class="chip">⏳ เวลาว่าง <b id="h-hours">0</b></span>
+    <span class="chip">❤️ สุขภาพ <b id="h-hp">0</b></span>
+    <span style="flex:1"></span>
+    <button id="csvbtn" title="ส่งออกข้อมูลรายเดือนเป็น CSV สำหรับเก็บผล playtest">📊 CSV</button>
+    <button id="savebtn" title="ดาวน์โหลดไฟล์เซฟเก็บไว้">💾 บันทึก</button>
+    <button id="loadbtn2" title="โหลดไฟล์เซฟที่เคยบันทึกไว้">📂 โหลด</button>
+    <button class="primary" id="endturn">จบตา ▸</button>
+  </div>
+  <canvas id="town" width="1400" height="130"></canvas>
+  <div id="champ-box"></div>
+  <div id="disaster-box"></div>
+  <div class="tip" id="tip"></div>
+
+  <div class="grid">
+    <!-- LEFT -->
+    <div>
+      <div class="win"><h3>อันดับในแมตช์</h3><div class="body"><div class="standings" id="stand"></div></div></div>
+      <div class="win"><h3 id="goal-title">ด่าน 1: ออกจากสนามแข่งหนู</h3><div class="body" id="goal"></div></div>
+      <div class="win"><h3>สุขภาพ</h3><div class="body" id="health"></div></div>
+      <div class="win"><h3>งบกำไรขาดทุน (ต่อเดือน)</h3><div class="body" id="income"></div></div>
+      <div class="win"><h3>งบดุล</h3><div class="body" id="balance"></div></div>
+    </div>
+
+    <!-- CENTER -->
+    <div>
+      <div class="win"><h3><span>⏳ งบเวลาเดือนนี้ — 720 ชั่วโมง</span><span class="sub" id="time-sum"></span></h3>
+        <div class="body" id="timebox"></div></div>
+      <div class="win"><h3><span>📍 คุณอยู่ที่ไหน — ทุกการเดินทางกินเวลาจริง</span><span class="sub" id="travel-sum"></span></h3>
+        <div class="body">
+          <div class="here-box" id="here"></div>
+          <div class="sub">คลิกอาคารบนแผนที่ด้านบน หรือเลือกจากรายการนี้:</div>
+          <div class="places" id="places"></div>
+        </div></div>
+      <div class="win" id="shopwin" style="display:none"><h3>🛒 ห้างสรรพสินค้า — ของที่ "ซื้อเวลา" ได้</h3>
+        <div class="body" id="shop"></div></div>
+      <div class="win"><h3><span>ตลาดดีล (ของกลาง — ใครถึงก่อนได้ก่อน)</span><span class="sub" id="mkt"></span></h3>
+        <div class="body"><div class="deals" id="deals"></div></div></div>
+      <div class="win"><h3>สิ่งที่ทำได้ด้วยเวลาที่เหลือ</h3><div class="body">
+        <div class="acts" id="acts"></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:9px;flex-wrap:wrap">
+          <span class="sub">จำนวนเงินกู้:</span>
+          <input id="loanamt" type="number" step="10000" value="200000" style="width:120px">
+          <span class="sub" id="creditinfo"></span>
+        </div>
+      </div></div>
+      <div class="win"><h3>ทรัพย์สินของฉัน</h3><div class="body" id="assets"></div></div>
+      <div class="win"><h3>หนี้สิน</h3><div class="body" id="debts"></div></div>
+    </div>
+
+    <!-- RIGHT -->
+    <div>
+      <div class="win"><h3>บันทึกเหตุการณ์ (ทั้งโต๊ะ)</h3><div class="body"><div id="log"></div></div></div>
+      <div class="win"><h3>บทเรียนที่เกมนี้สอน</h3><div class="body sub" style="line-height:1.75">
+        • <b class="c">720 ชม./เดือน เท่ากันทุกคน</b> — หมอมีเงินเยอะสุดแต่เหลือเวลาว่างน้อยสุด<br>
+        • <b class="c">สุขภาพ = ประสิทธิภาพเวลา</b> สุขภาพตกแปลว่าชั่วโมงที่มีอยู่ใช้ได้จริงน้อยลง<br>
+        • <b class="c">อาหารมีสามมิติ</b> เงิน/เวลา/สุขภาพ — ไม่มีตัวเลือกไหนดีทุกด้าน<br>
+        • <b class="c">เรียนเพิ่มเติม ≠ เลื่อนขั้น</b> เรียนแล้วเงินเดือนขึ้นโดยรายจ่ายไม่โต<br>
+        • <b class="c">งานเสริมคือกับดัก</b> 30 ชม. ได้เงินก้อนเดียว แต่ 18 ชม. ซื้อทรัพย์สินได้เงินทุกเดือน<br>
+        • <b class="c">รถไม่ใช่ของฟุ่มเฟือยเสมอไป</b> ถ้าเดินทางเยอะ มันคือการซื้อเวลาคืน<br>
+        • <b class="c">ภัยพิบัติมาเป็นระยะ</b> คนที่กู้เยอะเจ็บที่สุดตอนดอกเบี้ยพุ่ง
+      </div></div>
+      <div style="text-align:center"><button id="restart">เริ่มใหม่</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="pass"><div>
+  <div style="font-size:52px" id="pass-ic"></div>
+  <h2 style="color:var(--gold);letter-spacing:2px" id="pass-name"></h2>
+  <p class="sub">ส่งเครื่องให้ผู้เล่นคนนี้ แล้วกดปุ่มเพื่อเริ่มตา</p>
+  <button class="primary" id="pass-go" style="padding:11px 34px;font-size:15px">พร้อมแล้ว เริ่มตาของฉัน</button>
+</div></div>
+
+<div id="tut-ring"></div>
+<div id="tut-card">
+  <h4 id="tut-title"></h4>
+  <div class="txt" id="tut-text"></div>
+  <div class="ft">
+    <div id="tut-dots"></div>
+    <div style="display:flex;gap:6px">
+      <button class="tiny" id="tut-skip">ข้ามการสอน</button>
+      <button class="primary tiny" id="tut-next">ถัดไป ▸</button>
+    </div>
+  </div>
+</div>
+
+<div id="dreamwin"><div id="dreambody"></div></div>
+
+<div id="modal"><div>
+  <h2 id="m-title"></h2>
+  <div id="m-body"></div>
+  <div style="display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap">
+    <button id="m-save">💾 บันทึกไฟล์สรุปเกมนี้</button>
+    <button class="primary" id="m-close" style="padding:9px 26px">เล่นใหม่</button>
+  </div>
+</div></div>
+
+<script>
+/* =========================================================
+   WEALTH QUEST — Core Engine v4
+   - อาชีพอิงชีวิตจริง (ไทย) + สกุลเงินบาท
+   - ทอยเต๋าตอนเริ่ม = โอกาสในชีวิต
+   - ระบบเวลาจริง 720 ชม./เดือน (นอน/งาน/เดินทาง/กิน/ธุระ → เหลือเป็นเวลาว่าง)
+   - ระบบสุขภาพ ที่แปลงเป็น "ประสิทธิภาพเวลา" โดยตรง
+   - เรียนเพิ่มเติมเพื่อขึ้นเงินเดือนแบบไม่พองไลฟ์สไตล์
+   - ภัยพิบัติระดับโต๊ะ กระทบทุกคนพร้อมกันเป็นระยะ
+   - Phase 2: ทอยเต๋าสุ่มเป้าหมายชีวิตใหม่หลังออกจากสนามแข่งหนู
+   - SOLO (สู้บอท) / MULTI (หลายคน) ตลาดกลางเดียวกัน
+   ========================================================= */
+
+function makeRng(seed) {
+  const f = function () {
+    let a = f.s;
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    f.s = a;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  f.s = seed >>> 0;
+  return f;
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* =========================================================
+   ระบบเวลา — หนึ่งเดือน = 30 วัน = 720 ชั่วโมง
+   ========================================================= */
+const HOURS_PER_MONTH = 720;
+const CHORES_HOURS = 40;
+
+const SLEEP_OPTIONS = [
+  { h: 5, hours: 150, health: -4.5, penalty: 0.22, label: 'นอน 5 ชม./คืน', note: 'ได้เวลาว่างเยอะสุด แต่สุขภาพพังเร็วและประสิทธิภาพตกหนัก' },
+  { h: 6, hours: 180, health: -2.0, penalty: 0.10, label: 'นอน 6 ชม./คืน', note: 'พอไหวช่วงสั้นๆ แต่ประสิทธิภาพเริ่มตก' },
+  { h: 7, hours: 210, health: 0.0, penalty: 0.00, label: 'นอน 7 ชม./คืน', note: 'ค่ามาตรฐาน — สมดุลระหว่างเวลากับสุขภาพ' },
+  { h: 8, hours: 240, health: 1.5, penalty: 0.00, label: 'นอน 8 ชม./คืน', note: 'เสียเวลาว่าง 30 ชม./เดือน แลกกับสุขภาพที่ดีขึ้นเรื่อยๆ' }
+];
+
+const FOOD_OPTIONS = [
+  { id: 'fast', icon: '🍔', hours: 21, costMul: 1.30, health: -2.5, label: 'เดลิเวอรี / ฟาสต์ฟู้ด',
+    note: 'เร็วที่สุด (0.7 ชม./วัน) แต่ค่าอาหารแพงขึ้น 30% และสุขภาพลดเร็ว' },
+  { id: 'street', icon: '🍜', hours: 30, costMul: 1.00, health: -0.5, label: 'ข้าวแกง / สตรีทฟู้ด',
+    note: 'ทางสายกลางแบบคนไทย (1 ชม./วัน) — ค่ามาตรฐาน' },
+  { id: 'cook', icon: '🥗', hours: 75, costMul: 0.75, health: 2.5, label: 'ทำกินเอง / อาหารคลีน',
+    note: 'ถูกที่สุด (−25%) และสุขภาพดีที่สุด แต่กิน 2.5 ชม./วัน = 75 ชม./เดือน' }
+];
+
+const COST = {
+  deal: 18, sell: 12, loan: 8, scout: 14, side: 30, study: 40, exercise: 13, rest: 10
+};
+const ACTION_INFO = {
+  deal: 'ดูทรัพย์ + เจรจา + ธนาคาร + ทำสัญญา',
+  sell: 'หาผู้ซื้อ + โอนกรรมสิทธิ์',
+  loan: 'เตรียมเอกสาร + ยื่นกู้',
+  scout: 'เดินตลาด ดูทำเล หาข้อมูล',
+  side: 'งานเสริม/OT — ได้เงินก้อนเดียวจบ',
+  study: 'เรียน/อัปสกิล — ขึ้นเงินเดือนถาวรโดยรายจ่ายไม่โต',
+  exercise: 'ออกกำลังกาย — สุขภาพ +5',
+  rest: 'พักผ่อน/อยู่กับครอบครัว — สุขภาพ +2.5 ลดโอกาสเรื่องร้าย'
+};
+
+/* =========================================================
+   แผนที่เมือง — ทุกการกระทำผูกกับสถานที่ และการเดินทางกินเวลาจริง
+   x = ตำแหน่งบนถนนสายหลัก (0–100) ใช้คำนวณระยะทาง
+   ========================================================= */
+const TRAVEL_RATE = 0.11;          // ชั่วโมงต่อ 1 หน่วยระยะ เมื่อใช้ขนส่งสาธารณะ
+
+const PLACES = [
+  { id: 'home',   x: 50, icon: '🏠', name: 'บ้าน', color: '#5ac97a',
+    desc: 'ตั้งค่าการนอน ทำกินเอง พักผ่อน — และเป็นจุดเริ่มต้นของทุกเดือน',
+    acts: ['sleep', 'food', 'rest', 'homework', 'homestudy', 'mobile'] },
+  { id: 'office', x: 30, icon: '🏢', name: 'ออฟฟิศ / ที่ทำงาน', color: '#c95a5a',
+    desc: 'งานประจำหักเวลาอัตโนมัติอยู่แล้ว มาที่นี่เพื่อรับ OT เพิ่ม',
+    acts: ['ot'] },
+  { id: 'bank',   x: 62, icon: '🏦', name: 'ธนาคาร', color: '#5a8fc9',
+    desc: 'กู้เงิน ชำระหนี้ ซื้อ-ขายกองทุนและตราสารหนี้',
+    acts: ['loan', 'repay', 'fund'] },
+  { id: 'estate', x: 14, icon: '🏬', name: 'ศูนย์อสังหาฯ & ตลาดธุรกิจ', color: '#c9962e',
+    desc: 'ดีลอสังหาฯ ธุรกิจ และธุรกิจจิ๋วทั้งหมดอยู่ที่นี่ ต้องมาดูของจริง',
+    acts: ['estate', 'scout'] },
+  { id: 'gold',   x: 74, icon: '💍', name: 'ร้านทอง & ของสะสม', color: '#e0b84a',
+    desc: 'ทองคำ พระเครื่อง นาฬิกา คริปโต — ของเก็งกำไรทั้งหมด',
+    acts: ['gold'] },
+  { id: 'cowork', x: 42, icon: '💻', name: 'Co-working Space', color: '#7fd8ff',
+    desc: 'รับงาน freelance ได้เงินดีกว่า OT 25% และเรียนได้ด้วย',
+    acts: ['freelance', 'study'] },
+  { id: 'school', x: 22, icon: '🎓', name: 'สถาบันสอน', color: '#c8a6ff',
+    desc: 'เรียนแบบมีอาจารย์ — คืบหน้าเร็วกว่าเรียนออนไลน์',
+    acts: ['study'] },
+  { id: 'gym',    x: 56, icon: '🏋️', name: 'ฟิตเนส', color: '#7ee08a',
+    desc: 'ออกกำลังกาย มีแพ็กเกจให้เลือกตามงบและเวลา',
+    acts: ['gym'] },
+  { id: 'mall',   x: 84, icon: '🛒', name: 'ห้างสรรพสินค้า', color: '#ffb27a',
+    desc: 'ซื้อพาหนะและอุปกรณ์ที่ช่วยประหยัดเวลา — ของที่ "ซื้อเวลา" ได้',
+    acts: ['shop'] },
+  { id: 'resort', x: 96, icon: '🏨', name: 'โรงแรม & รีสอร์ต', color: '#ff9ad1',
+    desc: 'พักผ่อนจริงจัง ฟื้นสุขภาพเยอะ และลดโอกาสเกิดเรื่องร้าย',
+    acts: ['resort'] }
+];
+const PLACE = id => PLACES.find(p => p.id === id);
+
+/* ---------------- พาหนะ ---------------- */
+const VEHICLES = [
+  { id: 'public', icon: '🚌', name: 'ขนส่งสาธารณะ', price: 0, downPct: 0, upkeep: 0,
+    factor: 1.00, hp: 0, note: 'ค่าเริ่มต้น — ฟรี แต่ช้าที่สุด และเบียดเสียดทุกวัน' },
+  { id: 'moto', icon: '🛵', name: 'มอเตอร์ไซค์', price: 55000, downPct: 0.20, upkeep: 900,
+    factor: 0.55, hp: -0.6, note: 'ถูกและเร็วขึ้นเท่าตัว แต่ตากแดดตากฝน สุขภาพลดนิดหน่อย' },
+  { id: 'usedcar', icon: '🚗', name: 'รถยนต์มือสอง', price: 350000, downPct: 0.20, upkeep: 3800,
+    factor: 0.42, hp: 0, note: 'จุดคุ้มค่าที่สุดสำหรับคนที่เดินทางเยอะ' },
+  { id: 'newcar', icon: '🚙', name: 'รถยนต์ใหม่', price: 900000, downPct: 0.20, upkeep: 7500,
+    factor: 0.34, hp: 0.5, note: 'สบายขึ้น เร็วขึ้นอีกนิด — แต่ค่าผ่อนเริ่มกินสัดส่วนใหญ่' },
+  { id: 'luxury', icon: '🏎️', name: 'รถหรู', price: 2500000, downPct: 0.25, upkeep: 19000,
+    factor: 0.30, hp: 1.0, note: '⚠️ เร็วกว่ารถใหม่แค่ 12% แต่แพงกว่า 3 เท่า — ลองคิดดูว่าคุ้มไหม' }
+];
+
+/* ---------------- อุปกรณ์ (ซื้อครั้งเดียว ใช้ตลอด) ---------------- */
+const DEVICES = [
+  { id: 'smartphone', icon: '📱', name: 'สมาร์ตโฟน + แอปธนาคาร', price: 25000, upkeep: 500,
+    note: 'ทำธุรกรรมธนาคารได้จากที่บ้าน — กู้ ชำระหนี้ ซื้อกองทุน ไม่ต้องเดินทางอีกเลย' },
+  { id: 'laptop', icon: '💻', name: 'โน้ตบุ๊ก + เน็ตบ้าน', price: 45000, upkeep: 900,
+    note: 'เรียนออนไลน์และรับ freelance ที่บ้านได้ (freelance ได้เงิน 80% ของที่ co-working)' }
+];
+
+/* ---------------- แพ็กเกจฟิตเนส / พักผ่อน ---------------- */
+const GYM_PACKS = [
+  { id: 'daily', icon: '🎫', name: 'จ่ายรายครั้ง', cost: 350, hours: 13, hp: 5,
+    note: 'ไม่ผูกมัด แต่แพงกว่าถ้าไปบ่อย' },
+  { id: 'monthly', icon: '💪', name: 'แพ็กเกจรายเดือน', cost: 1600, hours: 11, hp: 5, monthly: true,
+    note: 'จ่ายครั้งเดียวใช้ได้ทั้งเดือน + มีอุปกรณ์พร้อม เลยเสียเวลาน้อยลง' },
+  { id: 'trainer', icon: '🏅', name: 'เทรนเนอร์ส่วนตัว', cost: 6500, hours: 10, hp: 8.5, monthly: true,
+    note: 'ได้ผลที่สุดต่อชั่วโมง — คุ้มถ้าเวลาคุณมีค่ามากกว่าเงิน' }
+];
+const RESORT_PACKS = [
+  { id: 'day', icon: '🌤️', name: 'เที่ยวใกล้บ้าน 1 วัน', cost: 2500, hours: 14, hp: 7, shield: 0 },
+  { id: 'weekend', icon: '🏖️', name: 'รีสอร์ตสุดสัปดาห์', cost: 14000, hours: 34, hp: 19, shield: 0.15 },
+  { id: 'abroad', icon: '✈️', name: 'ทริปต่างประเทศ', cost: 65000, hours: 100, hp: 38, shield: 0.35 }
+];
+
+/* =========================================================
+   อาชีพ — work/commute = ชั่วโมงต่อเดือน, food = ค่าอาหารฐาน
+   ========================================================= */
+const JOBS = [
+  { id: 'cleaner', tier: 1, name: 'พนักงานทำความสะอาด', icon: '🧹',
+    salary: 11000, fixed: 6000, food: 2600, cash: 22000, work: 208, commute: 39, health: 70, sleepNeed: 8,
+    debts: [], perkId: 'frugal', perk: 'ชินกับการประหยัด: เหตุการณ์ร้ายและค่ารักษาเสียเงินน้อยลงมาก',
+    note: 'ตัวเลขเล็กแต่สัดส่วนดี และมีเวลาว่างเยอะกว่าอาชีพเงินเดือนสูง' },
+  { id: 'convstore', tier: 1, name: 'พนักงานร้านสะดวกซื้อ', icon: '🏪',
+    salary: 13500, fixed: 7360, food: 3200, cash: 25000, work: 234, commute: 30, health: 68, sleepNeed: 8,
+    debts: [{ name: 'ผ่อนมือถือ', balance: 12000, rate: 0.02 }],
+    perkId: 'hustle', perk: 'ชินกับกะดึก: งานเสริมได้เงินมากกว่า 50% และทนงานหนักได้ดีกว่า',
+    note: 'เข้ากะดึกทำให้สุขภาพเริ่มต้นต่ำ ต้องดูแลตัวเองเป็นพิเศษ' },
+  { id: 'rider', tier: 1, name: 'ไรเดอร์ส่งอาหาร', icon: '🛵',
+    salary: 16500, fixed: 8675, food: 3800, cash: 20000, work: 260, commute: 0, health: 65, sleepNeed: 8,
+    debts: [{ name: 'ผ่อนมอเตอร์ไซค์', balance: 35000, rate: 0.015 }],
+    perkId: 'quick', perk: 'รู้จักทุกซอย: ปิดดีลใช้เวลาน้อยลง 20% และคนอื่นแย่งดีลจากคุณยากขึ้น',
+    note: 'ไม่มีเวลาเดินทางเพราะงานคือการเดินทาง — แต่ตากแดดตากฝนทุกวัน สุขภาพต่ำสุด' },
+
+  { id: 'teacher', tier: 2, name: 'ครูโรงเรียนรัฐ', icon: '👩‍🏫',
+    salary: 23000, fixed: 12680, food: 5000, cash: 40000, work: 198, commute: 33, health: 75, sleepNeed: 7,
+    debts: [{ name: 'หนี้ กยศ.', balance: 180000, rate: 0.004 }],
+    perkId: 'stable', perk: 'ข้าราชการ: ไม่ถูกเลิกจ้าง กู้สวัสดิการดอกถูก และมีประกันสุขภาพ (ค่ารักษาถูกลงครึ่ง)',
+    note: 'มั่นคงที่สุด แต่เงินเดือนโตช้า — การเรียนเพิ่มเติมช่วยได้มาก' },
+  { id: 'nurse', tier: 2, name: 'พยาบาลวิชาชีพ', icon: '👩‍⚕️',
+    salary: 29000, fixed: 16000, food: 6400, cash: 45000, work: 220, commute: 33, health: 72, sleepNeed: 8,
+    debts: [{ name: 'หนี้ กยศ.', balance: 150000, rate: 0.004 }],
+    perkId: 'hustle', perk: 'ขึ้นเวร OT ได้: งานเสริมได้เงินมากกว่า 50% และรู้วิธีดูแลตัวเอง',
+    note: 'แลกเวลาเป็นเงินเก่งที่สุด — แต่เวลาคือสิ่งที่ต้องใช้หาทรัพย์สิน' },
+  { id: 'technician', tier: 2, name: 'ช่างเทคนิค', icon: '🔧',
+    salary: 25000, fixed: 12840, food: 5200, cash: 35000, work: 192, commute: 36, health: 76, sleepNeed: 7,
+    debts: [{ name: 'ผ่อนรถกระบะ', balance: 220000, rate: 0.008 }],
+    perkId: 'discount', perk: 'ซ่อมเองได้ทุกอย่าง: ซื้อทรัพย์สินถูกลง 10%',
+    note: 'สุขภาพดี เวลาพอใช้ ต้นทุนต่ำกว่าคนอื่นทุกดีล' },
+  { id: 'accountant', tier: 2, name: 'พนักงานบัญชี', icon: '💼',
+    salary: 27000, fixed: 14590, food: 6000, cash: 50000, work: 198, commute: 44, health: 72, sleepNeed: 7,
+    debts: [{ name: 'หนี้บัตรเครดิต', balance: 45000, rate: 0.018 }],
+    perkId: 'insight', perk: 'อ่านงบเป็น: เห็นแนวโน้มตลาดล่วงหน้า และเก็งกำไรแม่นกว่า',
+    note: 'หนี้บัตรเครดิตดอก 21%/ปี คือศัตรูอันดับหนึ่ง ปิดก่อนเลย' },
+  { id: 'police', tier: 2, name: 'ตำรวจ', icon: '👮',
+    salary: 26000, fixed: 13900, food: 5600, cash: 30000, work: 216, commute: 36, health: 74, sleepNeed: 8,
+    debts: [{ name: 'เงินกู้สหกรณ์', balance: 250000, rate: 0.006 }],
+    perkId: 'stable', perk: 'ข้าราชการ: ไม่ถูกเลิกจ้าง กู้สวัสดิการดอกถูก และมีประกันสุขภาพ (ค่ารักษาถูกลงครึ่ง)',
+    note: 'หนี้สหกรณ์ดอกถูก — หนี้ไม่ได้แย่เสมอถ้าเอาไปสร้างรายได้' },
+
+  { id: 'engineer', tier: 3, name: 'วิศวกรโรงงาน', icon: '👷',
+    salary: 46000, fixed: 23650, food: 9000, cash: 90000, work: 198, commute: 44, health: 75, sleepNeed: 7,
+    debts: [{ name: 'ผ่อนรถยนต์', balance: 550000, rate: 0.007 }],
+    perkId: 'credit', perk: 'เครดิตดี: วงเงินกู้สูงกว่าปกติ 50% และดอกเบี้ยถูกกว่า',
+    note: 'ใช้เลเวอเรจได้ดีที่สุด — แต่ดอกเบี้ยคือรายจ่าย เส้นชัยจะขยับหนี' },
+  { id: 'programmer', tier: 3, name: 'โปรแกรมเมอร์', icon: '💻',
+    salary: 58000, fixed: 31000, food: 12000, cash: 120000, work: 176, commute: 22, health: 68, sleepNeed: 7,
+    debts: [], perkId: 'hustle', perk: 'รับ freelance ได้: งานเสริมได้เงินมากกว่า 50% และเรียนออนไลน์ได้เร็วกว่า',
+    note: 'WFH ทำให้เดินทางน้อยและมีเวลาเยอะ แต่นั่งทั้งวัน สุขภาพเริ่มต้นไม่ดี' },
+  { id: 'cafeowner', tier: 3, name: 'เจ้าของร้านกาแฟ', icon: '☕',
+    salary: 42000, fixed: 21600, food: 8400, cash: 70000, work: 260, commute: 26, health: 70, sleepNeed: 8,
+    debts: [{ name: 'เงินกู้เปิดร้าน', balance: 400000, rate: 0.010 }],
+    perkId: 'discount', perk: 'สายต่อรอง: ซื้อทรัพย์สินถูกลง 10%',
+    note: '"รายได้จากร้านที่คุณต้องยืนขายเอง" ยังไม่ใช่ Passive Income — และกินเวลา 260 ชม./เดือน' },
+  { id: 'salesmgr', tier: 3, name: 'ผู้จัดการฝ่ายขาย', icon: '📊',
+    salary: 52000, fixed: 27100, food: 10500, cash: 80000, work: 220, commute: 48, health: 68, sleepNeed: 7,
+    debts: [{ name: 'ผ่อนบ้าน + รถ', balance: 900000, rate: 0.006 }],
+    perkId: 'credit', perk: 'เครดิตดี: วงเงินกู้สูงกว่าปกติ 50% และดอกเบี้ยถูกกว่า',
+    note: 'รถติด + สังสรรค์กับลูกค้า = สุขภาพและเวลาหายไปพร้อมกัน' },
+
+  { id: 'doctor', tier: 4, name: 'แพทย์', icon: '🩺',
+    salary: 125000, fixed: 58800, food: 22000, cash: 200000, work: 264, commute: 36, health: 72, sleepNeed: 8,
+    debts: [{ name: 'หนี้เรียน + ผ่อนบ้าน', balance: 3200000, rate: 0.006 }],
+    perkId: 'credit', perk: 'เครดิตดี: วงเงินกู้สูงกว่าปกติ 50% + รักษาตัวเองได้ (ค่ารักษาถูกลงครึ่ง)',
+    note: 'ทำงาน 264 ชม./เดือน — เวลาว่างน้อยที่สุดในเกม เงินเยอะแต่ไม่มีเวลาไปหาดีล' },
+  { id: 'lawyer', tier: 4, name: 'ทนายความ', icon: '⚖️',
+    salary: 95000, fixed: 46600, food: 17000, cash: 150000, work: 248, commute: 44, health: 70, sleepNeed: 7,
+    debts: [{ name: 'ผ่อนบ้าน + รถ', balance: 2400000, rate: 0.006 }],
+    perkId: 'insight', perk: 'อ่านสัญญาขาด: เห็นแนวโน้มตลาดล่วงหน้า และเก็งกำไรแม่นกว่า',
+    note: 'รายได้สูง แต่ภาระผ่อนสูงตาม เส้นชัยอยู่ไกลกว่าครูเสียอีก' },
+  { id: 'pilot', tier: 4, name: 'นักบินพาณิชย์', icon: '✈️',
+    salary: 155000, fixed: 78250, food: 28000, cash: 250000, work: 240, commute: 40, health: 74, sleepNeed: 8,
+    debts: [{ name: 'ผ่อนบ้านหรู', balance: 4500000, rate: 0.0055 }],
+    perkId: 'none', perk: 'ไม่มีความสามารถพิเศษ — มีแค่เงินเดือนก้อนโตและไลฟ์สไตล์ที่โตตาม',
+    note: '⚠️ ยากที่สุดในเกม ทั้งที่เงินเดือนสูงสุด — บ้าน 4.5 ล้านดันเส้นชัยหนีไปไกลมาก' },
+  { id: 'executive', tier: 4, name: 'ผู้บริหารบริษัท', icon: '🏢',
+    salary: 115000, fixed: 56000, food: 22000, cash: 180000, work: 242, commute: 44, health: 66, sleepNeed: 7,
+    debts: [{ name: 'ผ่อนบ้าน + รถหรู', balance: 3000000, rate: 0.006 }],
+    perkId: 'stable', perk: 'ตำแหน่งมั่นคง: ไม่ถูกเลิกจ้าง และกู้ดอกเบี้ยถูกกว่า',
+    note: 'ความเครียดสูงสุด สุขภาพเริ่มต้นแย่สุด — ตำแหน่งยิ่งสูง ไลฟ์สไตล์ยิ่งบังคับให้จ่าย' }
+];
+
+/* ---------------- ทอยเต๋าเริ่มเกม ---------------- */
+const ROLL_TABLE = {
+  1: { count: 2, tiers: [1], bonusHours: 45, label: 'เกิดมาแทบไม่มีทางเลือก' },
+  2: { count: 3, tiers: [1, 2], bonusHours: 30, label: 'ทางเลือกจำกัด' },
+  3: { count: 4, tiers: [1, 2], bonusHours: 20, label: 'พอมีทางให้เลือกบ้าง' },
+  4: { count: 5, tiers: [1, 2, 3], bonusHours: 10, label: 'โอกาสระดับกลาง' },
+  5: { count: 6, tiers: [1, 2, 3, 4], bonusHours: 0, label: 'โอกาสดี' },
+  6: { count: 7, tiers: [1, 2, 3, 4], bonusHours: 0, label: 'เกิดมาพร้อมทางเลือกเต็มมือ' }
+};
+
+function rollStart(seed, forcedRoll) {
+  const rng = makeRng((seed || 1) * 2654435761 >>> 0);
+  const roll = forcedRoll || (1 + Math.floor(rng() * 6));
+  const t = ROLL_TABLE[roll];
+  const pool = JOBS.filter(j => t.tiers.includes(j.tier));
+  const picked = [];
+  if (roll >= 4) {
+    const top = Math.max(...t.tiers);
+    const tops = pool.filter(j => j.tier === top);
+    picked.push(tops[Math.floor(rng() * tops.length)]);
+  }
+  const rest = pool.filter(j => !picked.includes(j)).sort(() => rng() - 0.5);
+  while (picked.length < t.count && rest.length) picked.push(rest.pop());
+  picked.sort((a, b) => a.tier - b.tier || a.salary - b.salary);
+  return { roll, jobs: picked, bonusHours: t.bonusHours, label: t.label };
+}
+
+const BOT_NAMES = ['พี่เอ๋ (บอท)', 'เจ๊หมวย (บอท)', 'น้องบีม (บอท)', 'ลุงวิรัช (บอท)'];
+
+/* ---------------- เป้าหมายชีวิต Phase 2 ---------------- */
+const DREAMS = [
+  { roll: 1, icon: '🏝️', name: 'บ้านพักตากอากาศริมทะเล', costMul: 48, passiveMul: 1.20,
+    desc: 'ซื้อบ้านริมทะเลไว้ให้ครอบครัวมารวมตัวกันทุกปี',
+    why: 'ใช้เงินก้อนใหญ่ แต่ไม่ได้เพิ่มภาระรายเดือนมาก' },
+  { roll: 2, icon: '🌍', name: 'พาครอบครัวเที่ยวรอบโลก + กองทุนการศึกษาลูก', costMul: 30, passiveMul: 1.70,
+    desc: 'ออกเดินทางหนึ่งปีเต็มโดยไม่ต้องห่วงเรื่องเงิน',
+    why: 'เงินก้อนน้อยกว่า แต่ต้องมีรายได้ต่อเดือนมั่นคงกว่ามาก เพราะจะไม่อยู่ดูแลอะไรเลยทั้งปี' },
+  { roll: 3, icon: '🎓', name: 'ตั้งมูลนิธิให้ทุนการศึกษาเด็กบ้านเกิด', costMul: 38, passiveMul: 2.10,
+    desc: 'สร้างมูลนิธิที่จ่ายทุนต่อเนื่องทุกปี ไม่ใช่บริจาคครั้งเดียวจบ',
+    why: 'ต้องการกระแสเงินสดมากที่สุด — เพราะมูลนิธิต้องเลี้ยงตัวเองได้ตลอดไป' },
+  { roll: 4, icon: '🏥', name: 'สร้างศูนย์สุขภาพชุมชนในบ้านเกิด', costMul: 70, passiveMul: 1.30,
+    desc: 'ลงทุนก้อนใหญ่ที่สุด เพื่อสิ่งที่อยู่ได้นานกว่าตัวเรา',
+    why: 'ความฝันที่แพงที่สุดในตาราง — ต้องสะสมความมั่งคั่งจริงจัง' },
+  { roll: 5, icon: '🏎️', name: 'คอลเลกชันรถในฝัน + บ้านหลังใหญ่', costMul: 59, passiveMul: 1.10,
+    desc: 'ของที่อยากได้มาตั้งแต่เด็ก ตอนนี้ซื้อได้แล้ว',
+    why: 'ราคาแพง แต่ขอรายได้ต่อเดือนน้อยที่สุด — ความฝันแบบบริโภคล้วนๆ' },
+  { roll: 6, icon: '🚀', name: 'เปิดบริษัทของตัวเอง ส่งต่อให้ลูกหลาน', costMul: 43, passiveMul: 1.90,
+    desc: 'จากคนที่ทำงานให้เงิน กลายเป็นคนที่สร้างงานให้คนอื่น',
+    why: 'สมดุลระหว่างเงินก้อนกับกระแสเงินสด และเป็นความฝันที่ต่อยอดได้อีก' }
+];
+
+/* ---------------- ดีล ---------------- */
+const MORTGAGE = 0.005;
+const DEAL_POOL = [
+  { kind: 'micro', icon: '💡', names: ['ตู้กดน้ำหยอดเหรียญ 3 ตู้', 'รถเข็นขายกาแฟ', 'ร้านขายของออนไลน์', 'ปล่อยเช่ามอเตอร์ไซค์ 2 คัน', 'ตู้เติมเงินมือถือ 5 ตู้'],
+    min: 20000, max: 140000, downPct: [1, 1], yield: [0.024, 0.045], vol: 0.15, w: 3.0 },
+  { kind: 'business', icon: '🏪', names: ['แฟรนไชส์กาแฟหน้าปั๊ม', 'ร้านซักอบรีด', 'ตู้ซักผ้าหยอดเหรียญ 6 ตู้', 'ร้านชำในหมู่บ้าน', 'คาร์แคร์เล็ก'],
+    min: 150000, max: 900000, downPct: [1, 1], yield: [0.020, 0.038], vol: 0.17, w: 2.4 },
+  { kind: 'business', icon: '⚙️', names: ['ร้านอาหารตามสั่ง 20 โต๊ะ', 'คาเฟ่ย่านออฟฟิศ', 'โกดังให้เช่า', 'คลินิกความงาม', 'โรงงานผลิตเล็ก'],
+    min: 1000000, max: 3500000, downPct: [1, 1], yield: [0.018, 0.033], vol: 0.19, w: 1.2 },
+  { kind: 'realestate', icon: '🏢', names: ['คอนโดปล่อยเช่าใกล้ BTS', 'ห้องแถวย่านตลาด', 'ทาวน์เฮาส์ชานเมือง', 'หอพักนักศึกษา 6 ห้อง'],
+    min: 600000, max: 2400000, downPct: [0.15, 0.25], yield: [0.0070, 0.0125], vol: 0.09, w: 2.2 },
+  { kind: 'realestate', icon: '🏘️', names: ['อพาร์ตเมนต์ 12 ห้อง', 'ตึกแถว 3 ชั้นย่านค้าขาย', 'บ้านเดี่ยวปล่อยเช่า', 'ที่ดินเปล่าติดถนนใหญ่'],
+    min: 3000000, max: 9000000, downPct: [0.18, 0.28], yield: [0.0068, 0.0120], vol: 0.11, w: 0.8 },
+  { kind: 'speculation', icon: '💰', names: ['ทองคำแท่ง 10 บาท', 'คริปโตเหรียญใหม่', 'นาฬิกาสะสมมือสอง', 'พระเครื่ององค์ดัง', 'หุ้น IPO ตัวร้อน'],
+    min: 30000, max: 600000, downPct: [1, 1], yield: [0, 0], vol: 0.34, w: 1.4 },
+  { kind: 'fund', icon: '📈', names: ['กองทุนรวมหุ้นปันผล', 'พันธบัตรรัฐบาล', 'กอง REIT อสังหาฯ', 'หุ้นกู้บริษัทใหญ่'],
+    min: 100000, max: 900000, downPct: [1, 1], yield: [0.005, 0.0078], vol: 0.05, w: 1.2 }
+];
+const BIG_DEALS = [
+  { kind: 'realestate', icon: '🏨', names: ['อพาร์ตเมนต์ 40 ห้อง', 'โรงแรมบูทีค 20 ห้อง', 'โกดังโซนอุตสาหกรรม', 'คอมมูนิตี้มอลล์เล็ก'],
+    min: 12000000, max: 40000000, downPct: [0.20, 0.30], yield: [0.0085, 0.0135], vol: 0.13, w: 1 },
+  { kind: 'business', icon: '🏭', names: ['แฟรนไชส์ 5 สาขา', 'ปั๊มน้ำมันชุมชน', 'โรงงานแปรรูปอาหาร', 'บริษัทขนส่ง 20 คัน'],
+    min: 8000000, max: 25000000, downPct: [1, 1], yield: [0.018, 0.031], vol: 0.21, w: 1 }
+];
+const MEGA_DEALS = [
+  { kind: 'realestate', icon: '🏙️', names: ['คอนโดมิเนียมทั้งตึก', 'คอมมูนิตี้มอลล์', 'โรงแรมรีสอร์ตริมทะเล', 'อาคารสำนักงานให้เช่า', 'สนามกอล์ฟ'],
+    downPct: [0.25, 0.35], yield: [0.0085, 0.0140], vol: 0.13 },
+  { kind: 'business', icon: '🏢', names: ['เชนร้านอาหาร 20 สาขา', 'บริษัทโลจิสติกส์ระดับภูมิภาค', 'โรงงานส่งออก', 'บริษัทพลังงานแสงอาทิตย์', 'กองทุนส่วนบุคคล'],
+    downPct: [1, 1], yield: [0.017, 0.029], vol: 0.20 }
+];
+const KIND_LABEL = { micro: 'ธุรกิจจิ๋ว', business: 'ธุรกิจ', realestate: 'อสังหาฯ', speculation: 'เก็งกำไร', fund: 'กองทุน/ตราสาร' };
+
+/* ---------------- เหตุการณ์ส่วนตัว ---------------- */
+const EVENTS = [
+  { id: 'appliance', w: 8, text: 'แอร์/ตู้เย็นพัง ต้องซื้อใหม่', costMul: [0.15, 0.45] },
+  { id: 'car', w: 7, text: 'รถเสีย ต้องเข้าอู่ด่วน', costMul: [0.20, 0.55] },
+  { id: 'social', w: 6, text: 'งานแต่ง งานบวช งานศพ มารัวๆ เดือนเดียว', costMul: [0.08, 0.22] },
+  { id: 'bonus', w: 7, text: 'ได้โบนัสประจำปี', gainMul: [0.6, 1.6] },
+  { id: 'raise', w: 4, text: 'ได้เลื่อนขั้น ปรับเงินเดือนถาวร', raise: [0.06, 0.13] },
+  { id: 'boom', w: 6, text: 'ตลาดอสังหาฯ/หุ้นคึกคัก ราคาสินทรัพย์พุ่ง', market: [0.05, 0.12] },
+  { id: 'bust', w: 6, text: 'เศรษฐกิจชะลอตัว ราคาสินทรัพย์ร่วง', market: [-0.12, -0.05] },
+  { id: 'child', w: 4, text: 'มีลูก! รายจ่ายเพิ่มถาวรและเวลาว่างหายไป', childMul: [0.10, 0.18], childHours: 35 },
+  { id: 'layoff', w: 3, text: 'ถูกเลิกจ้าง/ปรับโครงสร้าง ขาดรายได้ 2 เดือน', downsize: 2 },
+  { id: 'inherit', w: 3, text: 'ได้รับเงินก้อนจากที่บ้าน/มรดก', gainMul: [1.5, 4] },
+  { id: 'sick_s', w: 6, health: true, text: 'ไข้หวัดใหญ่ นอนซม 3 วัน', costMul: [0.10, 0.30], hpCost: 4, timeCost: 24 },
+  { id: 'sick_m', w: 4, health: true, text: 'ออฟฟิศซินโดรม/ปวดหลังเรื้อรัง ต้องทำกายภาพ', costMul: [0.25, 0.60], hpCost: 6, timeCost: 30 },
+  { id: 'sick_l', w: 3, health: true, text: 'เจ็บป่วยหนักต้องนอนโรงพยาบาล', costMul: [0.6, 1.6], hpCost: 12, timeCost: 60 },
+  { id: 'burnout', w: 3, health: true, text: 'หมดไฟ (Burnout) ทำอะไรก็ไม่เดิน', hpCost: 10, timeCost: 45 }
+];
+const EVENTS2 = [
+  { w: 7, text: 'ภาษีที่ดินและสิ่งปลูกสร้างประเมินใหม่', costMul: [0.4, 1.2] },
+  { w: 6, text: 'ญาติมาขอยืมเงินก้อนใหญ่ (ปฏิเสธไม่ลง)', costMul: [0.6, 1.8] },
+  { w: 5, text: 'ถูกฟ้องร้องคดีธุรกิจ ต้องจ้างทนาย', costMul: [0.8, 2.2] },
+  { w: 5, text: 'ผู้จัดการทรัพย์สินยักยอกเงิน', costMul: [0.5, 1.5] },
+  { w: 7, text: 'ผังเมืองใหม่ประกาศ ทรัพย์สินขึ้นราคา', market: [0.06, 0.15] },
+  { w: 6, text: 'ตลาดผันผวนหนัก ราคาสินทรัพย์ร่วง', market: [-0.15, -0.06] },
+  { w: 6, text: 'ได้รับเงินปันผลพิเศษจากธุรกิจ', gainMul: [1.5, 4] },
+  { w: 4, text: 'ลูกขอทุนเปิดธุรกิจ — รายจ่ายประจำเพิ่มถาวร', childMul: [0.06, 0.14] },
+  { w: 5, text: 'ได้รางวัลนักธุรกิจแห่งปี — มีคนเสนอดีลดีๆ เข้ามา', bonusDeals: 2 },
+  { w: 4, health: true, text: 'สุขภาพเริ่มฟ้อง — ต้องตรวจร่างกายละเอียด', costMul: [0.3, 0.8], hpCost: 6 }
+];
+
+/* ---------------- ภัยพิบัติ (กระทบทุกคน) ---------------- */
+const DISASTERS = [
+  { id: 'flood', icon: '🌊', name: 'น้ำท่วมใหญ่', dur: 3,
+    desc: 'ธุรกิจหน้าร้านปิดยาว ทรัพย์สินเสียหาย',
+    mods: { business: 0.5 }, cashCostMul: [0.8, 1.8], market: -0.07, hp: -4 },
+  { id: 'plague', icon: '🦠', name: 'โรคระบาดระลอกใหม่', dur: 4,
+    desc: 'ล็อกดาวน์ ธุรกิจบริการแทบไม่มีรายได้ และทุกคนสุขภาพแย่ลง',
+    mods: { business: 0.35 }, cashCostMul: [0.3, 0.9], market: -0.10, hp: -12 },
+  { id: 'crisis', icon: '📉', name: 'วิกฤตเศรษฐกิจ', dur: 4,
+    desc: 'ราคาสินทรัพย์ดิ่ง ธนาคารหั่นวงเงินสินเชื่อครึ่งหนึ่ง',
+    mods: { credit: 0.5 }, market: -0.22, hp: -3 },
+  { id: 'rate', icon: '🏦', name: 'ดอกเบี้ยพุ่งแรง', dur: 6,
+    desc: 'ค่าผ่อนทุกก้อนแพงขึ้น 45% — คนที่กู้เยอะเจ็บที่สุด',
+    mods: { rate: 1.45 }, market: -0.05 },
+  { id: 'quake', icon: '🏚️', name: 'แผ่นดินไหว', dur: 2,
+    desc: 'อาคารเสียหาย ค่าซ่อมมหาศาล ผู้เช่าย้ายออก',
+    mods: { realestate: 0.6 }, cashCostMul: [1.0, 2.2], market: -0.06, hp: -3 },
+  { id: 'inflation', icon: '💸', name: 'ค่าครองชีพพุ่งกระฉูด', dur: 1,
+    desc: 'ของแพงขึ้นทั้งกระดาน — รายจ่ายประจำเพิ่มถาวร',
+    inflate: 0.08, hp: -2 },
+  { id: 'fire', icon: '🔥', name: 'ไฟไหม้ย่านการค้า', dur: 4,
+    desc: 'ธุรกิจของบางคนถูกไฟไหม้ ต้องปิดซ่อมยาว',
+    burnAsset: true, cashCostMul: [0.4, 1.0], hp: -3 }
+];
+
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const fmtM = n => Math.abs(n) >= 1000000 ? (n / 1000000).toFixed(Math.abs(n) >= 10000000 ? 1 : 2) + ' ล้าน' : Math.round(n).toLocaleString('en-US');
+
+/* =========================================================
+   PLAYER
+   ========================================================= */
+class Player {
+  constructor(match, opts) {
+    const job = JOBS.find(j => j.id === opts.jobId) || JOBS[0];
+    this.match = match;
+    this.name = opts.name;
+    this.isAI = !!opts.isAI;
+    this.job = job;
+    this.roll = opts.roll || 0;
+    this.bonusHours = opts.bonusHours || 0;
+    this.cash = job.cash;
+    this.salary = job.salary;
+    this.fixedExpenses = job.fixed;
+    this.foodBase = job.food;
+    this.childCost = 0;
+    this.childHours = 0;
+    this.assets = [];
+    this.liabilities = job.debts.map(d => ({ ...d }));
+    this.sleepIdx = 2;
+    this.foodId = 'street';
+    this.place = 'home';            // อยู่ที่ไหนตอนนี้
+    this.travelUsed = 0;            // ชั่วโมงที่เสียไปกับการเดินทางเดือนนี้
+    this.vehicle = 'public';
+    this.devices = [];
+    this.gymPack = null;            // แพ็กเกจฟิตเนสที่ซื้อไว้เดือนนี้
+    this.shield = 0;                // โล่กันเหตุการณ์ร้ายจากการไปพักผ่อน
+    this.health = job.health;
+    this.timePenalty = 0;
+    this.exerciseThisMonth = 0;
+    this.restedThisMonth = false;
+    this.sideUsed = 0;
+    this.studyLevel = 0;
+    this.studyProgress = 0;
+    this.downsizeLeft = 0;
+    this.bankrupt = false;
+    this.finished = 0;
+    this.phase = 1;
+    this.dream = null;
+    this.dreamDone = 0;
+    this.retired = false;
+    this.pendingDream = false;
+    this.history = [];
+    this.hours = this.hoursMax;
+  }
+
+  get rng() { return this.match.rng; }
+  get sleep() { return SLEEP_OPTIONS[this.sleepIdx]; }
+  get food() { return FOOD_OPTIONS.find(f => f.id === this.foodId); }
+
+  get workHours() { return (this.retired || this.downsizeLeft > 0) ? 0 : this.job.work; }
+  get commuteHours() {
+    if (this.retired || this.downsizeLeft > 0) return 0;
+    return Math.round(this.job.commute * this.travelFactor);
+  }
+  get committedHours() { return this.sleep.hours + this.workHours + this.commuteHours + this.food.hours + CHORES_HOURS + this.childHours; }
+  get rawFreeHours() { return Math.max(0, HOURS_PER_MONTH - this.committedHours + this.bonusHours - this.timePenalty); }
+  get veh() { return VEHICLES.find(v => v.id === this.vehicle) || VEHICLES[0]; }
+  has(dev) { return this.devices.includes(dev); }
+  get travelFactor() { return this.veh.factor; }
+  /* ชั่วโมงเดินทางระหว่างสองสถานที่ */
+  travelCost(toId, fromId) {
+    const a = PLACE(fromId || this.place), b = PLACE(toId);
+    if (!a || !b || a.id === b.id) return 0;
+    return Math.max(1, Math.round(Math.abs(a.x - b.x) * TRAVEL_RATE * this.travelFactor));
+  }
+  /* ทำ action นี้ได้จากที่ไหนบ้าง (รวมทางลัดจากอุปกรณ์) */
+  placeFor(act) {
+    if (act === 'loan' || act === 'repay' || act === 'fund') {
+      if (this.has('smartphone')) return this.place;      // ออนไลน์ได้ทุกที่
+      return 'bank';
+    }
+    if (act === 'study') return this.has('laptop') ? this.place : 'school';
+    if (act === 'freelance') return this.has('laptop') ? this.place : 'cowork';
+    const p = PLACES.find(pl => pl.acts.includes(act));
+    return p ? p.id : this.place;
+  }
+  canDoHere(act) {
+    const need = this.placeFor(act);
+    return need === this.place;
+  }
+  get sleepNeed() { return this.retired ? 7 : (this.job.sleepNeed || 7); }
+  get sleepDebt() { return Math.max(0, this.sleepNeed - this.sleep.h); }   // นอนขาดกี่ชั่วโมง/คืน
+  get efficiency() {
+    const short = this.sleepDebt * 0.05;
+    return clamp((0.40 + 0.60 * this.health / 100) * (1 - this.sleep.penalty - short), 0.28, 1.05);
+  }
+  get hoursMax() { return Math.max(0, Math.round(this.rawFreeHours * this.efficiency)); }
+  cost(base) { return Math.round(base * (this.job.perkId === 'quick' && base === COST.deal ? 0.8 : 1)); }
+  canSpend(h) { return this.hours >= h; }
+
+  get foodCost() { return Math.round(this.foodBase * this.food.costMul); }
+  get passiveIncome() {
+    const m = this.match.mods;
+    return this.assets.reduce((s, a) => {
+      if (a.burned) return s;
+      const k = (a.kind === 'business' || a.kind === 'micro') ? m.business : (a.kind === 'realestate' ? m.realestate : 1);
+      return s + a.income * k;
+    }, 0);
+  }
+  assetNet(a) {
+    const m = this.match.mods;
+    const k = (a.kind === 'business' || a.kind === 'micro') ? m.business : (a.kind === 'realestate' ? m.realestate : 1);
+    return (a.burned ? 0 : a.income * k) - a.debt * MORTGAGE * m.rate;
+  }
+  get debtPayments() { return this.liabilities.reduce((s, d) => s + d.balance * d.rate, 0) * this.match.mods.rate; }
+  get upkeepCost() {
+    let u = this.veh.upkeep;
+    for (const d of this.devices) { const dd = DEVICES.find(x => x.id === d); if (dd) u += dd.upkeep; }
+    return u;
+  }
+  get totalExpenses() { return this.fixedExpenses + this.foodCost + this.childCost + this.upkeepCost + this.debtPayments; }
+  get currentSalary() { return (this.retired || this.downsizeLeft > 0) ? 0 : this.salary; }
+  get totalIncome() { return this.currentSalary + this.passiveIncome; }
+  get monthlyCashflow() { return this.totalIncome - this.totalExpenses; }
+  get totalDebt() { return this.liabilities.reduce((s, d) => s + d.balance, 0); }
+  get assetValue() { return this.assets.reduce((s, a) => s + a.value * this.match.marketIndex * a.drift, 0); }
+  get netWorth() { return this.cash + this.assetValue - this.totalDebt; }
+  get freedomPct() { return Math.min(100, this.passiveIncome / Math.max(1, this.totalExpenses) * 100); }
+  get creditLimit() {
+    const base = (this.salary + this.passiveIncome) * 30 * this.match.mods.credit;
+    return Math.round(base * (this.job.perkId === 'credit' ? 1.5 : 1));
+  }
+  get creditLeft() { return Math.max(0, this.creditLimit - this.totalDebt); }
+  assetPrice(a) { return a.value * this.match.marketIndex * a.drift; }
+  get healthLabel() {
+    const h = this.health;
+    if (h >= 85) return 'แข็งแรงมาก'; if (h >= 70) return 'ปกติดี';
+    if (h >= 55) return 'เริ่มโทรม'; if (h >= 40) return 'ไม่ค่อยดี';
+    if (h >= 25) return 'ย่ำแย่'; return 'วิกฤต';
+  }
+  get medFactor() {
+    const p = this.job.perkId;
+    return (p === 'stable' || this.job.id === 'doctor') ? 0.5 : (p === 'frugal' ? 0.6 : 1);
+  }
+  get studyNeed() { return 3 + this.studyLevel; }
+  get dreamPct() { return this.dream ? Math.min(100, this.netWorth / this.dream.cost * 100) : 0; }
+  get dreamPassivePct() { return this.dream ? Math.min(100, this.passiveIncome / this.dream.passiveReq * 100) : 0; }
+  canClaimDream() { return this.phase === 2 && this.netWorth >= this.dream.cost && this.passiveIncome >= this.dream.passiveReq; }
+  log(text, type) { this.match.log(text, type, this); }
+
+  /* เดินทางไปสถานที่อื่น — กินเวลาจริง */
+  travelTo(toId) {
+    if (toId === this.place) return { ok: false, msg: 'อยู่ที่นี่อยู่แล้ว' };
+    const h = this.travelCost(toId);
+    if (!this.canSpend(h)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${h} ชม. ในการเดินทาง (เหลือ ${this.hours} ชม.)` };
+    this.hours -= h; this.travelUsed += h;
+    const from = PLACE(this.place), to = PLACE(toId);
+    this.place = toId;
+    if (!this.isAI) this.log(`${this.veh.icon} เดินทางจาก${from.name} → ${to.icon} ${to.name} (${h} ชม.)`, 'move');
+    return { ok: true };
+  }
+
+  /* ซื้อพาหนะ — ดาวน์ + กู้ส่วนที่เหลือ */
+  buyVehicle(id) {
+    const v = VEHICLES.find(x => x.id === id);
+    if (!v) return { ok: false, msg: 'ไม่พบพาหนะ' };
+    if (this.place !== 'mall') return { ok: false, msg: 'ต้องไปดูรถที่ 🛒 ห้างสรรพสินค้า ก่อน' };
+    if (v.id === this.vehicle) return { ok: false, msg: 'ใช้คันนี้อยู่แล้ว' };
+    const cur = this.veh;
+    if (VEHICLES.indexOf(v) < VEHICLES.indexOf(cur)) {
+      // ขายคันเดิมทิ้ง (ได้คืน 55% ของราคาป้าย) แล้วลดระดับ
+      this.cash += Math.round(cur.price * 0.55);
+      this.vehicle = v.id;
+      this.log(`ขาย ${cur.icon} ${cur.name} แล้วเปลี่ยนเป็น ${v.icon} ${v.name}`, 'sell');
+      return { ok: true };
+    }
+    const down = Math.round(v.price * v.downPct) || v.price;
+    const debt = v.price - down;
+    if (this.cash < down) return { ok: false, msg: `เงินดาวน์ไม่พอ ต้องใช้ ${fmt(down)}฿` };
+    if (debt > this.creditLeft) return { ok: false, msg: 'วงเงินกู้ไม่พอ' };
+    if (cur.price > 0) this.cash += Math.round(cur.price * 0.5);   // เทิร์นคันเก่า
+    this.cash -= down;
+    if (debt > 0) this.liabilities.push({ name: 'ผ่อน' + v.name, balance: debt, rate: 0.007 });
+    this.vehicle = v.id;
+    this.log(`🛒 ซื้อ ${v.icon} ${v.name} — ดาวน์ ${fmt(down)}฿` + (debt ? ` ผ่อน ${fmtM(debt)}฿` : '') +
+      ` • เวลาเดินทางเหลือ ${Math.round(v.factor * 100)}% และค่าใช้จ่ายเพิ่ม ${fmt(v.upkeep)}฿/เดือน`, 'buy');
+    return { ok: true };
+  }
+
+  buyDevice(id) {
+    const d = DEVICES.find(x => x.id === id);
+    if (!d) return { ok: false, msg: 'ไม่พบอุปกรณ์' };
+    if (this.place !== 'mall' && !this.has('smartphone'))
+      return { ok: false, msg: 'ต้องไปที่ 🛒 ห้างสรรพสินค้า ก่อน' };
+    if (this.has(id)) return { ok: false, msg: 'มีอยู่แล้ว' };
+    if (this.cash < d.price) return { ok: false, msg: `เงินสดไม่พอ ต้องใช้ ${fmt(d.price)}฿` };
+    this.cash -= d.price;
+    this.devices.push(id);
+    this.log(`🛒 ซื้อ ${d.icon} ${d.name} — ${d.note}`, 'buy');
+    return { ok: true };
+  }
+
+  setSleep(i) {
+    if (!this.canDoHere('sleep')) return { ok: false, msg: 'ตั้งค่าการนอนได้ที่บ้านเท่านั้น' };
+    this.sleepIdx = clamp(i, 0, SLEEP_OPTIONS.length - 1); this.hours = Math.min(this.hours, this.hoursMax); return { ok: true };
+  }
+  setFood(id) {
+    if (!this.canDoHere('food')) return { ok: false, msg: 'วางแผนอาหารได้ที่บ้านเท่านั้น' };
+    if (FOOD_OPTIONS.some(f => f.id === id)) { this.foodId = id; this.hours = Math.min(this.hours, this.hoursMax); }
+    return { ok: true };
+  }
+
+  actForKind(kind) { return kind === 'speculation' ? 'gold' : (kind === 'fund' ? 'fund' : 'estate'); }
+  placeName(act) { const id = this.placeFor(act); const p = PLACE(id); return p ? p.icon + ' ' + p.name : ''; }
+  needTravel(act) {
+    const need = this.placeFor(act);
+    return need === this.place ? null : { place: need, hours: this.travelCost(need) };
+  }
+
+  /* ---------- actions ---------- */
+  closeDeal(dealId) {
+    const h = this.cost(COST.deal);
+    if (!this.canSpend(h)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${h} ชม. (เหลือ ${this.hours} ชม.)` };
+    const M = this.match;
+    const i = M.deals.findIndex(d => d.id === dealId);
+    if (i < 0) return { ok: false, msg: 'ดีลนี้ถูกคนอื่นคว้าไปแล้ว' };
+    const d = M.deals[i];
+    const act = this.actForKind(d.kind);
+    if (!this.canDoHere(act)) return { ok: false, msg: `ต้องไปที่ ${this.placeName(act)} ก่อน` };
+    const price = this.job.perkId === 'discount' ? Math.round(d.price * 0.9) : d.price;
+    const down = Math.round(price * (d.down / d.price));
+    const debt = price - down;
+    if (this.cash < down) return { ok: false, msg: 'เงินสดไม่พอจ่ายเงินดาวน์' };
+    if (debt > this.creditLeft) return { ok: false, msg: 'วงเงินกู้ไม่พอ ต้องลดหนี้ก่อน' };
+    this.hours -= h; this.cash -= down;
+    const income = Math.round(d.income * (price / d.price));
+    if (debt > 0) this.liabilities.push({ name: 'สินเชื่อ: ' + d.name, balance: debt, rate: MORTGAGE, linked: d.id });
+    this.assets.push({ id: d.id, kind: d.kind, icon: d.icon, name: d.name, value: price, cost: down, debt, income, vol: d.vol, drift: 1, offer: null, sick: 0, burned: 0 });
+    M.deals.splice(i, 1);
+    const net = income - debt * MORTGAGE;
+    this.log(`ซื้อ ${d.icon} ${d.name} (${h} ชม.) — ลงเงิน ${fmtM(down)}฿` + (debt ? ` กู้เพิ่ม ${fmtM(debt)}฿` : '') + ` → ${net >= 0 ? '+' : ''}${fmt(net)}฿/เดือน`, 'buy');
+    return { ok: true };
+  }
+
+  sellAsset(assetId) {
+    if (!this.canSpend(COST.sell)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${COST.sell} ชม.` };
+    const i = this.assets.findIndex(a => a.id === assetId);
+    if (i < 0) return { ok: false, msg: 'ไม่พบทรัพย์สิน' };
+    const a = this.assets[i];
+    const sAct = this.actForKind(a.kind);
+    if (!this.canDoHere(sAct)) return { ok: false, msg: `ต้องไปที่ ${this.placeName(sAct)} ก่อนถึงจะขายได้` };
+    this.hours -= COST.sell;
+    const price = a.offer ? a.offer.price : this.assetPrice(a) * 0.94;
+    const proceeds = price - a.debt;
+    this.cash += proceeds;
+    const li = this.liabilities.findIndex(l => l.linked === a.id);
+    if (li >= 0) this.liabilities.splice(li, 1);
+    this.assets.splice(i, 1);
+    const gain = price - a.value;
+    this.log(`ขาย ${a.icon} ${a.name} ได้ ${fmtM(price)}฿ (${gain >= 0 ? 'กำไร' : 'ขาดทุน'} ${fmtM(Math.abs(gain))}฿)`, gain >= 0 ? 'sell' : 'bad');
+    return { ok: true };
+  }
+
+  takeLoan(amount) {
+    if (!this.canDoHere('loan')) return { ok: false, msg: `ต้องไปที่ ${this.placeName('loan')} ก่อน (หรือซื้อ 📱 สมาร์ตโฟนเพื่อทำออนไลน์)` };
+    if (!this.canSpend(COST.loan)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${COST.loan} ชม.` };
+    amount = Math.round(amount / 10000) * 10000;
+    if (amount <= 0) return { ok: false, msg: 'จำนวนไม่ถูกต้อง' };
+    if (amount > this.creditLeft) return { ok: false, msg: 'เกินวงเงินกู้' };
+    this.hours -= COST.loan;
+    const soft = (this.job.perkId === 'credit' || this.job.perkId === 'stable');
+    const rate = soft ? 0.011 : 0.015;
+    this.liabilities.push({ name: 'สินเชื่อส่วนบุคคล', balance: amount, rate });
+    this.cash += amount;
+    this.log(`กู้เงิน ${fmtM(amount)}฿ (ดอกเบี้ย ${(rate * 1200).toFixed(0)}%/ปี)`, 'debt');
+    return { ok: true };
+  }
+
+  /* ชำระหนี้ได้ทั้งก้อนหรือบางส่วน — ไม่เสียเวลา (เป็นแค่การโอนเงิน) */
+  repayDebt(index, amount) {
+    if (!this.canDoHere('repay')) return { ok: false, msg: `ต้องไปที่ ${this.placeName('repay')} ก่อน (หรือซื้อ 📱 สมาร์ตโฟน)` };
+    const d = this.liabilities[index];
+    if (!d) return { ok: false, msg: 'ไม่พบหนี้' };
+    if (this.cash <= 0) return { ok: false, msg: 'ไม่มีเงินสดเหลือ' };
+    amount = Math.floor(Math.min(amount, d.balance, this.cash));
+    if (amount <= 0) return { ok: false, msg: 'จำนวนไม่ถูกต้อง' };
+    const saved = amount * d.rate * this.match.mods.rate;
+    this.cash -= amount; d.balance -= amount;
+    const closed = d.balance < 1;
+    this.log(`ชำระหนี้ "${d.name}" ${fmtM(amount)}฿` +
+      (closed ? ' — <b>ปิดหนี้ก้อนนี้เรียบร้อย!</b>' : ` — เหลือ ${fmtM(d.balance)}฿`) +
+      ` • ประหยัดดอกเบี้ยได้ ${fmt(saved)}฿/เดือน ตลอดไป`, 'debt');
+    if (closed) this.liabilities.splice(index, 1);
+    return { ok: true };
+  }
+
+  /* งานเสริมมีสองแบบ: OT ที่ออฟฟิศ กับ freelance ที่ co-working (หรือที่บ้านถ้ามีโน้ตบุ๊ก) */
+  sideJob(kind) {
+    kind = kind || 'ot';
+    if (kind === 'ot') {
+      if (this.retired) return { ok: false, msg: 'ลาออกจากงานประจำแล้ว รับ OT ไม่ได้' };
+      if (this.downsizeLeft > 0) return { ok: false, msg: 'ตอนนี้ไม่มีงานประจำอยู่' };
+    }
+    if (!this.canDoHere(kind === 'ot' ? 'ot' : 'freelance'))
+      return { ok: false, msg: `ต้องไปที่ ${this.placeName(kind === 'ot' ? 'ot' : 'freelance')} ก่อน` };
+    if (!this.canSpend(COST.side)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${COST.side} ชม.` };
+    if (this.sideUsed >= 3) return { ok: false, msg: 'รับงานเสริมได้สูงสุด 3 ครั้ง/เดือน' };
+    this.hours -= COST.side; this.sideUsed++;
+    const mul = this.job.perkId === 'hustle' ? 1.5 : 1;
+    /* freelance ที่ co-working ได้ดีกว่า OT 25% · ทำที่บ้านได้ 80% ของ co-working */
+    let rateMul = 1;
+    if (kind === 'freelance') rateMul = this.place === 'cowork' ? 1.25 : 1.0;
+    const gain = Math.round(this.salary * (0.16 + this.rng() * 0.10) * mul * rateMul);
+    this.cash += gain;
+    if (!this.isAI) this.log(`${kind === 'ot' ? '⏱️ รับ OT' : '💻 รับงาน freelance'} ${COST.side} ชม. ได้ ${fmt(gain)}฿`, 'work');
+    return { ok: true };
+  }
+
+  scout() {
+    if (!this.canDoHere('scout')) return { ok: false, msg: `ต้องไปที่ ${this.placeName('scout')} ก่อน` };
+    if (!this.canSpend(COST.scout)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${COST.scout} ชม.` };
+    this.hours -= COST.scout;
+    for (let i = 0; i < 2; i++) {
+      if (this.match.deals.length >= 11) this.match.deals.shift();
+      this.match.deals.push(this.match.makeDeal());
+    }
+    if (!this.isAI) this.log('ออกดูทำเล/หาข้อมูล พบดีลใหม่ 2 รายการเข้าตลาด', 'info');
+    return { ok: true };
+  }
+
+  study() {
+    if (!this.canDoHere('study')) return { ok: false, msg: `ต้องไปที่ ${this.placeName('study')} ก่อน (หรือซื้อ 💻 โน้ตบุ๊กเพื่อเรียนออนไลน์)` };
+    if (!this.canSpend(COST.study)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${COST.study} ชม.` };
+    const online = this.place !== 'school';
+    const fee = Math.round(this.salary * (online ? 0.35 : 0.55));
+    if (this.cash < fee) return { ok: false, msg: `ค่าเรียน ${fmt(fee)}฿ — เงินสดไม่พอ` };
+    this.hours -= COST.study; this.cash -= fee;
+    this.studyProgress += (this.job.perkId === 'hustle' ? 1.5 : 1) * (online ? 0.7 : 1);
+    if (this.studyProgress >= this.studyNeed) {
+      this.studyProgress = 0; this.studyLevel++;
+      this.salary = Math.round(this.salary * 1.13);
+      this.log(`🎓 เรียนจบคอร์ส! เงินเดือนขึ้น 13% เป็น ${fmt(this.salary)}฿ — และรายจ่ายไม่ได้ขึ้นตาม ต่างจากการเลื่อนขั้นแบบปกติ`, 'good');
+    } else if (!this.isAI) {
+      this.log(`📚 เรียนเพิ่มเติม (${COST.study} ชม. + ${fmt(fee)}฿) — ความคืบหน้า ${Math.floor(this.studyProgress)}/${this.studyNeed}`, 'info');
+    }
+    return { ok: true };
+  }
+
+  /* ออกกำลังกายที่ฟิตเนส — เลือกแพ็กเกจได้ */
+  exercise(packId) {
+    if (!this.canDoHere('gym')) return { ok: false, msg: `ต้องไปที่ ${this.placeName('gym')} ก่อน` };
+    const pk = GYM_PACKS.find(g => g.id === (packId || this.gymPack || 'daily')) || GYM_PACKS[0];
+    const owned = pk.monthly && this.gymPack === pk.id;
+    const fee = owned ? 0 : pk.cost;
+    if (!this.canSpend(pk.hours)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${pk.hours} ชม.` };
+    if (this.cash < fee) return { ok: false, msg: `เงินสดไม่พอ ต้องจ่าย ${fmt(fee)}฿` };
+    this.hours -= pk.hours; this.cash -= fee; this.exerciseThisMonth++;
+    if (pk.monthly && !owned) this.gymPack = pk.id;
+    const gain = pk.hp + (this.job.id === 'nurse' ? 1 : 0);
+    this.health = clamp(this.health + gain, 0, 100);
+    if (!this.isAI) this.log(`🏋️ ${pk.icon} ${pk.name} — ${pk.hours} ชม.` + (fee ? ` จ่าย ${fmt(fee)}฿` : ' (ใช้แพ็กเกจที่ซื้อไว้)') +
+      ` → สุขภาพ +${gain} (ตอนนี้ ${Math.round(this.health)})`, 'good');
+    return { ok: true };
+  }
+
+  /* ไปพักผ่อนที่โรงแรม/รีสอร์ต */
+  vacation(packId) {
+    if (!this.canDoHere('resort')) return { ok: false, msg: `ต้องไปที่ ${this.placeName('resort')} ก่อน` };
+    const pk = RESORT_PACKS.find(r => r.id === packId) || RESORT_PACKS[0];
+    if (!this.canSpend(pk.hours)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${pk.hours} ชม.` };
+    if (this.cash < pk.cost) return { ok: false, msg: `เงินสดไม่พอ ต้องจ่าย ${fmt(pk.cost)}฿` };
+    this.hours -= pk.hours; this.cash -= pk.cost;
+    this.health = clamp(this.health + pk.hp, 0, 100);
+    this.shield = Math.max(this.shield, pk.shield);
+    this.restedThisMonth = true;
+    if (!this.isAI) this.log(`${pk.icon} ${pk.name} — ${pk.hours} ชม. จ่าย ${fmt(pk.cost)}฿ → สุขภาพ +${pk.hp}` +
+      (pk.shield ? ` และลดโอกาสเกิดเรื่องร้าย ${Math.round(pk.shield * 100)}%` : ''), 'good');
+    return { ok: true };
+  }
+
+  rest() {
+    if (!this.canDoHere('rest')) return { ok: false, msg: `ต้องกลับ ${this.placeName('rest')} ก่อน` };
+    if (!this.canSpend(COST.rest)) return { ok: false, msg: `เวลาไม่พอ ต้องใช้ ${COST.rest} ชม.` };
+    this.hours -= COST.rest;
+    this.health = clamp(this.health + 2.5, 0, 100);
+    this.restedThisMonth = true;
+    if (!this.isAI) this.log(`🛋️ พักผ่อน/อยู่กับครอบครัว ${COST.rest} ชม. — สุขภาพ +2.5 และลดโอกาสเกิดเรื่องร้าย`, 'good');
+    return { ok: true };
+  }
+
+  /* ---------- Phase 2 ---------- */
+  enterPhase2(dream, retire) {
+    this.phase = 2; this.pendingDream = false;
+    const exp = this.totalExpenses;
+    this.dream = { ...dream, cost: Math.round(exp * dream.costMul / 10000) * 10000, passiveReq: Math.round(exp * dream.passiveMul / 100) * 100 };
+    this.retired = !!retire;
+    this.hours = this.hoursMax;
+    this.match.log(`${this.name} ตั้งเป้าหมายใหม่: ${dream.icon} ${dream.name} — ต้องมีความมั่งคั่งสุทธิ ${fmtM(this.dream.cost)}฿ + รายได้จากทรัพย์สิน ${fmt(this.dream.passiveReq)}฿/เดือน` +
+      (retire ? ` • ลาออกจากงานประจำ (ได้เวลาคืน ${this.job.work + this.job.commute} ชม./เดือน แต่ไม่มีเงินเดือน)` : ' • ยังทำงานประจำต่อ'), 'win', null);
+  }
+
+  claimDream() {
+    if (!this.canClaimDream()) return { ok: false, msg: 'ยังไม่ครบทั้งความมั่งคั่งและรายได้ต่อเดือน' };
+    this.phase = 3; this.dreamDone = this.match.month;
+    const rank = this.match.champions.length + 1;
+    this.match.champions.push({ name: this.name, icon: this.job.icon, job: this.job.name,
+      dream: this.dream.name, dreamIcon: this.dream.icon, month: this.dreamDone, isAI: this.isAI, rank });
+    this.match.log(`👑 อันดับ ${rank} — ${this.name} ทำความฝัน "${this.dream.name}" สำเร็จในเดือนที่ ${this.dreamDone}!` +
+      (this.isAI ? ' (เกมยังเดินต่อจนกว่าคุณจะถึงฝันของตัวเอง)' : ''), 'win', null);
+    return { ok: true };
+  }
+
+  /* ---------- settle ---------- */
+  settle() {
+    const r = this.rng, M = this.match;
+
+    for (const a of this.assets) {
+      a.drift *= 1 + (r() - (a.kind === 'speculation' && this.job.perkId === 'insight' ? 0.508 : 0.5)) * a.vol * 0.55;
+      a.drift = clamp(a.drift, 0.35, 3.2);
+      if (a.offer) { a.offer.ttl--; if (a.offer.ttl <= 0) a.offer = null; }
+      if (a.sick > 0) { a.sick--; if (a.sick === 0) { a.income = a.baseIncome; delete a.baseIncome; this.log(`${a.icon} ${a.name} กลับมาทำกำไรตามปกติ`, 'good'); } }
+      if (a.burned > 0) { a.burned--; if (a.burned === 0) this.log(`${a.icon} ${a.name} ซ่อมเสร็จ กลับมาสร้างรายได้แล้ว`, 'good'); }
+      if (!a.offer && r() < 0.11) {
+        const base = a.kind === 'speculation' ? 1.12 + r() * 0.55 : 1.08 + r() * 0.30;
+        a.offer = { price: Math.round(this.assetPrice(a) * base), ttl: 2 };
+        if (!this.isAI) this.log(`💰 มีผู้เสนอซื้อ ${a.icon} ${a.name} ที่ ${fmtM(a.offer.price)}฿ (สูงกว่าราคาตลาด) — หมดอายุใน 2 เดือน`, 'offer');
+      }
+    }
+
+    if (M.month % 12 === 0) {
+      this.fixedExpenses = Math.round(this.fixedExpenses * 1.05);
+      this.foodBase = Math.round(this.foodBase * 1.05);
+      if (!this.isAI) this.log(`📈 ครบ ${M.month / 12} ปี — เงินเฟ้อดันค่าครองชีพขึ้น 5%`, 'bad');
+    }
+
+    const income = this.totalIncome, expense = this.totalExpenses, net = income - expense;
+    this.cash += net;
+    if (!this.isAI) this.log(`📅 สิ้นเดือนที่ ${M.month} — รับ ${fmt(income)}฿ / จ่าย ${fmt(expense)}฿ → ${net >= 0 ? '+' : ''}${fmt(net)}฿`, net >= 0 ? 'payday' : 'bad');
+    if (this.downsizeLeft > 0) this.downsizeLeft--;
+
+    /* สุขภาพประจำเดือน */
+    let dh = this.sleep.health + this.food.health - 0.35 - this.sleepDebt * 1.3 + this.veh.hp;
+    const load = this.workHours + this.sideUsed * COST.side;
+    if (load > 300) dh -= 3; else if (load > 255) dh -= 1.5;
+    if (this.job.perkId === 'hustle') dh += 0.8;
+    this.health = clamp(this.health + dh, 0, 100);
+
+    if (this.sleepDebt > 0 && !this.isAI && M.month % 3 === 0) {
+      this.log(`😴 อาชีพ${this.job.name}ต้องการนอน ${this.sleepNeed} ชม./คืน แต่คุณนอน ${this.sleep.h} — สุขภาพลดเพิ่ม ${(this.sleepDebt * 1.3).toFixed(1)}/เดือน และประสิทธิภาพหายอีก ${this.sleepDebt * 5}%`, 'bad');
+    }
+    if (this.health < 25 && r() < 0.30) {
+      const bill = Math.round(this.totalExpenses * (1.2 + r() * 1.6) * this.medFactor);
+      this.cash -= bill;
+      this.downsizeLeft = Math.max(this.downsizeLeft, 1);
+      this.timePenalty += 90;
+      this.health = clamp(this.health + 18, 0, 100);
+      this.log(`🏥 สุขภาพวิกฤต! ล้มป่วยหนักต้องหยุดงาน 1 เดือน + ค่ารักษา ${fmt(bill)}฿ — สุขภาพคือทรัพย์สินที่แพงที่สุด`, 'bad');
+    }
+
+    let evChance = 0.42 * (1 - this.shield);
+    if (this.restedThisMonth) evChance -= 0.07;
+    if (r() < evChance) this.rollEvent();
+    this.restedThisMonth = false;
+
+    for (const a of this.assets) {
+      if ((a.kind === 'business' || a.kind === 'micro') && !a.sick && !a.burned && r() < 0.05) {
+        a.baseIncome = a.income; a.income = Math.round(a.income * 0.35);
+        a.sick = 2 + Math.floor(r() * 3);
+        this.log(`⚠️ ${a.icon} ${a.name} ยอดขายตก รายได้ลดชั่วคราว ${a.sick} เดือน`, 'bad');
+      }
+    }
+
+    if (this.cash < 0) {
+      const need = Math.ceil(-this.cash / 10000) * 10000;
+      this.liabilities.push({ name: 'บัตรกดเงินสด (ดอกโหด)', balance: need, rate: 0.023 });
+      this.cash += need;
+      this.log(`🚨 เงินสดไม่พอ! ต้องกดบัตรเงินสด ${fmt(need)}฿ ดอกเบี้ย 28%/ปี`, 'bad');
+    }
+
+    this.history.push({ m: M.month, passive: Math.round(this.passiveIncome), exp: Math.round(this.totalExpenses),
+      nw: Math.round(this.netWorth), cash: Math.round(this.cash), hp: +this.health.toFixed(1),
+      hours: this.hoursMax, assets: this.assets.length, debt: Math.round(this.totalDebt),
+      salary: this.salary, sleep: this.sleep.h, food: this.foodId, phase: this.phase,
+      travel: this.travelUsed, vehicle: this.vehicle, devices: this.devices.join('|'),
+      dis: M.activeDisasters.map(d => d.def.id).join('|') });
+
+    if (!this.bankrupt && this.debtPayments > (this.currentSalary + this.passiveIncome) * 1.25 && this.netWorth < 0) {
+      this.bankrupt = true;
+      this.log('💀 ล้มละลาย — ภาระหนี้ท่วมรายได้ และทรัพย์สินไม่พอชำระ', 'bad');
+    }
+    if (!this.finished && this.passiveIncome >= this.totalExpenses) {
+      this.finished = M.month;
+      M.log(`🎉 ${this.name} ออกจากสนามแข่งหนูได้แล้ว! (เดือนที่ ${this.finished}) — ต่อไปคือการตามล่าความฝัน`, 'win', null);
+      if (this.isAI) this.enterPhase2(DREAMS[Math.floor(r() * DREAMS.length)], this.passiveIncome > this.totalExpenses * 1.12);
+      else this.pendingDream = true;
+    }
+    if (this.isAI && this.phase === 2 && this.canClaimDream()) this.claimDream();
+
+    this.timePenalty = Math.max(0, this.timePenalty - 90);
+    this.sideUsed = 0; this.exerciseThisMonth = 0;
+    this.place = 'home';            // สิ้นเดือนกลับบ้านเสมอ
+    this.travelUsed = 0;
+    this.gymPack = null;            // แพ็กเกจฟิตเนสหมดอายุรายเดือน
+    this.shield = 0;
+    this.hours = this.hoursMax;
+  }
+
+  rollEvent() {
+    const r = this.rng;
+    const list = this.phase >= 2 ? EVENTS2 : EVENTS;
+    const base = this.phase >= 2 ? this.totalExpenses : Math.max(this.salary, this.totalExpenses * 0.6);
+    const hpBoost = this.health < 40 ? 3.2 : (this.health < 55 ? 2.0 : (this.health < 70 ? 1.2 : 0.6));
+    const weights = list.map(e => e.health ? e.w * hpBoost : e.w);
+    const total = weights.reduce((s, w) => s + w, 0);
+    let roll = r() * total, ev = list[0];
+    for (let i = 0; i < list.length; i++) { roll -= weights[i]; if (roll <= 0) { ev = list[i]; break; } }
+
+    if (ev.bonusDeals) {
+      for (let i = 0; i < ev.bonusDeals; i++) this.match.deals.push(this.match.makeDeal());
+      this.log(`✨ ${ev.text}`, 'good'); return;
+    }
+    const frugal = this.job.perkId === 'frugal' ? 0.5 : 1;
+    const med = ev.health ? this.medFactor : 1;
+    let msg = '';
+    if (ev.costMul) {
+      const c = Math.round(base * (ev.costMul[0] + r() * (ev.costMul[1] - ev.costMul[0])) * frugal * med);
+      this.cash -= c; msg = `−${fmt(c)}฿`;
+    } else if (ev.gainMul) {
+      const g = Math.round(base * (ev.gainMul[0] + r() * (ev.gainMul[1] - ev.gainMul[0])));
+      this.cash += g; this.log(`✨ ${ev.text} +${fmt(g)}฿`, 'good'); return;
+    } else if (ev.raise) {
+      const p = ev.raise[0] + r() * (ev.raise[1] - ev.raise[0]);
+      this.salary = Math.round(this.salary * (1 + p));
+      this.fixedExpenses = Math.round(this.fixedExpenses * (1 + p * 0.55));
+      this.log(`✨ ${ev.text} (+${(p * 100).toFixed(0)}%) — แต่รายจ่ายโตตามทันที (ต่างจากการเรียนเพิ่มเติม)`, 'good'); return;
+    } else if (ev.market) {
+      const m = ev.market[0] + r() * (ev.market[1] - ev.market[0]);
+      this.match.marketIndex = clamp(this.match.marketIndex * (1 + m), 0.55, 1.9);
+      this.log(`${m > 0 ? '📈' : '📉'} ${ev.text} (${(m * 100).toFixed(0)}%)`, m > 0 ? 'good' : 'bad'); return;
+    } else if (ev.childMul) {
+      const c = Math.round(base * (ev.childMul[0] + r() * (ev.childMul[1] - ev.childMul[0])));
+      this.childCost += c;
+      if (ev.childHours) this.childHours += ev.childHours;
+      this.log(`👶 ${ev.text} (+${fmt(c)}฿/เดือน${ev.childHours ? ` และเวลาว่างหายไป ${ev.childHours} ชม./เดือน` : ''})`, 'bad'); return;
+    } else if (ev.downsize) {
+      if (this.job.perkId === 'stable') { this.log('🛡️ มีการปรับโครงสร้าง แต่ตำแหน่งคุณมั่นคง — รอดมาได้', 'good'); return; }
+      this.downsizeLeft = ev.downsize;
+      this.log(`💥 ${ev.text} — รายจ่ายยังเดินต่อ`, 'bad'); return;
+    }
+    if (ev.hpCost) { this.health = clamp(this.health - ev.hpCost, 0, 100); msg += ` • สุขภาพ −${ev.hpCost}`; }
+    if (ev.timeCost) { this.timePenalty += ev.timeCost; msg += ` • เดือนหน้าเสียเวลา ${ev.timeCost} ชม.`; }
+    this.log(`❗ ${ev.text} ${msg}`, 'bad');
+  }
+
+  /* ---------- AI ----------
+     บอทต้องวางแผนเส้นทางเองแล้ว: คะแนน = ผลตอบแทน ÷ (เวลาทำ + เวลาเดินทาง)
+  */
+  aiTurn() {
+    /* ไลฟ์สไตล์ (ทำได้ที่บ้านตอนต้นเดือน) */
+    if (this.place === 'home') {
+      const needIdx = SLEEP_OPTIONS.findIndex(o => o.h >= (this.job.sleepNeed || 7));
+      if (this.health < 55) { this.sleepIdx = 3; this.setFood('cook'); }
+      else if (this.cash < this.totalExpenses * 2) { this.sleepIdx = Math.max(needIdx, 2); this.setFood('cook'); }
+      else { this.sleepIdx = Math.max(needIdx, 2); this.setFood('street'); }
+      if (this.has('smartphone')) this.aiShop();
+    }
+    if (this.place === 'mall') this.aiShop();
+
+    let guard = 0;
+    while (this.hours > 0 && guard++ < 40) {
+      if (this.phase === 2 && this.canClaimDream()) { this.claimDream(); return; }
+      const best = this.aiBestMove();
+      if (!best) break;
+      if (best.travel > 0) { if (!this.travelTo(best.place).ok) break; }
+      const r = best.run();
+      if (!r || !r.ok) break;
+    }
+    this.hours = 0;
+  }
+
+  aiWantsShop() {
+    if (this.place === 'mall') return false;
+    if (!this.has('smartphone') && this.cash > 90000) return true;
+    if (!this.has('laptop') && this.cash > 160000) return true;
+    const val = Math.max(300, (this.salary + this.passiveIncome) / Math.max(40, this.hoursMax));
+    for (let i = VEHICLES.length - 1; i >= 1; i--) {
+      const v = VEHICLES[i];
+      if (VEHICLES.indexOf(this.veh) >= i) break;
+      const saveH = (this.job.commute + 40) * (this.veh.factor - v.factor);
+      const cost = v.upkeep + (v.price - v.price * v.downPct) * 0.007;
+      const down = Math.round(v.price * v.downPct);
+      if (saveH * val > cost * 1.25 && this.cash > down + this.totalExpenses * 3) return true;
+    }
+    return false;
+  }
+
+  /* ตัดสินใจซื้อของอำนวยความสะดวก */
+  aiShop() {
+    const val = Math.max(300, (this.salary + this.passiveIncome) / Math.max(40, this.hoursMax)); // มูลค่าต่อชั่วโมง
+    if (!this.has('smartphone') && this.cash > 90000) this.buyDevice('smartphone');
+    if (!this.has('laptop') && this.cash > 160000) this.buyDevice('laptop');
+    for (let i = VEHICLES.length - 1; i >= 1; i--) {
+      const v = VEHICLES[i];
+      if (VEHICLES.indexOf(this.veh) >= i) break;
+      const saveH = (this.job.commute + 40) * (this.veh.factor - v.factor);   // ชม.ที่ประหยัดได้/เดือน
+      const cost = v.upkeep + (v.price - v.price * v.downPct) * 0.007;
+      const down = Math.round(v.price * v.downPct);
+      if (saveH * val > cost * 1.25 && this.cash > down + this.totalExpenses * 3
+          && (v.price - down) <= this.creditLeft) { this.buyVehicle(v.id); break; }
+    }
+  }
+
+  /* คืนตัวเลือกที่คุ้มที่สุด (รวมเวลาเดินทางในการคิดแล้ว) */
+  aiBestMove() {
+    const cands = [];
+    const add = (place, hours, score, run) => {
+      const travel = place === this.place ? 0 : this.travelCost(place);
+      const total = hours + travel;
+      if (total > this.hours || total <= 0) return;
+      cands.push({ place, travel, score: score / total, run });
+    };
+
+    /* ขายทรัพย์สินที่มีข้อเสนอดี */
+    for (const a of this.assets) {
+      if (!a.offer) continue;
+      const need = a.kind === 'speculation' ? 1.22 : 1.28;
+      if (a.offer.price <= a.value * need) continue;
+      add(this.placeFor(this.actForKind(a.kind)), COST.sell, (a.offer.price - a.value) / 1000,
+        () => this.sellAsset(a.id));
+    }
+    /* ซื้อดีล */
+    for (const d of this.match.deals) {
+      const price = this.job.perkId === 'discount' ? d.price * 0.9 : d.price;
+      const down = price * (d.down / d.price), debt = price - down;
+      const cf = d.income * (price / d.price) - debt * MORTGAGE;
+      const roi = d.kind === 'speculation' ? 0.022 : cf / Math.max(1, down);
+      if (this.cash - down < this.totalExpenses * 0.5 || debt > this.creditLeft || roi < 0.018) continue;
+      add(this.placeFor(this.actForKind(d.kind)), this.cost(COST.deal), cf / 40 + roi * 400,
+        () => this.closeDeal(d.id));
+    }
+    /* สุขภาพ */
+    if (this.health < 80) {
+      const urgency = this.health < 50 ? 60 : (this.health < 65 ? 25 : 8);
+      const pk = this.gymPack ? GYM_PACKS.find(g => g.id === this.gymPack)
+        : (this.cash > 40000 ? GYM_PACKS[1] : GYM_PACKS[0]);
+      add('gym', pk.hours, urgency, () => this.exercise(pk.id));
+      if (this.health < 45 && this.cash > 60000)
+        add('resort', RESORT_PACKS[1].hours, urgency * 1.1, () => this.vacation('weekend'));
+      add('home', COST.rest, urgency * 0.35, () => this.rest());
+    }
+    /* เรียน */
+    if (this.phase === 1 && this.studyLevel < 2 && this.match.month < 24 && this.cash > this.salary * 2.5)
+      add(this.placeFor('study'), COST.study, 14, () => this.study());
+    /* งานเสริม */
+    if (this.cash < this.totalExpenses * 2.5 && this.sideUsed < 3) {
+      if (!this.retired && this.downsizeLeft === 0)
+        add('office', COST.side, this.salary * 0.21 / 900, () => this.sideJob('ot'));
+      add(this.placeFor('freelance'), COST.side, this.salary * 0.24 / 900, () => this.sideJob('freelance'));
+    }
+    /* หาดีลใหม่ */
+    if (this.match.deals.length < 9)
+      add('estate', COST.scout, 6, () => this.scout());
+    /* ไปห้างซื้อของอำนวยความสะดวก */
+    if (this.aiWantsShop()) add('mall', 2, 30, () => { this.aiShop(); return { ok: true }; });
+
+    if (!cands.length) return null;
+    cands.sort((a, b) => b.score - a.score);
+    return cands[0];
+  }
+}
+
+/* =========================================================
+   MATCH
+   ========================================================= */
+class Match {
+  constructor(opts) {
+    this.mode = opts.mode || 'solo';
+    this.rng = makeRng(opts.seed || 12345);
+    this.month = 1;
+    this.marketIndex = 1;
+    this.marketTrend = 0;
+    this.dealIdSeq = 1;
+    this.deals = [];
+    this.logs = [];
+    this.state = 'playing';
+    this.activeDisasters = [];
+    this.disasterCooldown = 9 + Math.floor(this.rng() * 8);
+    this.disasterHistory = [];
+    this.champions = [];          // ใครทำความฝันสำเร็จแล้วบ้าง (เกมยังเดินต่อ)
+    this.players = opts.players.map(p => new Player(this, p));
+    this.startIndex = 0;
+    this.turn = 0;
+    this.refillMarket();
+    this.log(`เริ่มแมตช์ — โหมด ${this.mode === 'solo' ? 'SOLO (สู้กับบอท)' : 'MULTIPLAYER'} • ผู้เล่น ${this.players.length} คน`, 'sys', null);
+    this.beginMonth();
+  }
+
+  get mods() {
+    const m = { business: 1, realestate: 1, rate: 1, credit: 1 };
+    for (const d of this.activeDisasters) {
+      const x = d.def.mods || {};
+      if (x.business) m.business *= x.business;
+      if (x.realestate) m.realestate *= x.realestate;
+      if (x.rate) m.rate *= x.rate;
+      if (x.credit) m.credit *= x.credit;
+    }
+    return m;
+  }
+
+  get order() {
+    const n = this.players.length, o = [];
+    for (let i = 0; i < n; i++) o.push(this.players[(this.startIndex + i) % n]);
+    return o;
+  }
+  get current() { return this.order[this.turn]; }
+  get human() { return this.players.find(p => !p.isAI); }
+
+  log(text, type, player) {
+    this.logs.unshift({ month: this.month, text, type: type || 'info', who: player ? player.name : null });
+    if (this.logs.length > 140) this.logs.pop();
+  }
+
+  pickTemplate(pool, maxDown) {
+    const r = this.rng;
+    let cand = pool;
+    if (maxDown) cand = pool.filter(t => t.min * t.downPct[0] <= maxDown);
+    if (!cand.length) cand = pool;
+    const total = cand.reduce((s, t) => s + (t.w || 1), 0);
+    let x = r() * total;
+    for (const t of cand) { x -= (t.w || 1); if (x <= 0) return t; }
+    return cand[cand.length - 1];
+  }
+
+  makeDeal(forceBig, maxDown) {
+    const r = this.rng;
+    const richest = Math.max(0, ...this.players.map(p => p.netWorth || 0));
+    const anyPhase2 = this.players.some(p => p.phase >= 2);
+
+    if (!maxDown && anyPhase2 && r() < 0.38) {
+      const t = MEGA_DEALS[Math.floor(r() * MEGA_DEALS.length)];
+      const price = Math.max(1000000, Math.round(richest * (0.15 + r() * 0.5) / 100000) * 100000);
+      const downPct = t.downPct[0] + r() * (t.downPct[1] - t.downPct[0]);
+      const down = Math.round(price * downPct), debt = price - down;
+      const income = Math.round(price * (t.yield[0] + r() * (t.yield[1] - t.yield[0])));
+      return { id: this.dealIdSeq++, kind: t.kind, icon: t.icon, name: t.names[Math.floor(r() * t.names.length)],
+        price, down, debt, income, cashflow: Math.round(income - debt * MORTGAGE), vol: t.vol,
+        mortgageRate: MORTGAGE, ttl: 2 + Math.floor(r() * 3), big: true, mega: true };
+    }
+
+    const big = forceBig || (!maxDown && richest > 4000000 && r() < 0.30);
+    const pool = big ? BIG_DEALS : DEAL_POOL;
+    const t = this.pickTemplate(pool, maxDown);
+    const step = t.min >= 1000000 ? 100000 : (t.min >= 100000 ? 10000 : 1000);
+    let hi = t.max;
+    if (maxDown) hi = Math.min(t.max, Math.max(t.min, maxDown / t.downPct[0]));
+    const price = Math.round((t.min + r() * (hi - t.min)) / step) * step;
+    const downPct = t.downPct[0] + r() * (t.downPct[1] - t.downPct[0]);
+    const down = Math.round(price * downPct), debt = price - down;
+    const income = Math.round(price * (t.yield[0] + r() * (t.yield[1] - t.yield[0])));
+    return { id: this.dealIdSeq++, kind: t.kind, icon: t.icon, name: t.names[Math.floor(r() * t.names.length)],
+      price, down, debt, income, cashflow: Math.round(income - debt * MORTGAGE), vol: t.vol,
+      mortgageRate: MORTGAGE, ttl: 2 + Math.floor(r() * 3), big: !!big };
+  }
+
+  refillMarket() {
+    const target = 4 + this.players.length;
+    while (this.deals.length < target) this.deals.push(this.makeDeal());
+    const alive = this.players.filter(p => !p.bankrupt && p.phase < 3);
+    if (!alive.length) return;
+    const poorest = Math.max(30000, Math.min(...alive.map(p => p.cash)));
+    let cheap = this.deals.filter(d => d.down <= poorest).length, guard = 0;
+    while (cheap < 2 && guard++ < 6) {
+      if (this.deals.length >= target + 2) this.deals.shift();
+      this.deals.push(this.makeDeal(false, poorest));
+      cheap = this.deals.filter(d => d.down <= poorest).length;
+    }
+  }
+
+  beginMonth() { this.turn = 0; this.runAITurns(); }
+
+  runAITurns() {
+    while (this.state === 'playing' && this.turn < this.players.length) {
+      const p = this.current;
+      if (p.isAI) { if (!p.bankrupt && p.phase < 3) p.aiTurn(); this.turn++; }
+      else if (p.bankrupt || p.phase === 3) { this.turn++; }
+      else break;
+    }
+    if (this.turn >= this.players.length) this.endMonth();
+  }
+
+  endTurn() {
+    if (this.state !== 'playing') return;
+    this.current.hours = 0;
+    this.turn++;
+    this.runAITurns();
+  }
+
+  tickDisasters() {
+    for (let i = this.activeDisasters.length - 1; i >= 0; i--) {
+      if (--this.activeDisasters[i].left <= 0) {
+        const d = this.activeDisasters.splice(i, 1)[0];
+        this.log(`${d.def.icon} สถานการณ์ "${d.def.name}" คลี่คลายแล้ว`, 'good', null);
+      }
+    }
+    if (--this.disasterCooldown > 0) return;
+    this.disasterCooldown = 10 + Math.floor(this.rng() * 9);
+
+    const r = this.rng;
+    const def = DISASTERS[Math.floor(r() * DISASTERS.length)];
+    this.activeDisasters.push({ def, left: def.dur });
+    this.disasterHistory.push({ month: this.month, id: def.id, name: def.name, icon: def.icon });
+    this.log(`⛔ ภัยพิบัติ: ${def.icon} ${def.name} — ${def.desc} (มีผล ${def.dur} เดือน)`, 'disaster', null);
+
+    if (def.market) this.marketIndex = clamp(this.marketIndex * (1 + def.market), 0.5, 1.9);
+    for (const p of this.players) {
+      if (p.bankrupt || p.phase === 3) continue;
+      if (def.hp) p.health = clamp(p.health + def.hp, 0, 100);
+      if (def.inflate) { p.fixedExpenses = Math.round(p.fixedExpenses * (1 + def.inflate)); p.foodBase = Math.round(p.foodBase * (1 + def.inflate)); }
+      if (def.cashCostMul) {
+        const frugal = p.job.perkId === 'frugal' ? 0.6 : 1;
+        const c = Math.round(p.totalExpenses * (def.cashCostMul[0] + r() * (def.cashCostMul[1] - def.cashCostMul[0])) * frugal);
+        p.cash -= c;
+        p.log(`${def.icon} ผลกระทบจาก${def.name} −${fmt(c)}฿`, 'bad');
+      }
+      if (def.burnAsset) {
+        const targets = p.assets.filter(a => (a.kind === 'business' || a.kind === 'micro') && !a.burned);
+        if (targets.length && r() < 0.5) {
+          const a = targets[Math.floor(r() * targets.length)];
+          a.burned = 4;
+          p.log(`🔥 ${a.icon} ${a.name} ถูกไฟไหม้! ไม่มีรายได้ 4 เดือน แต่ค่าผ่อนยังเดินต่อ`, 'bad');
+        }
+      }
+    }
+  }
+
+  endMonth() {
+    if (this.month >= 600) { this.state = 'over'; return; }
+    const r = this.rng;
+    this.marketTrend = this.marketTrend * 0.6 + (r() - 0.5) * 0.04;
+    this.marketIndex = clamp(this.marketIndex * (1 + this.marketTrend), 0.55, 1.9);
+
+    this.tickDisasters();
+    for (const p of this.players) if (!p.bankrupt && p.phase < 3) p.settle();
+
+    for (let i = this.deals.length - 1; i >= 0; i--) { this.deals[i].ttl--; if (this.deals[i].ttl <= 0) this.deals.splice(i, 1); }
+    this.refillMarket();
+
+    const humans = this.players.filter(p => !p.isAI);
+    const watch = humans.length ? humans : this.players;
+    const stillPlaying = watch.filter(p => !p.bankrupt && p.phase < 3);
+    if (stillPlaying.length === 0) { this.state = 'over'; return; }
+
+    this.month++;
+    this.startIndex = (this.startIndex + 1) % this.players.length;
+    this.beginMonth();
+  }
+
+  /* ---------- บันทึก / โหลด ---------- */
+  serialize() {
+    return {
+      v: 4, savedAt: null, mode: this.mode, month: this.month,
+      rng: this.rng.s, marketIndex: this.marketIndex, marketTrend: this.marketTrend,
+      dealIdSeq: this.dealIdSeq, deals: this.deals, logs: this.logs, state: this.state,
+      startIndex: this.startIndex, turn: this.turn,
+      disasterCooldown: this.disasterCooldown,
+      activeDisasters: this.activeDisasters.map(d => ({ id: d.def.id, left: d.left })),
+      disasterHistory: this.disasterHistory,
+      champions: this.champions,
+      players: this.players.map(p => ({
+        name: p.name, isAI: p.isAI, jobId: p.job.id, roll: p.roll, bonusHours: p.bonusHours,
+        cash: p.cash, salary: p.salary, fixedExpenses: p.fixedExpenses, foodBase: p.foodBase,
+        childCost: p.childCost, childHours: p.childHours,
+        assets: p.assets, liabilities: p.liabilities,
+        sleepIdx: p.sleepIdx, foodId: p.foodId, health: p.health, timePenalty: p.timePenalty,
+        sideUsed: p.sideUsed, exerciseThisMonth: p.exerciseThisMonth, restedThisMonth: !!p.restedThisMonth,
+        studyLevel: p.studyLevel, studyProgress: p.studyProgress,
+        downsizeLeft: p.downsizeLeft, bankrupt: p.bankrupt, finished: p.finished,
+        phase: p.phase, dream: p.dream, dreamDone: p.dreamDone, retired: p.retired,
+        pendingDream: p.pendingDream, hours: p.hours, history: p.history
+      }))
+    };
+  }
+
+  static load(data) {
+    if (!data || data.v !== 4) throw new Error('ไฟล์เซฟไม่ถูกต้อง หรือมาจากเกมคนละเวอร์ชัน');
+    const m = Object.create(Match.prototype);
+    m.mode = data.mode; m.month = data.month;
+    m.rng = makeRng(0); m.rng.s = data.rng >>> 0;
+    m.marketIndex = data.marketIndex; m.marketTrend = data.marketTrend;
+    m.dealIdSeq = data.dealIdSeq; m.deals = data.deals; m.logs = data.logs || [];
+    m.state = data.state; m.startIndex = data.startIndex; m.turn = data.turn;
+    m.disasterCooldown = data.disasterCooldown;
+    m.disasterHistory = data.disasterHistory || [];
+    m.champions = data.champions || [];
+    m.activeDisasters = (data.activeDisasters || [])
+      .map(d => ({ def: DISASTERS.find(x => x.id === d.id), left: d.left }))
+      .filter(d => d.def);
+    m.players = data.players.map(pd => {
+      const p = Object.create(Player.prototype);
+      p.match = m;
+      p.job = JOBS.find(j => j.id === pd.jobId) || JOBS[0];
+      Object.assign(p, pd);
+      delete p.jobId;
+      p.assets = pd.assets || []; p.liabilities = pd.liabilities || []; p.history = pd.history || [];
+      return p;
+    });
+    return m;
+  }
+
+  standings() {
+    return this.players.slice().sort((a, b) => {
+      if (a.dreamDone && b.dreamDone) return a.dreamDone - b.dreamDone;
+      if (a.dreamDone) return -1; if (b.dreamDone) return 1;
+      if (a.phase !== b.phase) return b.phase - a.phase;
+      if (a.phase === 2) return (b.dreamPct + b.dreamPassivePct) - (a.dreamPct + a.dreamPassivePct);
+      return b.freedomPct - a.freedomPct || b.netWorth - a.netWorth;
+    });
+  }
+}
+
+
+</script>
+
+<script>
+/* ================= UI ================= */
+const $ = id => document.getElementById(id);
+const el = (t,c,h) => { const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e; };
+const show = id => { ['s-mode','s-setup','s-game'].forEach(x=>$(x).style.display='none'); $(id).style.display=''; };
+const TIER_NAME = {1:'รายได้น้อย',2:'มนุษย์เงินเดือน',3:'ชนชั้นกลางบน',4:'รายได้สูง'};
+const PIPS = {1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+const TIME_COLORS = { sleep:'#5a7fc9', work:'#c9962e', commute:'#a05ac9', food:'#5ac97a', chores:'#6c8199', child:'#ff9ad1', free:'#7fd8ff' };
+
+let M=null, MODE='solo', setupList=[], setupIdx=0, seedBase=Math.floor(Math.random()*99999)+1;
+
+$('specbtn').onclick = e => { e.stopPropagation(); const s=$('spec'); s.style.display = s.style.display==='none'?'':'none'; };
+$('m-solo').onclick = () => { MODE='solo'; startSetup(1,true); };
+$('m-multi').onclick = () => {
+  const n = parseInt(prompt('เล่นกันกี่คน? (2-4)','2'));
+  if (!n||n<2||n>4) return;
+  MODE='multi'; startSetup(n, confirm('เติมบอท AI ให้ครบ 4 ที่นั่งด้วยไหม?\n(ตกลง = มีบอทร่วมแย่งดีล)'));
+};
+$('restart').onclick = ()=>location.reload();
+$('m-close').onclick = ()=>location.reload();
+
+function startSetup(nHumans, fillBots){
+  setupList=[]; setupIdx=0;
+  for(let i=0;i<nHumans;i++) setupList.push({name:nHumans===1?'คุณ':'ผู้เล่น '+(i+1), isAI:false});
+  window.__fillBots = !!fillBots;
+  show('s-setup'); renderSetup();
+}
+
+function renderSetup(){
+  const p = setupList[setupIdx];
+  $('setup-title').textContent = setupList.length>1 ? `${p.name} — ทอยเต๋าเปิดโอกาสของคุณ` : 'ทอยเต๋าเปิดโอกาสของคุณ';
+  const b=$('setup-body'); b.innerHTML='';
+  b.appendChild(el('div','tip',
+    '🎲 <b>ทอยเต๋าก่อนเริ่มเกม = ต้นทุนชีวิตที่คุณเกิดมาพร้อม</b> — แต้มยิ่งสูง อาชีพให้เลือกยิ่งเยอะ และเข้าถึงกลุ่มรายได้สูงได้<br>'+
+    'แต้มต่ำจะได้ <b class="c">ชั่วโมงว่างเพิ่ม</b> ชดเชย เพราะคนที่มีทางเลือกน้อยต้องลงแรงมากกว่า — แต่ทางเลือกก็ยังน้อยกว่าอยู่ดี'));
+  const box=el('div','dicebox');
+  const die=el('div','die'); die.id='die'; box.appendChild(die);
+  const wrap=el('div'); const btn=el('button','primary','🎲 ทอยเต๋า');
+  btn.style.cssText='margin-top:16px;padding:11px 34px;font-size:15px'; wrap.appendChild(btn); box.appendChild(wrap);
+  const res=el('div','rollres'); res.id='rollres'; box.appendChild(res);
+  b.appendChild(box); b.appendChild(el('div',null,'<div id="joblist"></div>'));
+  drawDie('die',1);
+  btn.onclick = ()=>{
+    btn.disabled=true; die.classList.add('roll');
+    let t=0; const iv=setInterval(()=>{ drawDie('die',1+Math.floor(Math.random()*6));
+      if(++t>14){ clearInterval(iv); die.classList.remove('roll'); finishRoll(p); } },70);
+  };
+}
+
+function drawDie(id,n){ const d=$(id); if(!d) return; const on=PIPS[n];
+  let h=''; for(let i=0;i<9;i++) h += on.includes(i)?'<b></b>':'<span></span>'; d.innerHTML=h; }
+
+function jobFreeHours(j,bonus){
+  const sleep = (j.sleepNeed||7)*30;
+  const raw = HOURS_PER_MONTH - sleep - j.work - j.commute - 30 - CHORES_HOURS + (bonus||0);
+  return Math.max(0, Math.round(raw * (0.40 + 0.60*j.health/100)));
+}
+
+function finishRoll(p){
+  const seed = seedBase + setupIdx*7919 + Math.floor(Math.random()*1000);
+  const r = rollStart(seed);
+  drawDie('die', r.roll);
+  p.roll=r.roll; p.bonusHours=r.bonusHours;
+  $('rollres').innerHTML = `ได้แต้ม <b>${r.roll}</b> — “${r.label}”<br>
+    <span class="sub">เลือกอาชีพได้ ${r.jobs.length} แบบ${r.bonusHours?` • ได้ชั่วโมงว่างเพิ่ม +${r.bonusHours} ชม./เดือน`:''}</span>`;
+  const jl=$('joblist'); jl.innerHTML='';
+  const g=el('div','jobs');
+  r.jobs.forEach(j=>{
+    const debt=j.debts.reduce((s,d)=>s+d.balance,0), pay=j.debts.reduce((s,d)=>s+d.balance*d.rate,0);
+    const totalExp=j.fixed+j.food+pay, save=j.salary-totalExp;
+    const free=jobFreeHours(j,p.bonusHours);
+    const c=el('div','job');
+    c.innerHTML = `<div class="ic">${j.icon}</div><h4>${j.name}</h4>
+      <div class="tierbadge">${TIER_NAME[j.tier]}</div>
+      <div class="row"><span class="d">เงินเดือน</span><span class="v g">${fmt(j.salary)}฿</span></div>
+      <div class="row"><span class="d">รายจ่ายรวม</span><span class="v r">${fmt(totalExp)}฿</span></div>
+      <div class="row"><span class="d">เหลือเก็บ/เดือน</span><span class="v y">${fmt(save)}฿</span></div>
+      <div class="row"><span class="d">หนี้ติดตัว</span><span class="v r">${debt?fmtM(debt)+'฿':'—'}</span></div>
+      <div class="row"><span class="d">ทำงาน+เดินทาง</span><span class="v o">${j.work+j.commute} ชม./ด.</span></div>
+      <div class="row"><span class="d">😴 ต้องนอน</span><span class="v ${(j.sleepNeed||7)>=8?'r':'c'}">${j.sleepNeed||7} ชม./คืน <span class="sub">(${(j.sleepNeed||7)*30} ชม./ด.)</span></span></div>
+      <div class="row"><span class="d">สุขภาพเริ่มต้น</span><span class="v ${j.health>=74?'g':(j.health>=70?'y':'r')}">${j.health}</span></div>
+      <div class="row"><span class="d">⏳ เวลาว่างใช้ได้จริง</span><span class="v c"><b>${free} ชม.</b> <span class="sub">(นอนตามเกณฑ์)</span></span></div>
+      <div class="row"><span class="d">รายจ่าย ÷ เงินเก็บ</span><span class="v ${totalExp/save<3.5?'g':(totalExp/save>4.6?'r':'y')}">${(totalExp/save).toFixed(1)} เท่า</span></div>
+      <div class="pk">✦ ${j.perk}</div><div class="nt">${j.note}</div>`;
+    c.onclick = ()=>{ p.jobId=j.id; nextSetup(); };
+    g.appendChild(c);
+  });
+  jl.appendChild(g);
+  jl.appendChild(el('div','sub','ℹ️ ตัวเลขที่สำคัญที่สุดมีสองตัว: <b>“รายจ่าย ÷ เงินเก็บ”</b> (ยิ่งน้อยยิ่งถึงเส้นชัยเร็ว) และ <b>“เวลาว่างใช้ได้จริง”</b> (ปิดดีลหนึ่งครั้งใช้ ${COST.deal} ชม. + เวลาเดินทาง)'));
+  jl.scrollIntoView({behavior:'smooth'});
+}
+
+function nextSetup(){
+  setupIdx++;
+  if(setupIdx<setupList.length){ renderSetup(); window.scrollTo({top:0,behavior:'smooth'}); return; }
+  const players = setupList.map(p=>({name:p.name,jobId:p.jobId,bonusHours:p.bonusHours,roll:p.roll,isAI:false}));
+  if(window.__fillBots){
+    const used=new Set(players.map(p=>p.jobId));
+    const pool=JOBS.filter(j=>!used.has(j.id)); let bi=0;
+    while(players.length<4 && pool.length){
+      const j=pool.splice(Math.floor(Math.random()*pool.length),1)[0];
+      players.push({name:BOT_NAMES[bi++], jobId:j.id, isAI:true, bonusHours: j.tier<=1?20:0});
+    }
+  }
+  M = new Match({mode:MODE, seed:seedBase, players});
+  show('s-game'); afterTurnChange();
+  setTimeout(()=>{ if(confirm('เปิดการสอน 5 เดือนแรกไหม?\n\n(แนะนำสำหรับคนเล่นครั้งแรก — ข้ามได้ตลอดเวลา)')) tutStart(); }, 400);
+}
+
+/* ---------- turn ---------- */
+function afterTurnChange(){
+  if(M.state!=='playing'){ render(); showEnd(); return; }
+  const cur=M.current;
+  if(!cur.isAI && cur.pendingDream){ render(); showDreamRoll(cur); return; }
+  if(!cur.isAI && setupList.length>1){
+    $('pass-ic').textContent=cur.job.icon; $('pass-name').textContent=`ตาของ ${cur.name}`;
+    $('pass').style.display='flex';
+  }
+  render();
+}
+function walkTo(){}
+$('pass-go').onclick=()=>{ $('pass').style.display='none'; render(); };
+$('endturn').onclick=()=>{ walkTo(3); M.endTurn(); afterTurnChange(); };
+function act(fn){ const r=fn(); if(r&&!r.ok) flash(r.msg); render(); }
+
+let flashT=null;
+function flash(msg){
+  let f=$('flashbox');
+  if(!f){f=el('div');f.id='flashbox';f.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);background:#7a1f1f;border:1px solid #ff8080;padding:8px 18px;z-index:99;border-radius:3px';document.body.appendChild(f);}
+  f.textContent=msg; f.style.display=''; clearTimeout(flashT); flashT=setTimeout(()=>f.style.display='none',2400);
+}
+
+/* ---------- Phase 2 : ทอยเต๋าสุ่มเป้าหมายชีวิต ---------- */
+let dreamRerolled=false, dreamPicked=null;
+function showDreamRoll(p){
+  dreamRerolled=false; dreamPicked=null;
+  const b=$('dreambody');
+  b.innerHTML = `<h2>🎉 ออกจากสนามแข่งหนูได้แล้ว!</h2>
+    <div class="sub" style="line-height:1.7">${p.job.icon} <b class="y">${p.name}</b> ใช้เวลา <b class="y">${p.finished} เดือน</b>
+      ทำให้รายได้จากทรัพย์สิน (${fmt(p.passiveIncome)}฿) มากกว่ารายจ่าย (${fmt(p.totalExpenses)}฿) ได้สำเร็จ<br>
+      แต่เกมยังไม่จบ — <b>เงินอิสระแล้วจะเอาไปทำอะไรต่อ?</b></div>
+    <div class="tip" style="text-align:left;margin:14px 0">
+      🎲 ทอยเต๋าเพื่อสุ่ม <b>เป้าหมายชีวิตใหม่</b> — แต่ละความฝันต้องการ "เงินก้อน" กับ "รายได้ต่อเดือน" ในสัดส่วนต่างกัน
+      บางอันแพงแต่ขอรายได้น้อย บางอันถูกกว่าแต่ขอรายได้สูงมาก<br>
+      <span class="d">ทอยใหม่ได้ 1 ครั้ง แต่ต้องรับผลครั้งที่สองไม่ว่าจะออกอะไร</span>
+    </div>
+    <div class="dicebox"><div class="die" id="die2"></div>
+      <div><button class="primary" id="rolldream" style="margin-top:14px;padding:10px 30px;font-size:15px">🎲 ทอยเต๋าเลือกเป้าหมาย</button></div></div>
+    <div id="dreamres"></div>`;
+  $('dreamwin').style.display='flex';
+  drawDie('die2',1);
+  $('rolldream').onclick=()=>{
+    const btn=$('rolldream'); btn.disabled=true;
+    const d=$('die2'); d.classList.add('roll');
+    let t=0; const iv=setInterval(()=>{ drawDie('die2',1+Math.floor(Math.random()*6));
+      if(++t>14){ clearInterval(iv); d.classList.remove('roll'); rollDreamResult(p); } },70);
+  };
+}
+
+function rollDreamResult(p){
+  const n = 1+Math.floor(Math.random()*6);
+  drawDie('die2', n);
+  const dm = DREAMS[n-1];
+  dreamPicked = dm;
+  const exp=p.totalExpenses;
+  const cost=Math.round(exp*dm.costMul/10000)*10000, need=Math.round(exp*dm.passiveMul/100)*100;
+  const workBack = p.job.work + p.job.commute;
+  $('dreamres').innerHTML = `
+    <div class="win" style="text-align:left;margin-top:6px"><h3>ได้แต้ม ${n} — เป้าหมายชีวิตใหม่ของคุณ</h3><div class="body">
+      <div style="font-size:20px;margin-bottom:4px">${dm.icon} <b class="y">${dm.name}</b></div>
+      <div class="sub" style="margin-bottom:8px">${dm.desc}</div>
+      <div class="row"><span>ต้องมีความมั่งคั่งสุทธิ</span><span class="v y">${fmtM(cost)}฿ <span class="sub">(ตอนนี้ ${fmtM(p.netWorth)}฿)</span></span></div>
+      <div class="row"><span>ต้องมีรายได้จากทรัพย์สิน</span><span class="v c">${fmt(need)}฿/เดือน <span class="sub">(ตอนนี้ ${fmt(p.passiveIncome)}฿)</span></span></div>
+      <div class="sub" style="margin-top:7px">💡 ${dm.why}</div>
+    </div></div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px">
+      ${dreamRerolled?'':'<button id="reroll">🎲 ทอยใหม่ (ได้ครั้งเดียว — ต้องรับผลที่สอง)</button>'}
+    </div>
+    <div class="win" style="text-align:left"><h3>แล้วจะทำงานประจำต่อไหม?</h3><div class="body">
+      <div class="acts">
+        <button class="act" id="retire"><b>🌴 ลาออกจากงานประจำ</b>
+          <span class="hh">+${workBack} ชม./เดือน</span>
+          <span class="sub">ได้เวลาคืนมหาศาล แต่ไม่มีเงินเดือนแล้ว — ต้องมั่นใจว่ารายได้จากทรัพย์สินเลี้ยงตัวเองได้จริง</span></button>
+        <button class="act" id="keepjob"><b>💼 ทำงานประจำต่อไปก่อน</b>
+          <span class="hh">เวลาเท่าเดิม</span>
+          <span class="sub">ยังมีเงินเดือน ${fmt(p.salary)}฿ ไว้เร่งสะสม — คนที่ไปถึงอิสรภาพจริงหลายคนก็เลือกทางนี้</span></button>
+      </div>
+    </div></div>`;
+  if($('reroll')) $('reroll').onclick=()=>{
+    dreamRerolled=true;
+    const d=$('die2'); d.classList.add('roll');
+    let t=0; const iv=setInterval(()=>{ drawDie('die2',1+Math.floor(Math.random()*6));
+      if(++t>14){ clearInterval(iv); d.classList.remove('roll'); rollDreamResult(p); } },70);
+  };
+  $('retire').onclick =()=>{ p.enterPhase2(dreamPicked,true);  $('dreamwin').style.display='none'; render(); };
+  $('keepjob').onclick=()=>{ p.enterPhase2(dreamPicked,false); $('dreamwin').style.display='none'; render(); };
+}
+
+/* ---------- render ---------- */
+function render(){
+  if(!M) return;
+  const p = M.current || M.players[0];
+  $('h-month').textContent = M.month;
+  $('h-who').innerHTML = `${p.job.icon} <b>${p.name}</b> <span class="sub">${p.job.name}${p.retired?' • เกษียณแล้ว':''}${p.phase===2?' • ด่าน 2':''}</span>`;
+  $('h-cash').textContent = fmtM(p.cash);
+  $('h-nw').textContent = fmtM(p.netWorth);
+  $('h-hours').innerHTML = `${p.hours}<span class="sub"> / ${p.hoursMax} ชม.</span>`;
+  $('h-hp').innerHTML = `${Math.round(p.health)}<span class="sub"> ${p.healthLabel}</span>`;
+
+  /* ---- ประกาศชัยชนะ (เกมยังเดินต่อ) ---- */
+  const cb=$('champ-box'); cb.innerHTML='';
+  if(M.champions.length){
+    const mine = M.champions.find(c=>!c.isAI);
+    cb.appendChild(el('div','champ',
+      `<b style="font-size:14px">🏆 ประกาศชัยชนะ</b>
+       <div style="margin-top:5px">${M.champions.map(c=>
+         `<div class="row" style="border:0;padding:1px 0"><span>อันดับ ${c.rank} — ${c.icon} <b>${c.name}</b>
+            <span class="sub">${c.job} • ${c.dreamIcon} ${c.dream}</span></span>
+            <span class="v y">เดือนที่ ${c.month}</span></div>`).join('')}</div>
+       <div class="sub" style="margin-top:5px">${mine? 'คุณทำสำเร็จแล้ว 🎉' :
+         'เกมยังไม่จบ — เดินต่อได้จนกว่าคุณจะไปถึงความฝันของตัวเอง (หรือกดเริ่มใหม่)'}</div>`));
+  }
+
+  /* ---- ภัยพิบัติ ---- */
+  const db=$('disaster-box'); db.innerHTML='';
+  M.activeDisasters.forEach(d=>{
+    db.appendChild(el('div','alarm',
+      `<b style="font-size:14px">${d.def.icon} ภัยพิบัติ: ${d.def.name}</b> <span class="sub">(เหลืออีก ${d.left} เดือน)</span><br>
+       <span class="sub">${d.def.desc}</span>`));
+  });
+
+  /* ---- standings ---- */
+  const st=$('stand'); st.innerHTML='';
+  M.standings().forEach(x=>{
+    const inP2 = x.phase>=2;
+    const pct = inP2 ? Math.min(x.dreamPct, x.dreamPassivePct) : x.freedomPct;
+    const d=el('div','stand'+(x===p?' me':''));
+    d.innerHTML = `<div class="row" style="border:0">
+        <span>${x.job.icon} ${x.name} ${x.dreamDone?'👑':(inP2?'🎉':'')}${x.bankrupt?'💀':''}</span>
+        <span class="v sub">${pct.toFixed(0)}%</span></div>
+      <div class="bar" style="height:8px"><div style="width:${pct}%;${inP2?'background:linear-gradient(90deg,#8a6414,#ffd76a)':(x.isAI?'background:linear-gradient(90deg,#7a3a5a,#ff9ad1)':'')}"></div></div>
+      <div class="sub" style="margin-top:3px">${inP2?('ด่าน 2 · '+x.dream.icon+' '+x.dream.name):x.job.name} • ❤️${Math.round(x.health)} • สุทธิ ${fmtM(x.netWorth)}฿</div>`;
+    st.appendChild(d);
+  });
+
+  const R=(host,label,val,cls,sub)=>{const r=el('div','row');
+    r.innerHTML=`<span>${label}${sub?` <span class="sub">${sub}</span>`:''}</span><span class="v ${cls||''}">${val}</span>`;host.appendChild(r);};
+
+  /* ---- goal ---- */
+  const goal=$('goal'); goal.innerHTML='';
+  if(p.phase>=2){
+    $('goal-title').textContent='ด่าน 2: ตามล่าความฝัน';
+    goal.innerHTML = `<div style="font-size:15px;margin-bottom:6px">${p.dream.icon} <b class="y">${p.dream.name}</b></div>
+      <div class="sub" style="margin-bottom:8px">${p.dream.desc}</div>
+      <div class="sub">ความมั่งคั่งสุทธิ ${fmtM(p.netWorth)} / ${fmtM(p.dream.cost)}฿</div>
+      <div class="bar dream"><div style="width:${p.dreamPct}%"></div><span>${p.dreamPct.toFixed(0)}%</span></div>
+      <div class="sub" style="margin-top:6px">รายได้จากทรัพย์สิน ${fmt(p.passiveIncome)} / ${fmt(p.dream.passiveReq)}฿ ต่อเดือน</div>
+      <div class="bar dream"><div style="width:${p.dreamPassivePct}%"></div><span>${p.dreamPassivePct.toFixed(0)}%</span></div>`;
+    const cb=el('button', p.canClaimDream()?'primary':'', '👑 ทำความฝันให้เป็นจริง');
+    cb.style.cssText='width:100%;margin-top:9px;padding:9px'; cb.disabled=!p.canClaimDream();
+    cb.onclick=()=>{ const ok=M.current.claimDream(); if(!ok.ok){flash(ok.msg);render();return;}
+      render(); M.endTurn(); afterTurnChange(); };
+    goal.appendChild(cb);
+    if(!p.canClaimDream()) goal.appendChild(el('div','sub','ต้องครบ<b>ทั้งสองแถบ</b> — มีเงินก้อนอย่างเดียวไม่พอ ต้องมีรายได้ต่อเดือนที่เลี้ยงความฝันได้ด้วย'));
+  } else {
+    $('goal-title').textContent='ด่าน 1: ออกจากสนามแข่งหนู';
+    const pct=p.freedomPct;
+    goal.innerHTML = `<div class="bar"><div style="width:${pct}%"></div><span>${fmt(p.passiveIncome)} / ${fmt(p.totalExpenses)} ฿ (${pct.toFixed(0)}%)</span></div>
+      <div class="sub" style="margin-top:6px">ชนะด่านนี้เมื่อ <b class="c">รายได้จากทรัพย์สิน</b> ≥ <b class="r">รายจ่ายรวม</b> —
+      แล้วจะได้ทอยเต๋าสุ่ม<b>เป้าหมายชีวิตใหม่</b>เพื่อเล่นด่าน 2 ต่อ</div>`;
+  }
+
+  /* ---- health ---- */
+  const hb=$('health'); hb.innerHTML='';
+  const hpCls = p.health>=70?'ok':(p.health>=45?'mid':'');
+  hb.innerHTML = `<div class="bar hp ${hpCls}"><div style="width:${p.health}%"></div><span>${Math.round(p.health)} / 100 — ${p.healthLabel}</span></div>
+    <div class="row" style="margin-top:6px"><span class="d">ประสิทธิภาพการใช้เวลา</span><span class="v ${p.efficiency>=0.8?'g':(p.efficiency>=0.65?'y':'r')}">${(p.efficiency*100).toFixed(0)}%</span></div>
+    <div class="sub">สุขภาพต่ำ = ชั่วโมงที่มีอยู่ใช้ได้จริงน้อยลง และเจอเหตุการณ์เจ็บป่วยบ่อยขึ้น${p.health<45?' <b class="r">— ตอนนี้เสี่ยงมาก</b>':''}</div>`;
+
+  /* ---- income / balance ---- */
+  const inc=$('income'); inc.innerHTML='';
+  R(inc,'เงินเดือน'+(p.retired?' <span class="d">(เกษียณ)</span>':(p.downsizeLeft>0?' <span class="r">(ตกงาน!)</span>':'')),fmt(p.currentSalary)+'฿','g');
+  R(inc,'รายได้จากทรัพย์สิน',fmt(p.passiveIncome)+'฿','c',`${p.assets.length} รายการ`);
+  R(inc,'<b>รวมรายรับ</b>','<b>'+fmt(p.totalIncome)+'฿</b>','g');
+  R(inc,'รายจ่ายประจำ','−'+fmt(p.fixedExpenses)+'฿','r');
+  R(inc,'ค่าอาหาร','−'+fmt(p.foodCost)+'฿','r',p.food.icon+' '+p.food.label);
+  if(p.childCost) R(inc,'ค่าเลี้ยงลูก','−'+fmt(p.childCost)+'฿','r');
+  if(p.upkeepCost) R(inc,'ค่าพาหนะ/อุปกรณ์','−'+fmt(p.upkeepCost)+'฿','r',p.veh.icon+(p.devices.length?' '+p.devices.map(d=>DEVICES.find(x=>x.id===d).icon).join(''):''));
+  R(inc,'ดอกเบี้ย/ค่าผ่อน','−'+fmt(p.debtPayments)+'฿','r',`${p.liabilities.length} ก้อน${M.mods.rate>1?' <b class="r">×'+M.mods.rate.toFixed(2)+'</b>':''}`);
+  R(inc,'<b>รวมรายจ่าย</b>','<b>−'+fmt(p.totalExpenses)+'฿</b>','r');
+  const cf=p.monthlyCashflow;
+  R(inc,'<b>เหลือเก็บต่อเดือน</b>','<b>'+(cf>=0?'+':'')+fmt(cf)+'฿</b>',cf>=0?'g':'r');
+
+  const bal=$('balance'); bal.innerHTML='';
+  R(bal,'เงินสด',fmtM(p.cash)+'฿','y');
+  R(bal,'มูลค่าทรัพย์สิน',fmtM(p.assetValue)+'฿','c');
+  R(bal,'หนี้สินรวม','−'+fmtM(p.totalDebt)+'฿','r');
+  R(bal,'<b>ความมั่งคั่งสุทธิ</b>','<b>'+fmtM(p.netWorth)+'฿</b>',p.netWorth>=0?'g':'r');
+  R(bal,'วงเงินกู้ที่เหลือ',fmtM(p.creditLeft)+'฿','d','จาก '+fmtM(p.creditLimit));
+  if(p.studyLevel||p.studyProgress) R(bal,'ระดับการศึกษา','Lv.'+p.studyLevel,'c',`คืบหน้า ${Math.floor(p.studyProgress)}/${p.studyNeed}`);
+
+  /* ---- time budget ---- */
+  const seg=[['sleep',p.sleep.hours,'นอน'],['work',p.workHours,'ทำงาน'],['commute',p.commuteHours,'เดินทาง'],
+             ['food',p.food.hours,'กินข้าว'],['chores',CHORES_HOURS,'ธุระ'],['child',p.childHours,'เลี้ยงลูก'],
+             ['free',Math.max(0,p.rawFreeHours),'เวลาว่าง']];
+  TIME_COLORS.travel='#ffb27a';
+  const tbox=$('timebox');
+  tbox.innerHTML = `<div class="tb">${seg.filter(s=>s[1]>0).map(s=>`<i style="width:${s[1]/HOURS_PER_MONTH*100}%;background:${TIME_COLORS[s[0]]}" title="${s[2]} ${s[1]} ชม."></i>`).join('')}</div>
+    <div class="tbl">${seg.filter(s=>s[1]>0).map(s=>`<span style="--k:${TIME_COLORS[s[0]]}">${s[2]} <b>${s[1]}</b> ชม.</span>`).join('')}</div>
+    <div class="row" style="margin-top:8px"><span>เวลาว่างดิบ × ประสิทธิภาพ ${(p.efficiency*100).toFixed(0)}%</span>
+      <span class="v c"><b>${p.hoursMax} ชม. ใช้ได้จริง</b></span></div>
+    ${p.timePenalty?`<div class="sub r">⚠ ถูกหักเวลาจากการเจ็บป่วย ${p.timePenalty} ชม.</div>`:''}
+    ${p.bonusHours?`<div class="sub g">✦ โบนัสจากการทอยเต๋าเริ่มเกม +${p.bonusHours} ชม.</div>`:''}
+    ${p.travelUsed?`<div class="sub o">🚗 เดือนนี้เสียเวลาไปกับการเดินทางแล้ว ${p.travelUsed} ชม.</div>`:''}
+    ${p.veh.id!=='public'?`<div class="sub g">${p.veh.icon} ${p.veh.name} ทำให้เวลาไปทำงานเหลือ ${p.commuteHours} ชม. (จาก ${p.job.commute})</div>`:''}
+    <div class="bar time" style="margin-top:7px"><div style="width:${p.hoursMax?p.hours/p.hoursMax*100:0}%"></div><span>เหลือใช้เดือนนี้ ${p.hours} / ${p.hoursMax} ชม.</span></div>
+    ${p.place!=='home'?`<div class="sub r" style="margin-top:9px">📍 ตั้งค่าการนอนและอาหารได้ที่ 🏠 บ้าน เท่านั้น (เดินทาง ${p.travelCost('home')} ชม.)</div>`:''}
+    <div style="margin-top:10px" class="sub">😴 นอนกี่ชั่วโมง — <b class="c">อาชีพ${p.job.name}ต้องการ ${p.sleepNeed} ชม./คืน</b> นอนน้อยกว่านี้เสียทั้งสุขภาพและประสิทธิภาพเพิ่ม</div>
+    <div class="acts" id="sleepopts" style="margin-top:4px"></div>
+    <div style="margin-top:9px" class="sub">🍽️ กินอย่างไร — สามมิติ: เงิน / เวลา / สุขภาพ</div>
+    <div class="acts" id="foodopts" style="margin-top:4px"></div>`;
+  $('time-sum').textContent = `ผูกมัดไปแล้ว ${p.committedHours} ชม.`;
+
+  const so=$('sleepopts');
+  SLEEP_OPTIONS.forEach((s,i)=>{
+    const debt = Math.max(0, p.sleepNeed - s.h);
+    const extraHp = debt*1.3, extraEff = debt*5;
+    const b=el('button','act opt'+(i===p.sleepIdx?' on':''),
+      `<b>${s.label}${s.h===p.sleepNeed?' <span class="g">✓ เกณฑ์อาชีพ</span>':''}</b>
+       <span class="hh">${s.hours} ชม./เดือน • สุขภาพ ${(s.health-extraHp)>0?'+':''}${(s.health-extraHp).toFixed(1)}${(s.penalty||extraEff)?` • ประสิทธิภาพ −${(s.penalty*100+extraEff).toFixed(0)}%`:''}</span>
+       ${debt?`<span class="sub r">นอนขาด ${debt} ชม./คืน จากเกณฑ์ของ${p.job.name}</span>`:''}`);
+    b.title=s.note; b.disabled = p.place!=='home'; b.onclick=()=>act(()=>M.current.setSleep(i)); so.appendChild(b);
+  });
+  const fo=$('foodopts');
+  FOOD_OPTIONS.forEach(f=>{
+    const cost=Math.round(p.foodBase*f.costMul);
+    const b=el('button','act opt'+(f.id===p.foodId?' on':''),
+      `<b>${f.icon} ${f.label}</b><span class="hh">${f.hours} ชม./เดือน • ${fmt(cost)}฿ • สุขภาพ ${f.health>0?'+':''}${f.health}</span>`);
+    b.title=f.note; b.disabled = p.place!=='home'; b.onclick=()=>act(()=>M.current.setFood(f.id)); fo.appendChild(b);
+  });
+
+  /* ---- สถานที่ปัจจุบัน + การเดินทาง ---- */
+  const here = PLACE(p.place);
+  $('travel-sum').innerHTML = `${p.veh.icon} ${p.veh.name} • เดินทางไปแล้ว <b class="c">${p.travelUsed} ชม.</b> เดือนนี้`;
+  $('here').innerHTML = `<div style="font-size:15px"><b class="y">${here.icon} ${here.name}</b></div>
+    <div class="sub" style="margin-top:3px">${here.desc}</div>`;
+  const pls=$('places'); pls.innerHTML='';
+  PLACES.forEach(pl=>{
+    const h = p.travelCost(pl.id);
+    const b = el('button','pl'+(pl.id===p.place?' here':''),
+      `<b>${pl.icon} ${pl.name}</b>` + (pl.id===p.place
+        ? '<span class="th">— คุณอยู่ที่นี่</span>'
+        : `<span class="th">⏳ ${h} ชม.</span>`));
+    b.disabled = pl.id===p.place || p.hours < h;
+    b.title = pl.desc;
+    b.onclick = ()=>{ walkToPlace(pl.id); act(()=>M.current.travelTo(pl.id)); };
+    pls.appendChild(b);
+  });
+
+  /* ---- ร้านค้า (เฉพาะที่ห้าง หรือสั่งออนไลน์ได้ถ้ามีสมาร์ตโฟน) ---- */
+  const canShop = p.place==='mall' || p.has('smartphone');
+  $('shopwin').style.display = canShop ? '' : 'none';
+  if(canShop){
+    const sh=$('shop'); sh.innerHTML='';
+    sh.appendChild(el('div','sub', p.place==='mall'
+      ? 'ของพวกนี้ไม่ได้สร้างรายได้ แต่<b>คืนเวลา</b>ให้คุณทุกเดือน — ลองคิดว่า 1 ชั่วโมงของคุณมีค่าเท่าไหร่ก่อนซื้อ'
+      : '📱 สั่งอุปกรณ์ออนไลน์ได้ แต่<b>พาหนะต้องไปดูที่ห้าง</b>เอง'));
+    const g1=el('div','shopgrid'); g1.style.marginTop='7px';
+    VEHICLES.forEach(v=>{
+      const own = v.id===p.vehicle;
+      const idx = VEHICLES.indexOf(v), curIdx = VEHICLES.indexOf(p.veh);
+      const down = Math.round(v.price*v.downPct)||v.price;
+      const saveCommute = Math.round(p.job.commute*(p.veh.factor - v.factor));
+      const c=el('div','shopcard'+(own?' own':''));
+      c.innerHTML=`<h5>${v.icon} ${v.name} ${own?'<span class="venue ok">ใช้อยู่</span>':''}</h5>
+        <div class="mini"><span class="d">ราคา</span><span class="y">${v.price?fmtM(v.price)+'฿':'ฟรี'}</span></div>
+        <div class="mini"><span class="d">เงินดาวน์</span><span class="${p.cash>=down?'y':'r'}">${v.price?fmtM(down)+'฿':'—'}</span></div>
+        <div class="mini"><span class="d">ค่าใช้จ่าย/เดือน</span><span class="r">${v.upkeep?'+'+fmt(v.upkeep)+'฿':'—'}</span></div>
+        <div class="mini"><span class="d">เวลาเดินทางเหลือ</span><span class="c">${Math.round(v.factor*100)}%</span></div>
+        <div class="cf ${saveCommute>0?'g':'d'}" style="font-size:12.5px">${saveCommute>0?`ประหยัดเวลาไปทำงาน ${saveCommute} ชม./เดือน`:'—'}</div>
+        <div class="sub" style="line-height:1.4">${v.note}</div>`;
+      if(!own){
+        const b=el('button', idx>curIdx?'good':'', idx>curIdx?`ซื้อ (ดาวน์ ${fmtM(down)}฿)`:'ขายทิ้ง/ลดระดับ');
+        b.style.cssText='width:100%;margin-top:6px';
+        b.disabled = p.place!=='mall';
+        if(p.place!=='mall') b.title='ต้องไปดูรถที่ห้างเอง';
+        b.onclick=()=>act(()=>M.current.buyVehicle(v.id));
+        c.appendChild(b);
+      }
+      g1.appendChild(c);
+    });
+    sh.appendChild(g1);
+    sh.appendChild(el('div','sub','<br>📦 <b>อุปกรณ์</b> — ซื้อครั้งเดียว ใช้ได้ตลอด'));
+    const g2=el('div','shopgrid'); g2.style.marginTop='5px';
+    DEVICES.forEach(d=>{
+      const own=p.has(d.id);
+      const c=el('div','shopcard'+(own?' own':''));
+      c.innerHTML=`<h5>${d.icon} ${d.name} ${own?'<span class="venue ok">มีแล้ว</span>':''}</h5>
+        <div class="mini"><span class="d">ราคา</span><span class="${p.cash>=d.price?'y':'r'}">${fmt(d.price)}฿</span></div>
+        <div class="mini"><span class="d">ค่าใช้จ่าย/เดือน</span><span class="r">+${fmt(d.upkeep)}฿</span></div>
+        <div class="sub" style="line-height:1.45;margin-top:4px">${d.note}</div>`;
+      if(!own){
+        const b=el('button','good','ซื้อ'); b.style.cssText='width:100%;margin-top:6px';
+        b.onclick=()=>act(()=>M.current.buyDevice(d.id));
+        c.appendChild(b);
+      }
+      g2.appendChild(c);
+    });
+    sh.appendChild(g2);
+  }
+
+  /* ---- market ---- */
+  $('mkt').innerHTML = `ดัชนีตลาด <b class="${M.marketIndex>=1?'g':'r'}">${(M.marketIndex*100).toFixed(0)}</b>`+
+    (p.job.perkId==='insight'?(M.marketTrend>=0?' <span class="g">▲ ขาขึ้น</span>':' <span class="r">▼ ขาลง</span>'):'');
+  const dl=$('deals'); dl.innerHTML='';
+  const dealCost = p.cost(COST.deal);
+  M.deals.forEach(d=>{
+    const disc=p.job.perkId==='discount';
+    const price=disc?Math.round(d.price*0.9):d.price;
+    const down=Math.round(price*(d.down/d.price)), debt=price-down;
+    const income=Math.round(d.income*(price/d.price));
+    const cash=Math.round(income-debt*MORTGAGE);
+    const roi=down>0?cash/down*100:0;
+    const vAct = p.actForKind(d.kind);
+    const atVenue = p.canDoHere(vAct);
+    const vPlace = PLACE(p.placeFor(vAct));
+    const ok = p.cash>=down && debt<=p.creditLeft && p.hours>=dealCost && atVenue;
+    const c=el('div','deal k-'+d.kind+(d.ttl<=1?' hot':'')+(d.mega?' mega':''));
+    c.innerHTML = `<span class="tag">${KIND_LABEL[d.kind]}${d.mega?' ★★':(d.big?' ★':'')}</span>
+      <div class="nm">${d.icon} ${d.name}</div>
+      <div class="mini"><span>ราคา</span><span class="y">${fmtM(price)}฿${disc?' <span class="g">-10%</span>':''}</span></div>
+      <div class="mini"><span>ใช้เงินตัวเอง (ดาวน์)</span><span class="${p.cash>=down?'y':'r'}">${fmtM(down)}฿</span></div>
+      <div class="mini"><span>กู้เพิ่ม</span><span class="${debt?'r':'d'}">${debt?fmtM(debt)+'฿':'—'}</span></div>
+      <div class="mini"><span>รายรับ / ค่าผ่อน</span><span><span class="g">+${fmt(income)}</span> / <span class="r">−${fmt(debt*MORTGAGE)}</span></span></div>
+      <div class="cf ${cash>0?'g':'r'}">${cash>=0?'+':''}${fmt(cash)}฿/เดือน <span class="sub">(${roi.toFixed(1)}%/ด. ต่อทุน)</span></div>
+      <div class="mini"><span class="sub">${d.ttl<=1?'🔥 กำลังจะหลุดจากตลาด!':'อยู่ในตลาดอีก ~'+d.ttl+' เดือน'}</span><span class="sub c">⏳${dealCost} ชม.</span></div>
+      <div class="mini"><span class="venue ${atVenue?'ok':''}">${vPlace.icon} ${vPlace.name}${atVenue?' ✓':''}</span></div>`;
+    let b;
+    if(!atVenue){
+      const th=p.travelCost(vPlace.id);
+      b=el('button','', `ไป${vPlace.name} (${th} ชม.)`);
+      b.disabled = p.hours < th;
+      b.onclick=()=>{ walkToPlace(vPlace.id); act(()=>M.current.travelTo(vPlace.id)); };
+    } else {
+      b=el('button', ok?'good':'', `ปิดดีล (${dealCost} ชม.)`);
+      b.disabled=!ok;
+      b.onclick=()=>act(()=>M.current.closeDeal(d.id));
+    }
+    b.style.cssText='width:100%;margin-top:6px';
+    c.appendChild(b); dl.appendChild(c);
+  });
+
+  /* ---- actions: แสดงตามสถานที่ ---- */
+  const ac=$('acts'); ac.innerHTML='';
+  const mkAct=(actKey,label,hours,desc,fn,extraDisabled)=>{
+    const needId = p.placeFor(actKey);
+    const atHere = needId===p.place;
+    const th = atHere?0:p.travelCost(needId);
+    const np = PLACE(needId);
+    const b=el('button','act',
+      `<b>${label}</b><span class="hh">⏳ ${hours} ชม.${atHere?'':` + เดินทาง ${th} ชม.`}</span>`+
+      `<span class="sub">${desc}</span>`+
+      (atHere?'':`<span class="sub c">📍 ต้องไปที่ ${np.icon} ${np.name}</span>`));
+    if(atHere){
+      b.disabled = extraDisabled || p.hours<hours;
+      b.onclick = ()=>act(fn);
+    } else {
+      b.disabled = p.hours < th;
+      b.onclick = ()=>{ walkToPlace(needId); act(()=>M.current.travelTo(needId)); };
+    }
+    ac.appendChild(b);
+  };
+  mkAct('scout','🔍 ออกดูทำเล/หาข้อมูล',COST.scout,'ดีลใหม่เข้าตลาด 2 รายการ',()=>M.current.scout());
+  mkAct('ot','⏱️ รับ OT ที่ออฟฟิศ',COST.side,`ได้เงินก้อน ~${fmt(p.salary*0.21*(p.job.perkId==='hustle'?1.5:1))}฿ (${p.sideUsed}/3)`,
+        ()=>M.current.sideJob('ot'), p.retired||p.downsizeLeft>0||p.sideUsed>=3);
+  mkAct('freelance','💻 รับงาน freelance',COST.side,
+        p.has('laptop')&&p.place!=='cowork' ? 'ทำที่บ้านได้ แต่ได้เงินน้อยกว่าที่ co-working 20%'
+        : `ได้เงินมากกว่า OT 25% (${p.sideUsed}/3)`,
+        ()=>M.current.sideJob('freelance'), p.sideUsed>=3);
+  mkAct('study','📚 เรียนเพิ่มเติม',COST.study,
+        (p.placeFor('study')==='school'?`ค่าเรียน ${fmt(p.salary*0.55)}฿ • `:`เรียนออนไลน์ ค่าเรียนถูกกว่า แต่คืบหน้าช้ากว่า 30% • `)+
+        `ครบ ${p.studyNeed} ครั้ง = เงินเดือน +13% <b>โดยรายจ่ายไม่โต</b>`,
+        ()=>M.current.study(), p.retired);
+  mkAct('rest','🛋️ พักผ่อนที่บ้าน',COST.rest,'สุขภาพ +2.5 และลดโอกาสเกิดเรื่องร้ายเดือนนี้',()=>M.current.rest());
+  mkAct('loan','🏦 ยื่นกู้',COST.loan,
+        p.has('smartphone')?'ทำผ่านแอปได้ ไม่ต้องเดินทาง':'เพิ่มเงินสดแลกกับดอกเบี้ยที่กลายเป็นรายจ่าย',
+        ()=>M.current.takeLoan(parseInt($('loanamt').value)||0));
+  $('creditinfo').innerHTML = `วงเงินเหลือ <b class="y">${fmtM(p.creditLeft)}฿</b>${M.mods.credit<1?' <span class="r">(ถูกหั่นจากวิกฤต)</span>':''}`;
+
+  /* แพ็กเกจฟิตเนส */
+  if(p.place==='gym'){
+    ac.appendChild(el('div','sub','<br>🏋️ <b>เลือกแพ็กเกจ</b> — จ่ายเงินมากขึ้นเพื่อประหยัดเวลาและได้ผลดีขึ้น'));
+    const g=el('div','acts'); g.style.marginTop='5px';
+    GYM_PACKS.forEach(pk=>{
+      const owned = pk.monthly && p.gymPack===pk.id;
+      const fee = owned?0:pk.cost;
+      const b=el('button','act'+(owned?' opt on':''),
+        `<b>${pk.icon} ${pk.name}${owned?' (ซื้อแล้ว)':''}</b>
+         <span class="hh">⏳ ${pk.hours} ชม. • ${fee?fmt(fee)+'฿':'ฟรี'} • สุขภาพ +${pk.hp}</span>
+         <span class="sub">${pk.note}</span>`);
+      b.disabled = p.hours<pk.hours || p.cash<fee;
+      b.onclick=()=>act(()=>M.current.exercise(pk.id));
+      g.appendChild(b);
+    });
+    ac.appendChild(g);
+  } else {
+    mkAct('gym','🏋️ ออกกำลังกาย',GYM_PACKS[0].hours,'สุขภาพ +5 ขึ้นไป — มีแพ็กเกจให้เลือกที่ฟิตเนส',()=>M.current.exercise());
+  }
+
+  /* แพ็กเกจพักผ่อน */
+  if(p.place==='resort'){
+    ac.appendChild(el('div','sub','<br>🏨 <b>เลือกทริป</b> — ฟื้นสุขภาพเยอะและลดโอกาสเกิดเรื่องร้าย'));
+    const g=el('div','acts'); g.style.marginTop='5px';
+    RESORT_PACKS.forEach(pk=>{
+      const b=el('button','act',
+        `<b>${pk.icon} ${pk.name}</b>
+         <span class="hh">⏳ ${pk.hours} ชม. • ${fmt(pk.cost)}฿ • สุขภาพ +${pk.hp}</span>
+         <span class="sub">${pk.shield?`ลดโอกาสเกิดเรื่องร้ายเดือนนี้ ${Math.round(pk.shield*100)}%`:'ทริปสั้นๆ พอฟื้นได้บ้าง'}</span>`);
+      b.disabled = p.hours<pk.hours || p.cash<pk.cost;
+      b.onclick=()=>act(()=>M.current.vacation(pk.id));
+      g.appendChild(b);
+    });
+    ac.appendChild(g);
+  } else {
+    mkAct('resort','🏨 ไปพักผ่อน',RESORT_PACKS[0].hours,'ฟื้นสุขภาพเยอะกว่าพักที่บ้านมาก — มีแพ็กเกจให้เลือก',()=>M.current.vacation('day'));
+  }
+
+  /* ---- assets ---- */
+  const as=$('assets'); as.innerHTML='';
+  if(!p.assets.length) as.appendChild(el('div','sub','ยังไม่มีทรัพย์สิน — ทรัพย์สินคือสิ่งที่เอาเงิน "เข้า" กระเป๋าทุกเดือน'));
+  p.assets.forEach(a=>{
+    const price=p.assetPrice(a), net=p.assetNet(a), gain=price-a.value;
+    const r=el('div','row');
+    r.innerHTML=`<span>${a.icon} ${a.name} ${a.burned?'<span class="r sub">(ไฟไหม้ '+a.burned+'ด.)</span>':''}${a.sick?'<span class="r sub">(ซบเซา '+a.sick+'ด.)</span>':''}
+      <span class="sub">${KIND_LABEL[a.kind]}</span><br>
+      <span class="sub">มูลค่า ${fmtM(price)}฿ <span class="${gain>=0?'g':'r'}">(${gain>=0?'+':'−'}${fmtM(Math.abs(gain))})</span>${a.debt?' • หนี้ '+fmtM(a.debt)+'฿':''}</span></span>`;
+    const right=el('span','v');
+    right.innerHTML=`<span class="${net>=0?'g':'r'}">${net>=0?'+':''}${fmt(net)}฿</span><br>`;
+    const sAct=p.actForKind(a.kind), sHere=p.canDoHere(sAct), sPl=PLACE(p.placeFor(sAct));
+    const b=el('button', a.offer&&sHere?'primary tiny':'tiny',
+      sHere ? (a.offer?`ขาย ${fmtM(a.offer.price)}฿ ⭐`:`ขาย (${COST.sell} ชม.)`)
+            : `ขายที่ ${sPl.icon}`);
+    b.title = sHere?'':`ต้องไปที่ ${sPl.name} ก่อน (เดินทาง ${p.travelCost(sPl.id)} ชม.)`;
+    b.disabled = sHere ? p.hours<COST.sell : p.hours<p.travelCost(sPl.id);
+    b.onclick=()=> sHere ? act(()=>M.current.sellAsset(a.id))
+                         : (walkToPlace(sPl.id), act(()=>M.current.travelTo(sPl.id)));
+    right.appendChild(b); r.appendChild(right); as.appendChild(r);
+  });
+
+  /* ---- debts (ชำระบางส่วนได้) ---- */
+  const dbt=$('debts'); dbt.innerHTML='';
+  if(!p.liabilities.length) dbt.appendChild(el('div','sub g','ปลอดหนี้ 🎉'));
+  else {
+    const maxRate = Math.max(...p.liabilities.map(x=>x.rate));
+    if(!p.canDoHere('repay')) dbt.appendChild(el('div','sub r',
+      `📍 ต้องไปที่ ${PLACE(p.placeFor('repay')).icon} ธนาคาร ก่อนถึงจะชำระหนี้ได้ (เดินทาง ${p.travelCost('bank')} ชม.) — หรือซื้อ 📱 สมาร์ตโฟนเพื่อทำผ่านแอป`));
+    dbt.appendChild(el('div','sub','💡 ปิด<b>หนี้ดอกแพงที่สุดก่อน</b>เสมอ — ทุก 100,000฿ ที่ปิดหนี้ดอก 28%/ปี ช่วยลดรายจ่ายได้ 2,300฿/เดือน <i>ตลอดไป</i> ซึ่งดีกว่าทรัพย์สินหลายตัวในตลาด'));
+    p.liabilities.forEach((d,i)=>{
+      const eff=d.rate*M.mods.rate;
+      const top = d.rate>=maxRate && p.liabilities.length>1;
+      const box=el('div'); box.style.cssText='padding:7px 0;border-bottom:1px dotted #2f4358';
+      box.innerHTML = `<div class="row" style="border:0">
+          <span>${d.name} ${top?'<span class="tag" style="position:static;background:#6b1414;border-color:#ff8080;font-size:9.5px;padding:1px 5px;border-radius:8px">ดอกแพงสุด</span>':''}
+            <br><span class="sub">ดอกเบี้ย ${(eff*1200).toFixed(0)}%/ปี = −${fmt(d.balance*eff)}฿/เดือน${M.mods.rate>1?' <b class="r">(พุ่งจากวิกฤต)</b>':''}</span></span>
+          <span class="v r">${fmtM(d.balance)}฿</span></div>`;
+      const ctl=el('div'); ctl.style.cssText='display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:5px';
+      const inp=el('input'); inp.type='number'; inp.step='10000';
+      inp.value = Math.max(0, Math.floor(Math.min(d.balance, p.cash)/10000)*10000);
+      inp.style.cssText='width:110px;padding:3px 5px;font-size:11px';
+      const pay=el('button','tiny good','ชำระ');
+      pay.disabled=!p.canDoHere('repay');
+      pay.onclick=()=>act(()=>M.current.repayDebt(i, parseFloat(inp.value)||0));
+      ctl.appendChild(inp); ctl.appendChild(pay);
+      [['25%',0.25],['50%',0.5],['ทั้งหมด',1]].forEach(([lb,f])=>{
+        const q=el('button','tiny',lb);
+        const amt = Math.floor(Math.min(d.balance*f, p.cash));
+        q.disabled = amt<=0 || !p.canDoHere('repay');
+        q.title = `ชำระ ${fmt(amt)}฿`;
+        q.onclick=()=>act(()=>M.current.repayDebt(i, amt));
+        ctl.appendChild(q);
+      });
+      const hint=el('span','sub');
+      hint.innerHTML = p.cash < d.balance
+        ? `เงินสด ${fmtM(p.cash)}฿ — ปิดได้บางส่วน`
+        : `<span class="g">เงินสดพอปิดทั้งก้อน</span>`;
+      ctl.appendChild(hint);
+      box.appendChild(ctl);
+      dbt.appendChild(box);
+    });
+  }
+
+  /* ---- log ---- */
+  const lg=$('log'); lg.innerHTML='';
+  M.logs.forEach(l=>lg.appendChild(el('div','t-'+l.type,
+    `<span class="m">[${l.month}]</span>${l.who?`<span class="who">${l.who}: </span>`:''}${l.text}`)));
+
+  $('tip').innerHTML = '💡 ' + tipFor(p);
+  if(tutOn) tutRender();
+}
+
+function tipFor(p){
+  if(M.activeDisasters.length) return `<b class="r">กำลังเจอภัยพิบัติ</b> — ช่วงนี้รายได้จากทรัพย์สินบางประเภทหด แต่ค่าผ่อนยังเดินเต็ม คนที่กู้เยอะที่สุดคือคนที่เจ็บที่สุด`;
+  if(p.health<45) return `<b class="r">สุขภาพ ${Math.round(p.health)} แล้ว</b> — ประสิทธิภาพเวลาเหลือ ${(p.efficiency*100).toFixed(0)}% แปลว่าชั่วโมงที่มีอยู่ใช้ได้จริงน้อยลง ลองออกกำลังกาย/นอน 8 ชม./ทำกินเอง`;
+  if(M.month===1) return `เดือนแรก: ลองดูแถบงบเวลาก่อน — ปิดดีลใช้ ${COST.deal} ชม. <b>บวกเวลาเดินทางไปศูนย์อสังหาฯ อีก ${p.travelCost('estate')} ชม.</b> คุณทำได้กี่ครั้งต่อเดือน? นั่นคือเพดานความเร็วของคุณ`;
+  if(p.phase>=2 && !p.canClaimDream()) return 'ด่าน 2 ต้องครบ<b>ทั้งสองแถบ</b> — เงินก้อนอย่างเดียวไม่พอ ความฝันที่ดีต้องมีรายได้เลี้ยงมันต่อไปได้';
+  if(p.assets.some(a=>a.offer)) return 'มีคนเสนอซื้อทรัพย์สินเหนือราคาตลาด — <b>ขายแล้วเอาเงินก้อนไปดาวน์หลายชิ้น</b> คือวิธีโตเร็วที่สุด';
+  if(p.sideUsed>=2) return 'รับงานเสริมไป 2 ครั้ง = 70 ชม. — เท่ากับปิดดีลได้เกือบ 3 ดีล ลองเทียบว่าอันไหนให้ผลตอบแทนระยะยาวมากกว่า';
+  if(p.sleepDebt>0) return `<b class="r">คุณนอน ${p.sleep.h} ชม. แต่อาชีพ${p.job.name}ต้องการ ${p.sleepNeed} ชม.</b> — ได้เวลาว่างดิบเพิ่ม ${p.sleepDebt*30} ชม. แต่เสียประสิทธิภาพ ${p.sleepDebt*5}% และสุขภาพ ${(p.sleepDebt*1.3).toFixed(1)}/เดือน ลองคำนวณดูว่าคุ้มจริงไหม`;
+  if(p.foodId==='fast') return 'กินเดลิเวอรีทุกวัน = แพงขึ้น 30% + สุขภาพลง 2.5/เดือน — ประหยัดเวลาได้ 9 ชม. แลกกับสองอย่างที่แพงกว่า';
+  if(p.debtPayments>p.currentSalary*0.5) return 'ค่าผ่อนกินรายได้เกินครึ่งแล้ว — ถ้าเจอภัยพิบัติดอกเบี้ยพุ่งช่วงนี้จะอันตรายมาก';
+  if(p.cash>p.totalExpenses*10) return 'เงินสดกองอยู่เฉยๆ ไม่สร้างรายได้ — เงินที่ไม่ทำงานคือเงินที่เสียมูลค่าให้เงินเฟ้อทุกเดือน';
+  if(p.freedomPct>60) return 'ใกล้แล้ว! เหลืออีก '+fmt(p.totalExpenses-p.passiveIncome)+'฿/เดือน จะออกจากสนามแข่งหนู';
+  return 'เงิน เวลา สุขภาพ — สามอย่างนี้แลกกันได้ แต่แลกผิดทางจะเสียทั้งสามอย่างพร้อมกัน';
+}
+
+function showEnd(){
+  const s=M.standings(), w=s[0];
+  $('m-title').textContent = w.dreamDone ? '👑 จบแมตช์!' : '💀 จบแมตช์';
+  let html = w.dreamDone
+    ? `<b class="y">${w.name}</b> (${w.job.icon} ${w.job.name}) ทำความฝัน <b class="y">${w.dream.icon} ${w.dream.name}</b> สำเร็จในเดือนที่ <b class="y">${w.dreamDone}</b>`
+    : 'ไม่มีใครไปถึงความฝัน';
+  html += '<div style="text-align:left;margin-top:16px">';
+  s.forEach((x,i)=>{
+    const status = x.dreamDone ? `<span class="y">ทำฝันสำเร็จ เดือนที่ ${x.dreamDone}</span>`
+      : x.phase>=2 ? `<span class="sub">ด่าน 2 · ${Math.min(x.dreamPct,x.dreamPassivePct).toFixed(0)}%</span>`
+      : `<span class="sub">${x.freedomPct.toFixed(0)}% • สุทธิ ${fmtM(x.netWorth)}฿</span>`;
+    html += `<div class="row"><span>${i+1}. ${x.job.icon} ${x.name} <span class="sub">${x.job.name}${x.isAI?' • บอท':''}${x.roll?' • ทอยได้ '+x.roll:''} • ❤️${Math.round(x.health)}</span></span><span class="v">${status}</span></div>`;
+  });
+  html += '</div>';
+  if(M.champions.length) html += `<div class="sub" style="text-align:left;margin-top:12px">ลำดับผู้ทำความฝันสำเร็จ: ${M.champions.map(c=>`${c.rank}. ${c.icon} ${c.name} (ด.${c.month})`).join(' · ')}</div>`;
+  if(M.disasterHistory.length) html += `<div class="sub" style="text-align:left;margin-top:12px">ภัยพิบัติที่ผ่านมา: ${M.disasterHistory.map(d=>d.icon+' '+d.name+' (ด.'+d.month+')').join(' · ')}</div>`;
+  $('m-body').innerHTML = html;
+  $('modal').style.display='flex';
+}
+
+/* ============ TUTORIAL (5 เดือนแรก) ============ */
+const TUT = [
+  { m:1, sel:'#timebox', t:'นี่คือทรัพยากรจริงของเกม',
+    x:'หนึ่งเดือนมี <b>720 ชั่วโมง</b> เท่ากันทุกอาชีพ แถบสีนี้บอกว่าชีวิตคุณหมดไปกับอะไร — นอน ทำงาน เดินทาง กินข้าว ธุระ<br><br>ส่วนที่เหลือ (สีฟ้า) คือเวลาที่คุณเอาไป<b>สร้างความมั่งคั่ง</b>ได้จริง' },
+  { m:1, sel:'#timebox .bar.time', t:'เวลาว่างดิบ ≠ เวลาที่ใช้ได้จริง',
+    x:'ชั่วโมงว่างจะถูกคูณด้วย <b>ประสิทธิภาพ</b> ซึ่งมาจากสุขภาพและการนอน<br><br>สุขภาพ 90 ใช้เวลาได้ ~94% · สุขภาพ 40 เหลือ ~64% — <b>สุขภาพตกแปลว่าชั่วโมงที่มีอยู่หายไปเฉยๆ</b>' },
+  { m:1, sel:'#deals', t:'ดูตัวเลขนี้ ไม่ใช่ราคา',
+    x:'ทุกการ์ดดีลบอก <b class="g">ผลตอบแทนต่อทุน %/เดือน</b> ไว้ที่บรรทัดใหญ่<br><br>ดีลราคาถูกไม่ได้แปลว่าดี และดีลแพงไม่ได้แปลว่าแย่ — เทียบที่ % เสมอ' },
+  { m:1, sel:'#town', t:'ทุกอย่างมีที่ทางของมัน',
+    x:'นี่คือแผนที่เมือง <b>คลิกอาคารเพื่อเดินทาง</b> — และการเดินทาง<b class="r">กินเวลาจริง</b><br><br>🏬 ดีลอสังหาฯ/ธุรกิจ · 💍 ทองและของสะสม · 🏦 ธนาคาร · 🏢 OT · 💻 freelance · 🎓 เรียน · 🏋️ ฟิตเนส · 🏨 พักผ่อน · 🛒 ซื้อรถ/มือถือ · 🏠 นอนกับอาหาร<br><br>การวางลำดับว่าจะแวะที่ไหนก่อน คือเกมใหม่ที่ซ้อนอยู่บนเกมเดิม' },
+  { m:1, sel:'#places', t:'ของที่ซื้อเวลาคืนได้',
+    x:'ที่ 🛒 <b>ห้างสรรพสินค้า</b> มีของสองอย่างที่เปลี่ยนเกม:<br><br>🚗 <b>รถ</b> — ลดทั้งเวลาเดินทางและ<b>เวลาไปทำงานประจำ</b> (ตัวหลังคือของจริง บางอาชีพประหยัดได้ 20–30 ชม./เดือน)<br>📱 <b>สมาร์ตโฟน</b> — ทำธุรกรรมธนาคารจากที่ไหนก็ได้ ไม่ต้องเดินทางอีกเลย<br><br>ทั้งคู่มีค่าใช้จ่ายรายเดือน — คำถามคือ 1 ชั่วโมงของคุณมีค่าเท่าไหร่' },
+  { m:1, sel:'#deals', t:'ลองปิดดีลแรกของคุณ',
+    x:'เลือกการ์ดที่ปุ่มเป็น<b class="g">สีเขียว</b> (แปลว่าเงินและเวลาพอ) แล้วกด "ปิดดีล"<br><br>เลือกอันที่ % ต่อทุนสูงที่สุดเท่าที่ซื้อไหว',
+    wait:'รอให้คุณปิดดีลแรก...', done:(p)=>p.assets.length>0 },
+  { m:1, sel:'#endturn', t:'จบเดือนเมื่อพร้อม',
+    x:'ใช้เวลาที่เหลือให้คุ้มก่อน แล้วค่อยกด <b>จบตา</b><br><br>ตอนสิ้นเดือนจะเกิด: ราคาตลาดขยับ → เงินเดือนเข้า → หักรายจ่าย → เหตุการณ์สุ่ม',
+    wait:'กด "จบตา" เพื่อไปเดือนถัดไป...', done:(p,M)=>M.month>1 },
+
+  { m:2, sel:'#income', t:'นี่คือหัวใจของเกมทั้งหมด',
+    x:'<b class="c">รายได้จากทรัพย์สิน</b> คือเงินที่เข้ามาโดยคุณไม่ต้องทำงาน<br><b class="r">รวมรายจ่าย</b> คือเงินที่ออกไปทุกเดือนไม่ว่าคุณจะทำอะไร<br><br>ชนะด่านแรกเมื่อ <b>บรรทัดแรก ≥ บรรทัดที่สอง</b> — แค่นั้นเลย' },
+  { m:2, sel:'#goal', t:'ระวังกับดักข้อแรก',
+    x:'ดอกเบี้ยถูกนับเป็น<b>รายจ่าย</b> แปลว่ายิ่งกู้เยอะ <b class="r">เส้นชัยยิ่งขยับหนี</b><br><br>การกู้ช่วยให้โตเร็วขึ้นจริง แต่ก็ยกเป้าหมายสูงขึ้นพร้อมกัน — ความตึงตรงนี้คือเกมนี้' },
+
+  { m:3, sel:'#foodopts', t:'อาหารมีสามมิติ',
+    x:'ไม่มีตัวเลือกไหนดีทุกด้าน:<br>🍔 <b>เดลิเวอรี</b> เร็วสุด แต่แพงขึ้น 30% และสุขภาพลง<br>🍜 <b>สตรีทฟู้ด</b> ทางสายกลาง<br>🥗 <b>ทำกินเอง</b> ถูกสุด สุขภาพดีสุด แต่กิน 75 ชม./เดือน = ปิดดีลหายไป 3 ดีล<br><br>เปลี่ยนได้ตลอด ไม่เสียเวลา' },
+  { m:3, sel:'#sleepopts', t:'นอนตามเกณฑ์ของอาชีพ',
+    x:'แต่ละอาชีพมีเกณฑ์การนอนไม่เท่ากัน (ดูป้าย <b class="g">✓ เกณฑ์อาชีพ</b>)<br><br>นอนน้อยกว่าเกณฑ์โดนปรับ<b>สองชั้น</b> — ทั้งสุขภาพและประสิทธิภาพ ลองกดดูตัวเลขก่อนตัดสินใจ มักไม่คุ้มอย่างที่คิด' },
+
+  { m:4, sel:'#health', t:'สุขภาพคือทรัพย์สินที่แพงที่สุด',
+    x:'สุขภาพไม่ใช่แค่ตัวเลขประดับ — มันคูณตรงเข้ากับเวลาที่คุณใช้ได้<br><br>ต่ำกว่า 45 จะเจอเหตุการณ์เจ็บป่วยบ่อยขึ้นมาก และต่ำกว่า 25 มีโอกาสล้มป่วยหนักจนต้องหยุดงาน' },
+  { m:4, sel:'#acts', t:'ป้องกันถูกกว่ารักษาเสมอ',
+    x:'🏃 <b>ออกกำลังกาย</b> 16 ชม. → สุขภาพ +5<br>🛋️ <b>พักผ่อน</b> 12 ชม. → สุขภาพ +2.5 และลดโอกาสเกิดเรื่องร้ายเดือนนั้น<br><br>เทียบกับค่ารักษาตอนล้มป่วยที่แพงกว่ารายจ่ายทั้งเดือน 1–3 เท่า บวกเสียเวลาอีก 90 ชม.' },
+
+  { m:5, sel:'#acts', t:'กับดักสำคัญที่สุดของเกมนี้',
+    x:'💪 <b>งานเสริม</b> ใช้ 35 ชม. → ได้เงิน<b>ก้อนเดียวจบ</b><br>🤝 <b>ปิดดีล</b> ใช้ 25 ชม. → ได้เงิน<b>ทุกเดือนตลอดไป</b><br><br>งานเสริมช่วยตอนเงินตึงจริง แต่ถ้าทำทุกเดือน คุณกำลังเอาเวลาไปแลกเงินซ้ำๆ แทนที่จะสร้างสิ่งที่จ่ายคุณเอง<br><br>📚 <b>เรียนเพิ่มเติม</b> เป็นทางที่สาม — เงินเดือนขึ้นถาวรโดยรายจ่ายไม่โตตาม' },
+  { m:5, sel:'#stand', t:'คู่แข่งแย่งดีลจริง',
+    x:'ทุกคนใช้<b>ตลาดเดียวกัน</b> ดีลที่คุณลังเล คนอื่นคว้าไปได้จริงๆ<br><br>แถบนี้บอกว่าแต่ละคนไปถึงกี่ % แล้ว — ใช้ดูว่าควรเร่งหรือควรระวัง' },
+  { m:5, sel:null, t:'จบการสอนแล้ว 🎉',
+    x:'สามอย่างที่อยากให้จำ:<br><br>1. <b class="c">เวลาคือคอขวดจริง</b> ไม่ใช่เงิน<br>2. <b class="c">สุขภาพคือตัวคูณเวลา</b> ปล่อยให้ตกแล้วทุกอย่างช้าลงหมด<br>3. <b class="c">ตัวเลขที่กำหนดชะตาคือสัดส่วน</b> ไม่ใช่เงินเดือน<br><br>ที่เหลือลองเองครับ — และอย่าลืมกด 💾 บันทึก ก่อนปิด' }
+];
+let tutOn = false, tutStep = 0;
+
+function tutStart(){ tutOn = true; tutStep = 0; tutRender(); }
+function tutEnd(){ tutOn = false; $('tut-card').style.display='none'; $('tut-ring').style.display='none'; }
+$('tut-skip').onclick = tutEnd;
+$('tut-next').onclick = ()=>{ tutStep++; if(tutStep>=TUT.length){ tutEnd(); return; } tutRender(true); };
+
+function tutRender(scroll){
+  if(!tutOn || !M){ return; }
+  const p = M.current; if(!p || p.isAI) return;
+  /* ข้ามสเต็ปของเดือนที่ผ่านไปแล้ว */
+  while(tutStep < TUT.length-1 && TUT[tutStep].m < M.month && !TUT[tutStep].done) tutStep++;
+  const st = TUT[tutStep];
+  if(!st){ tutEnd(); return; }
+  /* สเต็ปที่รอให้ทำ action */
+  if(st.done && st.done(p,M)){ tutStep++; tutRender(true); return; }
+
+  $('tut-title').textContent = st.t;
+  $('tut-text').innerHTML = st.x + (st.done ? `<div class="tut-wait">▸ ${st.wait}</div>` : '');
+  $('tut-next').style.display = st.done ? 'none' : '';
+  $('tut-next').textContent = tutStep===TUT.length-1 ? 'เริ่มเล่นเลย' : 'ถัดไป ▸';
+  let dots=''; for(let i=0;i<TUT.length;i++) dots += `<i class="${i<=tutStep?'on':''}"></i>`;
+  $('tut-dots').innerHTML = dots;
+  $('tut-card').style.display='block';
+
+  const ring=$('tut-ring');
+  const el2 = st.sel ? document.querySelector(st.sel) : null;
+  if(el2){
+    const r = el2.getBoundingClientRect();
+    ring.style.display='block'; ring.style.left=(r.left+scrollX-6)+'px'; ring.style.top=(r.top+scrollY-6)+'px';
+    ring.style.width=(r.width+12)+'px'; ring.style.height=(r.height+12)+'px';
+    if(scroll) el2.scrollIntoView({behavior:'smooth', block:'center'});
+  } else ring.style.display='none';
+}
+addEventListener('scroll', ()=>{ if(tutOn) tutRender(); }, {passive:true});
+addEventListener('resize', ()=>{ if(tutOn) tutRender(); });
+
+/* ============ ส่งออกข้อมูล playtest (CSV) ============ */
+function exportCSV(){
+  if(!M){ flash('ยังไม่ได้เริ่มเกม'); return; }
+  const me = M.players.find(x=>!x.isAI) || M.players[0];
+  const head = ['เดือน','อาชีพ','ด่าน','เงินสด','ความมั่งคั่งสุทธิ','หนี้สินรวม','รายได้จากทรัพย์สิน','รายจ่ายรวม',
+    'อิสรภาพ%','เงินเดือน','สุขภาพ','ชม.ที่ใช้ได้','จำนวนทรัพย์สิน','ชม.นอน','อาหาร','ภัยพิบัติที่มีผล'];
+  const rows = me.history.map(h=>[h.m, me.job.name, h.phase, h.cash, h.nw, h.debt, h.passive, h.exp,
+    (h.passive/Math.max(1,h.exp)*100).toFixed(1), h.salary, h.hp, h.hours, h.assets, h.sleep, h.food, h.dis||'']);
+  const meta = [
+    ['# WEALTH QUEST — ข้อมูล playtest'],
+    ['# ผู้เล่น', me.name, 'อาชีพ', me.job.name, 'ทอยได้', me.roll||'-'],
+    ['# โหมด', M.mode, 'ผู้เล่นทั้งหมด', M.players.length],
+    ['# ออกจากสนามแข่งหนู (เดือน)', me.finished||'ยังไม่ถึง', 'ทำความฝันสำเร็จ (เดือน)', me.dreamDone||'ยังไม่ถึง'],
+    ['# ความฝันที่ทอยได้', me.dream?me.dream.name:'-'],
+    ['# ภัยพิบัติที่เจอ', M.disasterHistory.map(d=>d.name+'(ด.'+d.month+')').join(' | ')],
+    ['# ผู้ทำความฝันสำเร็จ', M.champions.map(c=>c.rank+'.'+c.name+'(ด.'+c.month+')').join(' | ')],
+    []
+  ];
+  const esc = v => { v=String(v??''); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+  const csv = '\ufeff' + [...meta, head, ...rows].map(r=>r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`playtest-${me.job.id}-m${String(M.month).padStart(3,'0')}.csv`;
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  flashOK(`ส่งออกแล้ว ${me.history.length} เดือน: ${a.download}`);
+}
+
+/* ============ SAVE / LOAD ============ */
+function saveGame(){
+  if(!M){ flash('ยังไม่ได้เริ่มเกม'); return; }
+  const data = M.serialize();
+  data.savedAt = new Date().toISOString();
+  data.humanCount = setupList.length || M.players.filter(p=>!p.isAI).length;
+  data.tut = tutOn ? tutStep : -1;
+  const me = M.players.find(p=>!p.isAI) || M.players[0];
+  const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `wealthquest-${me.job.id}-m${String(M.month).padStart(3,'0')}.json`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  flashOK(`บันทึกแล้ว: ${a.download}`);
+}
+
+function flashOK(msg){
+  let f=$('flashbox');
+  if(!f){f=el('div');f.id='flashbox';f.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);padding:8px 18px;z-index:99;border-radius:3px';document.body.appendChild(f);}
+  f.style.background='#1d4b2b'; f.style.border='1px solid #7ee08a';
+  f.textContent=msg; f.style.display=''; clearTimeout(flashT);
+  flashT=setTimeout(()=>{f.style.display='none';f.style.background='#7a1f1f';f.style.border='1px solid #ff8080';},2600);
+}
+
+function openLoad(){ $('fileinput').value=''; $('fileinput').click(); }
+$('loadbtn').onclick  = openLoad;
+$('loadbtn2').onclick = openLoad;
+$('savebtn').onclick  = saveGame;
+$('csvbtn').onclick   = exportCSV;
+$('fileinput').onchange = e => {
+  const file = e.target.files[0]; if(!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const data = JSON.parse(rd.result);
+      M = Match.load(data);
+      MODE = M.mode;
+      const hc = data.humanCount || M.players.filter(p=>!p.isAI).length;
+      setupList = Array.from({length:hc},(_,i)=>({name:'p'+i}));
+      if(typeof data.tut === 'number' && data.tut >= 0){ tutOn=true; tutStep=data.tut; } else tutEnd();
+      show('s-game');
+      afterTurnChange();
+      flashOK(`โหลดเกมสำเร็จ — เดือนที่ ${M.month}${data.savedAt?' (บันทึกเมื่อ '+new Date(data.savedAt).toLocaleString('th-TH')+')':''}`);
+    }catch(err){ alert('โหลดไฟล์ไม่สำเร็จ: '+err.message); }
+  };
+  rd.readAsText(file);
+};
+
+/* ============ 2.5D town strip — คลิกอาคารเพื่อเดินทาง ============ */
+const cv=$('town'), cx=cv.getContext('2d');
+let heroX=0.5, heroTarget=0.5;
+const placeScreenX = pl => 0.045 + (pl.x/100)*0.915;   // เว้นขอบซ้ายขวา
+
+function drawTown(ts){
+  const w=cv.width,h=cv.height;
+  const sky=cx.createLinearGradient(0,0,0,h); sky.addColorStop(0,'#16283f'); sky.addColorStop(1,'#0a1420');
+  cx.fillStyle=sky; cx.fillRect(0,0,w,h);
+  if(M&&M.activeDisasters.length){ cx.fillStyle='rgba(120,20,20,.30)'; cx.fillRect(0,0,w,h); }
+  for(let r=0;r<5;r++)for(let c=-1;c<28;c++){
+    const tw=58,th=13,x=c*tw+(r%2?tw/2:0)-30,y=78+r*th;
+    cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+tw/2,y+th/2);cx.lineTo(x,y+th);cx.lineTo(x-tw/2,y+th/2);cx.closePath();
+    cx.fillStyle=(r+c)%2?'#1d3145':'#20374e';cx.fill();
+    cx.strokeStyle='rgba(80,120,160,.12)';cx.stroke();
+  }
+  if(typeof PLACES!=='undefined') PLACES.forEach(pl=>{
+    const x=placeScreenX(pl)*w, bw=52, bh=42;
+    const here = M && M.current && M.current.place===pl.id;
+    cx.fillStyle='#16222f';cx.fillRect(x-bw/2+4,84,bw,6);
+    cx.fillStyle= here?'#33506e':'#243a52';cx.fillRect(x-bw/2,80-bh,bw,bh);
+    cx.fillStyle=pl.color;cx.fillRect(x-bw/2,80-bh,bw,5);
+    cx.fillStyle='#0e1a26';
+    for(let i=0;i<3;i++)for(let j=0;j<2;j++)cx.fillRect(x-18+i*13,80-bh+12+j*13,8,8);
+    cx.fillStyle='rgba(255,215,106,.75)';cx.fillRect(x-18+((ts/700|0)%3)*13,80-bh+12,8,8);
+    if(here){ cx.strokeStyle='#ffd76a'; cx.lineWidth=2; cx.strokeRect(x-bw/2-2,80-bh-2,bw+4,bh+4); cx.lineWidth=1; }
+    cx.font='16px Tahoma'; cx.textAlign='center'; cx.fillText(pl.icon, x, 80-bh+30);
+    cx.fillStyle= here?'#ffd76a':'#9fb8d0'; cx.font='10px Tahoma';
+    cx.fillText(pl.name.length>14?pl.name.slice(0,13)+'…':pl.name, x, 80-bh-6);
+  });
+  heroX += (heroTarget-heroX)*0.08;
+  const hx=heroX*w, walking=Math.abs(heroTarget-heroX)>0.004;
+  const by=92+(walking?Math.sin(ts/150)*2.5:Math.sin(ts/500));
+  cx.fillStyle='rgba(0,0,0,.35)';cx.beginPath();cx.ellipse(hx,by+16,9,3.5,0,0,7);cx.fill();
+  if(M&&M.current&&M.current.veh&&M.current.veh.id!=='public'&&walking){
+    cx.font='18px Tahoma';cx.textAlign='center';cx.fillText(M.current.veh.icon,hx,by+10);
+  } else {
+    cx.fillStyle='#3f6f9e';cx.fillRect(hx-6,by,12,14);
+    cx.fillStyle='#2a4c70';cx.fillRect(hx-6,by+10,5,6);cx.fillRect(hx+1,by+10,5,6);
+    cx.fillStyle='#ffdcae';cx.fillRect(hx-7,by-12,14,13);
+    cx.fillStyle='#4a2f1c';cx.fillRect(hx-8,by-15,16,6);
+    cx.fillStyle='#1a1a1a';cx.fillRect(hx-4,by-6,2,2);cx.fillRect(hx+2,by-6,2,2);
+  }
+  cx.fillStyle='#ffd76a';cx.font='10px Tahoma';cx.textAlign='center';
+  if(M&&M.current) cx.fillText(M.current.job.icon+' '+M.current.name,hx,by-20);
+  requestAnimationFrame(drawTown);
+}
+requestAnimationFrame(drawTown);
+
+function walkToPlace(id){
+  const pl = PLACES.find(x=>x.id===id);
+  if(pl) heroTarget = placeScreenX(pl);
+}
+/* คลิกอาคารบนแผนที่เพื่อเดินทาง */
+cv.addEventListener('click', e=>{
+  if(!M || !M.current || M.current.isAI) return;
+  const r=cv.getBoundingClientRect();
+  const rel=(e.clientX-r.left)/r.width;
+  let best=null, bd=1;
+  PLACES.forEach(pl=>{ const d=Math.abs(placeScreenX(pl)-rel); if(d<bd){bd=d;best=pl;} });
+  if(best && bd<0.045){
+    if(best.id===M.current.place){ flash('คุณอยู่ที่นี่อยู่แล้ว'); return; }
+    walkToPlace(best.id);
+    act(()=>M.current.travelTo(best.id));
+  }
+});
+cv.addEventListener('mousemove', e=>{
+  const r=cv.getBoundingClientRect(), rel=(e.clientX-r.left)/r.width;
+  let bd=1; PLACES.forEach(pl=>{ bd=Math.min(bd,Math.abs(placeScreenX(pl)-rel)); });
+  cv.style.cursor = bd<0.045 ? 'pointer' : 'default';
+});
+</script>
+</body>
+</html>

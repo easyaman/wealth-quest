@@ -1,0 +1,16 @@
+; Godot 4.x project — WEALTH QUEST
+config_version=5
+
+[application]
+config/name="Wealth Quest"
+config/description="เกมการเงิน 2.5D — เงิน · เวลา · สุขภาพ"
+run/main_scene="res://ui/Main.tscn"
+config/features=PackedStringArray("4.3")
+
+[display]
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="canvas_items"
+
+[rendering]
+textures/canvas_textures/default_texture_filter=0

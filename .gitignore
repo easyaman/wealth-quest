@@ -1,0 +1,19 @@
+# ไฟล์ zip ที่ใช้ส่งงาน — เนื้อหาถูกแตกไว้ในโฟลเดอร์นี้แล้ว
+*.zip
+
+# Godot
+.godot/
+.import/
+export_presets.cfg
+
+# ระบบปฏิบัติการ / เอดิเตอร์
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# ผลลัพธ์ชั่วคราวจากการจำลอง
+node_modules/
+/tmp/
+*.log

@@ -293,6 +293,10 @@ const DEAL_POOL = [
   { kind: 'fund', icon: '📈', names: ['กองทุนรวมหุ้นปันผล', 'พันธบัตรรัฐบาล', 'กอง REIT อสังหาฯ', 'หุ้นกู้บริษัทใหญ่'],
     min: 100000, max: 900000, downPct: [1, 1], yield: [0.005, 0.0078], vol: 0.05, w: 1.2 }
 ];
+/* เงินดาวน์ที่ถูกที่สุดที่ตลาดสร้างได้ — ใช้เป็นพื้นของการันตี
+   "ต้องมีของให้คนจนที่สุดซื้อได้" (GDD ข้อ 5.2) ต่ำกว่านี้ก็สร้างอะไรให้ไม่ได้อยู่ดี */
+const CHEAPEST_DOWN = Math.min(...DEAL_POOL.map(t => Math.round(t.min * t.downPct[0])));
+
 const BIG_DEALS = [
   { kind: 'realestate', icon: '🏨', names: ['อพาร์ตเมนต์ 40 ห้อง', 'โรงแรมบูทีค 20 ห้อง', 'โกดังโซนอุตสาหกรรม', 'คอมมูนิตี้มอลล์เล็ก'],
     min: 12000000, max: 40000000, downPct: [0.20, 0.30], yield: [0.0085, 0.0135], vol: 0.13, w: 1 },
@@ -1082,7 +1086,8 @@ class Match {
   pickTemplate(pool, maxDown) {
     const r = this.rng;
     let cand = pool;
-    if (maxDown) cand = pool.filter(t => t.min * t.downPct[0] <= maxDown);
+    // ใช้ downPct ตัวบน เพราะเงินดาวน์จริงสุ่มได้ถึงค่านั้น — ถ้ากรองด้วยตัวล่างจะได้ดีลที่ยังซื้อไม่ไหว
+    if (maxDown) cand = pool.filter(t => t.min * t.downPct[1] <= maxDown);
     if (!cand.length) cand = pool;
     const total = cand.reduce((s, t) => s + (t.w || 1), 0);
     let x = r() * total;
@@ -1111,7 +1116,7 @@ class Match {
     const t = this.pickTemplate(pool, maxDown);
     const step = t.min >= 1000000 ? 100000 : (t.min >= 100000 ? 10000 : 1000);
     let hi = t.max;
-    if (maxDown) hi = Math.min(t.max, Math.max(t.min, maxDown / t.downPct[0]));
+    if (maxDown) hi = Math.min(t.max, Math.max(t.min, maxDown / t.downPct[1]));
     const price = Math.round((t.min + r() * (hi - t.min)) / step) * step;
     const downPct = t.downPct[0] + r() * (t.downPct[1] - t.downPct[0]);
     const down = Math.round(price * downPct), debt = price - down;
@@ -1126,7 +1131,7 @@ class Match {
     while (this.deals.length < target) this.deals.push(this.makeDeal());
     const alive = this.players.filter(p => !p.bankrupt && p.phase < 3);
     if (!alive.length) return;
-    const poorest = Math.max(30000, Math.min(...alive.map(p => p.cash)));
+    const poorest = Math.max(CHEAPEST_DOWN, Math.min(...alive.map(p => p.cash)));
     let cheap = this.deals.filter(d => d.down <= poorest).length, guard = 0;
     while (cheap < 2 && guard++ < 6) {
       if (this.deals.length >= target + 2) this.deals.shift();
@@ -1230,6 +1235,8 @@ class Match {
         cash: p.cash, salary: p.salary, fixedExpenses: p.fixedExpenses, foodBase: p.foodBase,
         childCost: p.childCost, childHours: p.childHours,
         assets: p.assets, liabilities: p.liabilities,
+        place: p.place, travelUsed: p.travelUsed, vehicle: p.vehicle,
+        devices: p.devices, gymPack: p.gymPack, shield: p.shield,
         sleepIdx: p.sleepIdx, foodId: p.foodId, health: p.health, timePenalty: p.timePenalty,
         sideUsed: p.sideUsed, exerciseThisMonth: p.exerciseThisMonth, restedThisMonth: !!p.restedThisMonth,
         studyLevel: p.studyLevel, studyProgress: p.studyProgress,
@@ -1261,6 +1268,14 @@ class Match {
       Object.assign(p, pd);
       delete p.jobId;
       p.assets = pd.assets || []; p.liabilities = pd.liabilities || []; p.history = pd.history || [];
+      /* ค่าเริ่มต้นของระบบแผนที่ — ไฟล์เซฟเก่าที่บันทึกก่อนมีระบบนี้จะไม่มีช่องเหล่านี้
+         ต้องเติมให้ ไม่งั้น getter อย่าง upkeepCost จะพังทันทีที่โหลด */
+      if (p.place === undefined) p.place = 'home';
+      if (p.travelUsed === undefined) p.travelUsed = 0;
+      if (p.vehicle === undefined) p.vehicle = 'public';
+      if (!Array.isArray(p.devices)) p.devices = [];
+      if (p.gymPack === undefined) p.gymPack = null;
+      if (p.shield === undefined) p.shield = 0;
       return p;
     });
     return m;

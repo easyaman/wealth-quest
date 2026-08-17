@@ -1,13 +1,16 @@
 extends Control
-## หน้าจอหลักชั่วคราว — ตอนนี้มีวิดเจ็ตจริงตัวแรกแล้ว (⏳ งบเวลา) ที่เหลือยัง placeholder
-## งานถัดไปตามบทที่ 12 ของ GDD: deal_card → statement → health_bar → standings
+## หน้าจอหลักชั่วคราว — มีวิดเจ็ตจริงแล้ว: ⏳ งบเวลา · งบการเงิน · ตลาดดีล · หนี้สิน
+## งานถัดไปตามบทที่ 12 ของ GDD: health_bar → standings → แผงสถานที่/การเดินทาง
 
 const BG := Color("0a1420")
 
 var m: WQMatch
 var time_budget: WQTimeBudget
 var deal_market: WQDealMarket
+var statement: WQStatement
+var debt_list: WQDebtList
 var log_label: RichTextLabel
+var _scroll: ScrollContainer
 var _shot_path := ""
 var _shot_frames := 0
 
@@ -29,6 +32,9 @@ func _ready() -> void:
 	# ถ่ายภาพหน้าจอแล้วปิดตัวเอง — ใช้ตรวจงาน UI จาก terminal ได้โดยไม่ต้องเปิดเกมเอง
 	_shot_path = OS.get_environment("WQ_SHOT")
 	set_process(_shot_path != "")
+	# เลื่อนหน้าลงก่อนถ่าย เพื่อตรวจวิดเจ็ตที่อยู่ใต้ขอบจอได้จาก terminal
+	var scroll_to := OS.get_environment("WQ_SHOT_SCROLL")
+	if scroll_to != "": _scroll.set_deferred("scroll_vertical", scroll_to.to_int())
 
 
 ## Godot มากับฟอนต์ที่ไม่มีสระและวรรณยุกต์ไทย ข้อความทั้งเกมจะกลายเป็นกล่องเปล่า
@@ -37,7 +43,7 @@ func _apply_thai_font() -> void:
 	var f := SystemFont.new()
 	f.font_names = PackedStringArray([
 		"Noto Sans Thai", "Sarabun", "Thonburi", "Leelawadee UI", "Tahoma"])
-	f.allow_system_fallback = true
+	f.allow_system_fallback = true   # อีโมจิมาจากฟอนต์ระบบผ่านทางนี้ ไม่ต้องระบุชื่อเอง
 	var t := Theme.new()
 	t.default_font = f
 	t.default_font_size = 14
@@ -61,21 +67,27 @@ func _build_layout() -> void:
 	margin.add_child(cols)
 
 	# ตลาดดีลยาวเกินจอได้ง่ายๆ (9-11 ใบ) ถ้าไม่มีสกรอลล์ การ์ดแถวล่างจะกดไม่ได้เลย
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(780, 0)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	cols.add_child(scroll)
+	_scroll = ScrollContainer.new()
+	_scroll.custom_minimum_size = Vector2(780, 0)
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	cols.add_child(_scroll)
 
 	var center := VBoxContainer.new()
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center.add_theme_constant_override("separation", 12)
-	scroll.add_child(center)
+	_scroll.add_child(center)
 
 	time_budget = WQTimeBudget.new()
 	center.add_child(time_budget)
 
+	statement = WQStatement.new()
+	center.add_child(statement)
+
 	deal_market = WQDealMarket.new()
 	center.add_child(deal_market)
+
+	debt_list = WQDebtList.new()
+	center.add_child(debt_list)
 
 	log_label = RichTextLabel.new()
 	log_label.bbcode_enabled = true
@@ -89,6 +101,8 @@ func _refresh() -> void:
 	if p == null: return
 	time_budget.bind(p)
 	deal_market.bind(p, m)
+	statement.bind(p)
+	debt_list.bind(p)
 
 	var s := "[b]เดือนที่ %d[/b]  |  %s %s\n" % [m.month, p.job.icon, p.pname]
 	s += "เงินสด %s  ·  สุทธิ %s  ·  📍 %s  ·  ❤️ %d\n" % [

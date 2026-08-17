@@ -62,6 +62,8 @@ func _init() -> void:
 
 	w.free()
 	_check_deal_market(m)
+	_check_statement(m)
+	_check_debt_list(m)
 
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -119,6 +121,79 @@ func _check_deal_market(m: WQMatch) -> void:
 	_eq("ดีลที่ซื้อไปแล้วต้องหลุดจากตลาด", m.deals.size(), before_deals - 1)
 
 	mk.free()
+
+
+func _check_statement(m: WQMatch) -> void:
+	var p = m.players[0]
+	# ส่วนก่อนหน้าเปลี่ยนพาหนะ/สถานที่ไว้ ต้องรีเซ็ตก่อน ไม่งั้นเทสต์อ่านสถานะของส่วนอื่น
+	p.vehicle = "public"
+	p.devices = []
+	p.place = "home"
+	var st := WQStatement.new()
+	st.bind(p)
+
+	# ทุกบรรทัดต้องตรงกับ core ไม่ใช่คำนวณซ้ำในฝั่ง UI แล้วเพี้ยน
+	_eq("งบมีบรรทัดรวมรายรับตรงกับ core", _labels_with(st, WQFmt.n(p.get_total_income()) + "฿") > 0, true)
+	_eq("งบมีบรรทัดรวมรายจ่ายตรงกับ core", _labels_with(st, WQFmt.n(p.get_total_expenses()) + "฿") > 0, true)
+	_eq("งบมีเหลือเก็บต่อเดือนตรงกับ core",
+		_labels_with(st, WQFmt.signed(p.get_monthly_cashflow()) + "฿") > 0, true)
+	_eq("งบดุลมีความมั่งคั่งสุทธิตรงกับ core", _labels_with(st, WQFmt.m(p.get_net_worth()) + "฿") > 0, true)
+	# เส้นชัยของด่าน 1 ต้องอยู่บนหน้าจอเสมอ
+	_eq("บอกว่าครอบคลุมรายจ่ายไปแล้วกี่ %", _labels_with(st, "ครอบคลุมรายจ่ายแล้ว"), 1)
+
+	# ค่าดูแลพาหนะ/อุปกรณ์ต้องโผล่เป็นบรรทัดของตัวเองเมื่อมีจริงเท่านั้น
+	_eq("ยังไม่มีพาหนะ จึงไม่มีบรรทัดค่าพาหนะ", _labels_with(st, "ค่าพาหนะ/อุปกรณ์"), 0)
+	p.vehicle = "usedcar"
+	p.changed.emit()
+	_eq("ซื้อพาหนะแล้วต้องมีบรรทัดค่าพาหนะ", _labels_with(st, "ค่าพาหนะ/อุปกรณ์"), 1)
+	p.vehicle = "public"
+	p.changed.emit()
+	st.free()
+
+
+func _check_debt_list(m: WQMatch) -> void:
+	var p = m.players[0]
+	p.place = "bank"          # ต้องอยู่ธนาคารถึงจะชำระหนี้ได้
+	p.cash = 60000.0
+	p.liabilities = [
+		{"name": "หนี้ถูก", "balance": 100000.0, "rate": 0.005},
+		{"name": "หนี้แพง", "balance": 80000.0, "rate": 0.023},
+	]
+
+	var dl := WQDebtList.new()
+	dl.bind(p)
+
+	# ข้อ 12.2.5 — ก้อนดอกแพงสุดต้องถูกติดป้ายให้เอง และต้องมีใบเดียว
+	_eq("ติดป้ายดอกแพงสุดให้ก้อนที่ดอกสูงสุด", _labels_with(dl, "ดอกแพงสุด"), 1)
+	_eq("ป้ายไปอยู่กับก้อนที่ถูกต้อง", _labels_with(dl, "หนี้แพง   ⚠ ดอกแพงสุด"), 1)
+
+	# ข้อ 12.2.4 — ต้องบอกดอกเบี้ยที่ประหยัดได้/เดือน โดยไม่ต้องเอาเมาส์ไปจิ้ม
+	_eq("บอกดอกเบี้ยที่ประหยัดได้ต่อเดือนของทั้งสองก้อน", _labels_with(dl, "→ ประหยัด"), 2)
+
+	# กดชำระแล้วยอดต้องลดจริง และต้องลดก้อนที่ถูกต้อง
+	var expensive: Dictionary = p.liabilities[1]
+	var before: float = float(expensive.balance)
+	var hours_before: int = p.hours
+	var btn := _quick_button(dl, "หนี้แพง", "50%")
+	if btn == null:
+		_fails += 1; print("  ❌ หาปุ่มชำระ 50% ของหนี้แพงไม่เจอ"); dl.free(); return
+	_eq("อยู่ธนาคารแล้วปุ่มชำระต้องกดได้", btn.disabled, false)
+	btn.pressed.emit()
+	_eq("ยอดหนี้ก้อนที่กดลดลงจริง", float(expensive.balance) < before, true)
+	_eq("ชำระหนี้ไม่กินเวลา (เป็นแค่การโอนเงิน)", p.hours, hours_before)
+
+	dl.free()
+
+
+## หาปุ่มลัด (25% / 50% / ทั้งหมด) ของหนี้ก้อนที่ชื่อขึ้นต้นตามที่ระบุ
+func _quick_button(dl: WQDebtList, debt_name: String, label: String) -> Button:
+	for row in dl._list.get_children():
+		if _labels_with(row, debt_name) == 0: continue
+		for c in row.get_children():
+			if not (c is HBoxContainer): continue
+			for b in c.get_children():
+				if b is Button and (b as Button).text == label: return b
+	return null
 
 
 func _labels_with(node: Node, needle: String) -> int:

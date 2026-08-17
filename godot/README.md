@@ -10,6 +10,8 @@ godot --headless --path . --script res://sim/rng_check.gd    # 1) ตัวส�
 godot --headless --path . --script res://sim/headless_sim.gd # 2) สมดุลต้องผ่าน 40–60 เดือน
 godot --headless --path . --script res://sim/parity_dump.gd -- 60   # 3) ผลต้องตรงกับ engine.js ทีละเกม
 godot --headless --path . --script res://sim/save_check.gd   # 4) เซฟ/โหลดต้องเก็บครบรวมถึง state ตัวสุ่ม
+godot --headless --path . --script res://sim/ui_check.gd     # 5) ตรรกะวิดเจ็ต UI
+WQ_SHOT=/tmp/ui.png godot --path .                           # ดูหน้าตาจริง: เปิด → ถ่ายภาพ → ปิดเอง
 ```
 
 อ่าน `CLAUDE.md` (บริบทและกฎของโปรเจกต์) และ `../WEALTH-QUEST-GDD.md` (เอกสารออกแบบ)
@@ -27,7 +29,7 @@ godot --headless --path . --script res://sim/save_check.gd   # 4) เซฟ/โ�
 | ความตรงกับ `engine.js` | ✅ **ตรงทุกเกม** 2,400 เกม (16 อาชีพ × 150 เมล็ดสุ่ม) ทุกช่อง |
 | headless sim | ✅ รันครบ 16 อาชีพ — มัธยฐาน 57 เดือน ผ่านเกณฑ์ 40–60 |
 | data (ตารางสมดุล) | ครบ สร้างจากเอนจิน JS ที่ผ่านการจำลอง 4,000 เกม |
-| UI | ⬜ placeholder (RichTextLabel + กด Space เพื่อจบตา) — ยังเดินทางผ่าน UI ไม่ได้ |
+| UI | 🟡 มีวิดเจ็ตจริงตัวแรกแล้ว (⏳ งบเวลา) ที่เหลือยัง placeholder — ยังเดินทางผ่าน UI ไม่ได้ |
 | ฉาก 2.5D / อาร์ต / เสียง | ⬜ ยังไม่มี |
 
 ## บั๊กที่เจอตอนทำให้พอร์ตรันได้ครั้งแรก

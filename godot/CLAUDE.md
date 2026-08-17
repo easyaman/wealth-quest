@@ -136,7 +136,8 @@ world/      ฉาก 2.5D (ยังว่าง)
 
 1. ~~ตรวจพอร์ต~~ ✅ เสร็จแล้ว — ตรงกับ `engine.js` ทุกเกม
 2. **UI หลัก** ตามเลย์เอาต์ในบทที่ 12 ของ GDD — เรียงตามความสำคัญ:
-   `widgets/time_budget` → `widgets/deal_card` → `widgets/statement` → `widgets/health_bar` → `widgets/standings`
+   ~~`widgets/time_budget`~~ ✅ → **`widgets/deal_card`** ← ทำต่อตรงนี้ →
+   `widgets/statement` → `widgets/health_bar` → `widgets/standings`
 3. **หน้าจอ setup** — ทอยเต๋า → เลือกอาชีพ (บทที่ 7 ของ GDD)
 4. **ด่าน 2** — ทอยเต๋าสุ่มความฝัน + เลือกลาออก/ทำงานต่อ (บทที่ 9)
 5. **บันทึก/โหลด + autosave 3 ช่อง** (`core/save.gd` พร้อมแล้ว ต่อ UI อย่างเดียว)
@@ -156,6 +157,21 @@ world/      ฉาก 2.5D (ยังว่าง)
 godot --headless --script res://sim/headless_sim.gd   # ทดสอบสมดุล
 godot --headless --script res://sim/save_check.gd     # เซฟ/โหลดเก็บครบไหม (รวม state ตัวสุ่ม)
 godot --headless --script res://sim/rng_check.gd      # ตัวสุ่มตรงกับ JS ไหม
+godot --headless --script res://sim/ui_check.gd       # ตรรกะวิดเจ็ต UI (ไม่ต้องเปิดหน้าต่าง)
 godot --headless --quit                                # เช็ค syntax error ทั้งโปรเจกต์
 godot                                                  # เปิดเกม
+WQ_SHOT=/tmp/ui.png godot                              # เปิด ถ่ายภาพหน้าจอ แล้วปิดเอง
 ```
+
+**เพิ่ม `class_name` ใหม่แล้วต้องรัน `godot --headless --path . --import` ก่อน** ไม่งั้น
+`--script` และเกมจะหา class ไม่เจอ (`Could not find type "..." in the current scope`)
+
+## UI
+
+- ทุกวิดเจ็ตรับผู้เล่นผ่าน `bind(player)` แล้ว subscribe สัญญาณ `changed` เอง
+  **ห้าม refresh ทุกเฟรม** และ `bind()` ซ้ำต้องถอดสัญญาณของคนเดิมออกก่อนเสมอ
+- ลบลูกของ container ด้วย `remove_child()` + `free()` **อย่าใช้ `queue_free()`**
+  เพราะ `changed` ยิงได้หลายครั้งในเฟรมเดียว โหนดที่รอลบยังนับเป็นลูกอยู่ รายการจะซ้อนกัน
+- Godot มากับฟอนต์ที่ไม่มีสระ/วรรณยุกต์ไทย ข้อความจะกลายเป็นกล่องเปล่า
+  `ui/main.gd` จึงยืมฟอนต์ไทยจากระบบผ่าน `SystemFont` — **ตอนจะปล่อยจริงต้องฝังฟอนต์ที่มีสิทธิ์ใช้งาน**
+  ลงในโปรเจกต์ ไม่งั้นเครื่องที่ไม่มีฟอนต์ไทยจะอ่านไม่ออก

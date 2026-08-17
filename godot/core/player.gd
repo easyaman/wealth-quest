@@ -5,7 +5,15 @@ extends RefCounted
 
 signal changed
 
-var match_ref: WQMatch             # Godot 4 ผูก class_name ผ่าน global class cache จึงประกาศ type ตรงๆ ได้
+## อ้างกลับไปหาแมตช์แบบ **อ่อน** — `WQMatch.players` ถือผู้เล่นไว้แบบแข็งอยู่แล้ว
+## ถ้าฝั่งนี้ถือแบบแข็งด้วยจะกลายเป็นวงอ้างอิง RefCounted แล้วทั้งแมตช์จะไม่ถูกคืนหน่วยความจำเลย
+## (เดิมรัน sim ทีนึงรั่วหลักพัน object) เจ้าของอายุจริงของแมตช์คือคนที่สร้างมันขึ้นมา
+var _match_wr: WeakRef
+var match_ref: WQMatch:
+	get:
+		return _match_wr.get_ref() if _match_wr != null else null
+	set(value):
+		_match_wr = weakref(value) if value != null else null
 var pname: String = ""
 var is_ai := false
 var job: Dictionary = {}

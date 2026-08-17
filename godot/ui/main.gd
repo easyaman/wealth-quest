@@ -6,6 +6,7 @@ const BG := Color("0a1420")
 
 var m: WQMatch
 var time_budget: WQTimeBudget
+var deal_market: WQDealMarket
 var log_label: RichTextLabel
 var _shot_path := ""
 var _shot_frames := 0
@@ -59,13 +60,22 @@ func _build_layout() -> void:
 	cols.add_theme_constant_override("separation", 16)
 	margin.add_child(cols)
 
+	# ตลาดดีลยาวเกินจอได้ง่ายๆ (9-11 ใบ) ถ้าไม่มีสกรอลล์ การ์ดแถวล่างจะกดไม่ได้เลย
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(780, 0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	cols.add_child(scroll)
+
 	var center := VBoxContainer.new()
-	center.custom_minimum_size = Vector2(560, 0)
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center.add_theme_constant_override("separation", 12)
-	cols.add_child(center)
+	scroll.add_child(center)
 
 	time_budget = WQTimeBudget.new()
 	center.add_child(time_budget)
+
+	deal_market = WQDealMarket.new()
+	center.add_child(deal_market)
 
 	log_label = RichTextLabel.new()
 	log_label.bbcode_enabled = true
@@ -78,16 +88,14 @@ func _refresh() -> void:
 	var p = m.get_current()
 	if p == null: return
 	time_budget.bind(p)
+	deal_market.bind(p, m)
 
 	var s := "[b]เดือนที่ %d[/b]  |  %s %s\n" % [m.month, p.job.icon, p.pname]
-	s += "เงินสด %d  ·  สุทธิ %d  ·  📍 %s  ·  ❤️ %d\n" % [
-		int(p.cash), int(p.get_net_worth()), WQData.place(p.place).name, int(p.health)]
-	s += "รายได้จากทรัพย์สิน %d / รายจ่าย %d  (%.0f%%)\n\n" % [
-		int(p.get_passive_income()), int(p.get_total_expenses()), p.get_freedom_pct()]
-	s += "[b]ตลาดดีล[/b]\n"
-	for d in m.deals:
-		s += "  %s %s — ดาวน์ %d · %+d/เดือน\n" % [d.icon, d.name, int(d.down), int(d.cashflow)]
-	s += "\n[b]บันทึก[/b]\n"
+	s += "เงินสด %s  ·  สุทธิ %s  ·  📍 %s  ·  ❤️ %d\n" % [
+		WQFmt.m(p.cash), WQFmt.m(p.get_net_worth()), WQData.place(p.place).name, int(p.health)]
+	s += "รายได้จากทรัพย์สิน %s / รายจ่าย %s  (%.0f%%)\n\n" % [
+		WQFmt.n(p.get_passive_income()), WQFmt.n(p.get_total_expenses()), p.get_freedom_pct()]
+	s += "[b]บันทึก[/b]\n"
 	for i in mini(12, m.logs.size()):
 		s += "  [%d] %s\n" % [m.logs[i].month, m.logs[i].text]
 	log_label.text = s

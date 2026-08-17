@@ -61,8 +61,85 @@ func _init() -> void:
 	_has("แสดงค่าของผู้เล่นคนใหม่", w._usable.text, str(q.get_hours_max()))
 
 	w.free()
+	_check_deal_market(m)
+
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
+
+
+func _check_deal_market(m: WQMatch) -> void:
+	var p = m.players[0]
+	p.place = "home"
+	p.hours = p.get_hours_max()
+
+	# เลือกดีลที่ถูกที่สุดแล้วเติมเงินให้พอ เพื่อให้เส้นทาง "กดปิดดีลแล้วซื้อจริง" ถูกทดสอบแน่ๆ
+	# ไม่งั้นปุ่มอาจถูก disable แล้วเทสต์ผ่านแบบไม่ได้ตรวจอะไรเลย
+	var d: Dictionary = m.deals[0]
+	for x in m.deals:
+		if float(x.down) < float(d.down): d = x
+	p.cash = float(d.down) + p.get_total_expenses() * 3.0
+
+	var mk := WQDealMarket.new()
+	mk.bind(p, m)
+	_eq("สร้างการ์ดครบทุกดีลในตลาด", mk._grid.get_child_count(), m.deals.size())
+
+	var card: WQDealCard = _card_for_deal(mk, int(d.id))
+
+	# กฎ 12.2.1 — การ์ดต้องบอกผลตอบแทนต่อทุน ไม่ใช่แค่ราคา
+	_eq("การ์ดบอกผลตอบแทนต่อทุน %/เดือน", _labels_with(card, "%/ด. ต่อทุน"), 1)
+	# กฎ 12.2.3 — ปุ่มติดป้ายราคาเป็นชั่วโมงเสมอ
+	var btn := _button_of(card)
+	_ne("ปุ่มมีข้อความ", btn.text, "")
+	_has("ปุ่มติดป้ายชั่วโมง", btn.text, "ชม.")
+
+	# อยู่บ้าน = ยังไม่ถึงหน้างาน ปุ่มต้องเป็น "เดินทางไป" ไม่ใช่ "ปิดดีล"
+	var venue: String = p.place_for(p.act_for_kind(d.kind))
+	_ne("ยังไม่ถึงหน้างาน ปุ่มต้องไม่ใช่ปิดดีล", btn.text.contains("ปิดดีล"), true)
+	btn.pressed.emit()
+	_eq("กดปุ่มแล้วเดินทางไปสถานที่ของดีลจริง", p.place, venue)
+	_eq("กดปุ่มแล้วสั่งสร้างการ์ดใหม่", mk._rebuild_queued, true)
+
+	# สร้างใหม่ซ้ำๆ ต้องไม่ทำให้การ์ดสะสม (ทั้งจากสัญญาณ changed และจากปุ่ม)
+	mk._rebuild(); mk._rebuild()
+	_eq("การ์ดไม่สะสมเมื่อสร้างใหม่ซ้ำ", mk._grid.get_child_count(), m.deals.size())
+
+	# ถึงหน้างานแล้วปุ่มต้องเปลี่ยนเป็นปิดดีล และกดแล้วต้องได้ทรัพย์สินเพิ่มจริง
+	var same := _card_for_deal(mk, int(d.id))
+	if same == null:
+		_fails += 1
+		print("  ❌ หาการ์ดของดีลเดิมไม่เจอหลังเดินทาง")
+		mk.free(); return
+	var btn2 := _button_of(same)
+	_has("ถึงหน้างานแล้วปุ่มเปลี่ยนเป็นปิดดีล", btn2.text, "ปิดดีล")
+	var before_assets: int = p.assets.size()
+	var before_deals: int = m.deals.size()
+	_eq("เงินและเวลาพอแล้ว ปุ่มต้องกดได้", btn2.disabled, false)
+	btn2.pressed.emit()
+	_eq("กดปิดดีลแล้วได้ทรัพย์สินเพิ่ม", p.assets.size(), before_assets + 1)
+	_eq("ดีลที่ซื้อไปแล้วต้องหลุดจากตลาด", m.deals.size(), before_deals - 1)
+
+	mk.free()
+
+
+func _labels_with(node: Node, needle: String) -> int:
+	var n := 0
+	if node is Label and (node as Label).text.contains(needle): n += 1
+	for c in node.get_children(): n += _labels_with(c, needle)
+	return n
+
+
+func _button_of(node: Node) -> Button:
+	if node is Button: return node
+	for c in node.get_children():
+		var b := _button_of(c)
+		if b != null: return b
+	return null
+
+
+func _card_for_deal(mk: WQDealMarket, id: int) -> WQDealCard:
+	for c in mk._grid.get_children():
+		if c is WQDealCard and int((c as WQDealCard)._deal.id) == id: return c
+	return null
 
 
 func _notes_with(w: WQTimeBudget, needle: String) -> int:

@@ -19,9 +19,11 @@
 | `tests/` | ชุดทดสอบถดถอย 24 ข้อ |
 | `tools/build.js` | ประกอบ `ui.html` + `engine.js` → ไฟล์ที่แจก |
 | `tools/reference.js` | สร้างตัวเลขสมดุลอ้างอิงแบบทำซ้ำได้ |
+| `tools/parity_dump.js` · `tools/parity_check.js` | ดัมพ์ผลรายเกมของ JS แล้วเทียบกับพอร์ต Godot ทีละเมล็ดสุ่ม |
+| `tools/trace_dump.js` | ไล่สถานะรายเดือนของเกมเดียว ใช้หาว่าพอร์ตเริ่มเพี้ยนเดือนไหน |
 | `sim.js` | การจำลองรุ่นเดิม (ใช้ `Math.random` เลือกอาชีพ — ผลซ้ำไม่ได้ ใช้ `tools/reference.js` แทน) |
 | `gendoc.js` · `writegdd.js` | สร้าง GDD จากตัวเลขจริงในเอนจิน |
-| `godot/` | โครงพอร์ตไป Godot 4 (core เป็น GDScript แล้ว UI ยังเป็น placeholder) |
+| `godot/` | พอร์ต Godot 4 — core + ระบบแผนที่ครบแล้ว ให้ผลตรงกับ `engine.js` ทุกเกม · UI ยังเป็น placeholder |
 
 ## เวิร์กโฟลว์ — ทุกครั้งที่แก้ `engine.js`
 
@@ -46,11 +48,15 @@ node writegdd.js                # 4) สร้างเอกสารใหม�
 
 ## Godot
 
-ดู `godot/README.md` และ `godot/CLAUDE.md` — งานแรกคือตรวจว่าพอร์ตถูกต้อง:
+ดู `godot/README.md` และ `godot/CLAUDE.md`
+
+พอร์ตให้ผลตรงกับ `engine.js` **ทีละเกม** ไม่ใช่แค่ค่าเฉลี่ยใกล้กัน — ตรวจซ้ำได้ด้วย:
 
 ```bash
-godot --headless --script res://sim/headless_sim.gd
+node tools/parity_dump.js 60 > /tmp/js.json
+godot --headless --path godot --script res://sim/parity_dump.gd -- 60 | grep '^ROW' > /tmp/gd.txt
+node tools/parity_check.js /tmp/js.json /tmp/gd.txt      # ต้องขึ้น "ตรงกันทุกเกม ✅"
 ```
 
-ตัวสุ่มของ GDScript ต้องให้ค่าตรงกับ JS เป๊ะ ทดสอบด้วย `makeRng(12345)` 5 ค่าแรก
-(ดูค่าอ้างอิงใน `tests/rng.test.js`) ถ้าตัวสุ่มไม่ตรง ทุกอย่างจะเพี้ยนหมด
+**แก้ `engine.js` เมื่อไหร่ ต้องรันชุดนี้ด้วย** ไม่งั้นพอร์ตจะค่อยๆ หลุดจากต้นฉบับโดยไม่มีใครรู้
+ถ้าไม่ตรง ใช้ `tools/trace_dump.js` คู่กับ `godot/sim/trace_dump.gd` ไล่หาเดือนแรกที่ต่างกัน

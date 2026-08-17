@@ -33,7 +33,8 @@ func setup(opts: Dictionary) -> void:
 	WQData.load_all()
 	mode = opts.get("mode", "solo")
 	rng = WQRng.new(opts.get("seed", 12345))
-	disaster_cooldown = int(WQData.cfg.disaster_min) - 1 + rng.range_i(int(WQData.cfg.disaster_max) - int(WQData.cfg.disaster_min) + 2)
+	# ภัยพิบัติลูกแรกมาเร็วกว่าคาบปกติหนึ่งช่วง — 9..16 เดือน (คาบต่อไปคือ 10..18)
+	disaster_cooldown = int(WQData.cfg.disaster_min) - 1 + rng.range_i(int(WQData.cfg.disaster_max) - int(WQData.cfg.disaster_min))
 	for po in opts.players:
 		var p := WQPlayer.new()
 		p.setup(self, po)
@@ -153,9 +154,11 @@ func tick_disasters() -> void:
 func pick_template(pool: Array, max_down: float) -> Dictionary:
 	var cand: Array = pool
 	if max_down > 0:
+		# ใช้ downPct ตัวบน เพราะเงินดาวน์จริงสุ่มได้ถึงค่านั้น
+		# ถ้ากรองด้วยตัวล่างจะได้ดีลที่ยังซื้อไม่ไหวหลุดเข้ามา
 		cand = []
 		for t in pool:
-			if float(t.min) * float(t.downPct[0]) <= max_down: cand.append(t)
+			if float(t.min) * float(t.downPct[1]) <= max_down: cand.append(t)
 		if cand.is_empty(): cand = pool
 	var total := 0.0
 	for t in cand: total += float(t.get("w", 1))
@@ -186,7 +189,7 @@ func make_deal(force_big := false, max_down := 0.0) -> Dictionary:
 	var t2 := pick_template(pool, max_down)
 	var step := 100000.0 if float(t2.min) >= 1000000 else (10000.0 if float(t2.min) >= 100000 else 1000.0)
 	var hi := float(t2.max)
-	if max_down > 0: hi = minf(hi, maxf(float(t2.min), max_down / float(t2.downPct[0])))
+	if max_down > 0: hi = minf(hi, maxf(float(t2.min), max_down / float(t2.downPct[1])))
 	var price2 := roundf(rng.range_f(float(t2.min), hi) / step) * step
 	var down2 := roundf(price2 * rng.range_f(t2.downPct[0], t2.downPct[1]))
 	var income2 := roundf(price2 * rng.range_f(t2.yield[0], t2.yield[1]))
@@ -210,7 +213,7 @@ func refill_market() -> void:
 	if alive.is_empty(): return
 	var poorest := 1e18
 	for p in alive: poorest = minf(poorest, p.cash)
-	poorest = maxf(30000.0, poorest)
+	poorest = maxf(WQData.cheapest_down(), poorest)
 	var guard := 0
 	while _count_cheap(poorest) < 2 and guard < 6:
 		guard += 1

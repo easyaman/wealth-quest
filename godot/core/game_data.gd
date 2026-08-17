@@ -11,6 +11,11 @@ static var events1: Array = []
 static var events2: Array = []
 static var disasters: Array = []
 static var dreams: Array = []
+static var places: Array = []
+static var vehicles: Array = []
+static var devices: Array = []
+static var gym_packs: Array = []
+static var resort_packs: Array = []
 static var cfg: Dictionary = {}
 static var _loaded := false
 
@@ -23,6 +28,9 @@ static func load_all() -> void:
 	events1 = e.phase1; events2 = e.phase2
 	disasters = _json("res://data/disasters.json")
 	dreams = _json("res://data/dreams.json")
+	var pl = _json("res://data/places.json")
+	places = pl.places; vehicles = pl.vehicles; devices = pl.devices
+	gym_packs = pl.gym_packs; resort_packs = pl.resort_packs
 	cfg = _json("res://data/config.json")
 	_loaded = true
 
@@ -40,3 +48,30 @@ static func disaster(id: String) -> Dictionary:
 	for d in disasters:
 		if d.id == id: return d
 	return {}
+
+static func _by_id(arr: Array, id: String) -> Dictionary:
+	for x in arr:
+		if x.id == id: return x
+	return {}
+
+## เงินดาวน์ที่ถูกที่สุดที่ตลาดมีให้ — ใช้เป็นพื้นของการันตี "ดีลที่คนจนที่สุดเอื้อม"
+## คำนวณจากตารางจริง ห้าม hardcode ไม่งั้นแก้ data แล้วเกณฑ์จะเพี้ยนเงียบๆ
+static func cheapest_down() -> float:
+	var lo := INF
+	for t in deal_pool: lo = minf(lo, roundf(float(t.min) * float(t.downPct[0])))
+	return 0.0 if lo == INF else lo
+
+static func place(id: String) -> Dictionary: return _by_id(places, id)
+static func device(id: String) -> Dictionary: return _by_id(devices, id)
+static func gym_pack(id: String) -> Dictionary: return _by_id(gym_packs, id)
+static func resort_pack(id: String) -> Dictionary: return _by_id(resort_packs, id)
+
+## พาหนะเรียงจากช้าไปเร็ว — ลำดับใน array คือระดับ ใช้เทียบว่าอัปเกรดหรือดาวน์เกรด
+static func vehicle(id: String) -> Dictionary:
+	var v := _by_id(vehicles, id)
+	return vehicles[0] if v.is_empty() else v
+
+static func vehicle_index(id: String) -> int:
+	for i in vehicles.size():
+		if vehicles[i].id == id: return i
+	return 0

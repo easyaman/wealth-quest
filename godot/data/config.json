@@ -159,5 +159,11 @@
   "side_job_max": 0.26,
   "side_job_max_count": 3,
   "study_fee_ratio": 0.55,
-  "study_raise": 0.13
+  "study_fee_ratio_online": 0.35,
+  "study_progress_online": 0.7,
+  "study_raise": 0.13,
+  "freelance_cowork_mul": 1.25,
+  "vehicle_loan_rate": 0.007,
+  "vehicle_downgrade_refund": 0.55,
+  "vehicle_tradein": 0.5
 }

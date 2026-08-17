@@ -30,6 +30,15 @@ var time_penalty := 0
 var hours := 0
 var side_used := 0
 var rested_this_month := false
+var exercise_this_month := 0
+
+# --- แผนที่และการเดินทาง (ข้อ 3A ของ GDD) ---
+var place := "home"          # อยู่ที่ไหนตอนนี้
+var travel_used := 0         # ชั่วโมงที่เสียไปกับการเดินทางเดือนนี้
+var vehicle := "public"
+var devices: Array = []
+var gym_pack := ""           # แพ็กเกจฟิตเนสรายเดือนที่ซื้อไว้ ("" = ไม่มี)
+var shield := 0.0            # โล่กันเหตุการณ์ร้ายจากการไปพักผ่อน
 
 # --- การเรียน ---
 var study_level := 0
@@ -71,13 +80,115 @@ func food_opt() -> Dictionary:
 		if f.id == food_id: return f
 	return WQData.cfg.food_options[1]
 
-func set_sleep(i: int) -> void:
+func set_sleep(i: int) -> Dictionary:
+	if not can_do_here("sleep"): return _fail("ตั้งค่าการนอนได้ที่บ้านเท่านั้น")
 	sleep_idx = clampi(i, 0, WQData.cfg.sleep_options.size() - 1)
 	hours = mini(hours, get_hours_max()); changed.emit()
+	return {"ok": true}
 
-func set_food(id: String) -> void:
-	food_id = id
-	hours = mini(hours, get_hours_max()); changed.emit()
+func set_food(id: String) -> Dictionary:
+	if not can_do_here("food"): return _fail("วางแผนอาหารได้ที่บ้านเท่านั้น")
+	for f in WQData.cfg.food_options:
+		if f.id == id:
+			food_id = id
+			hours = mini(hours, get_hours_max())
+			break
+	changed.emit()
+	return {"ok": true}
+
+# ========== แผนที่และการเดินทาง ==========
+func get_veh() -> Dictionary: return WQData.vehicle(vehicle)
+func get_travel_factor() -> float: return float(get_veh().factor)
+func has_device(id: String) -> bool: return devices.has(id)
+
+## ชั่วโมงเดินทางระหว่างสองสถานที่ — อย่างน้อย 1 ชม. เสมอ
+func travel_cost(to_id: String, from_id := "") -> int:
+	var a := WQData.place(from_id if from_id != "" else place)
+	var b := WQData.place(to_id)
+	if a.is_empty() or b.is_empty() or a.id == b.id: return 0
+	return maxi(1, roundi(absf(float(a.x) - float(b.x)) * float(WQData.cfg.travel_rate) * get_travel_factor()))
+
+## ทำ action นี้ได้จากที่ไหน (รวมทางลัดจากอุปกรณ์)
+func place_for(act: String) -> String:
+	if act == "loan" or act == "repay" or act == "fund":
+		return place if has_device("smartphone") else "bank"
+	if act == "study": return place if has_device("laptop") else "school"
+	if act == "freelance": return place if has_device("laptop") else "cowork"
+	for pl in WQData.places:
+		if pl.acts.has(act): return pl.id
+	return place
+
+func can_do_here(act: String) -> bool: return place_for(act) == place
+
+func place_name(act: String) -> String:
+	var p := WQData.place(place_for(act))
+	return "" if p.is_empty() else "%s %s" % [p.icon, p.name]
+
+func act_for_kind(kind: String) -> String:
+	if kind == "speculation": return "gold"
+	return "fund" if kind == "fund" else "estate"
+
+## คืน null ถ้าอยู่ถูกที่แล้ว · คืน {place, hours} ถ้าต้องเดินทางก่อน
+func need_travel(act: String):
+	var need := place_for(act)
+	return null if need == place else {"place": need, "hours": travel_cost(need)}
+
+func travel_to(to_id: String) -> Dictionary:
+	if to_id == place: return _fail("อยู่ที่นี่อยู่แล้ว")
+	var h := travel_cost(to_id)
+	if not can_spend(h):
+		return _fail("เวลาไม่พอ ต้องใช้ %d ชม. ในการเดินทาง (เหลือ %d ชม.)" % [h, hours])
+	hours -= h; travel_used += h
+	var from := WQData.place(place)
+	var to := WQData.place(to_id)
+	place = to_id
+	if not is_ai:
+		_log("%s เดินทางจาก%s → %s %s (%d ชม.)" % [get_veh().icon, from.name, to.icon, to.name, h], "move")
+	changed.emit()
+	return {"ok": true}
+
+## ซื้อพาหนะ — ดาวน์ + กู้ส่วนที่เหลือ · ลดระดับได้โดยขายคันเดิมทิ้ง
+func buy_vehicle(id: String) -> Dictionary:
+	var v := WQData._by_id(WQData.vehicles, id)
+	if v.is_empty(): return _fail("ไม่พบพาหนะ")
+	if place != "mall": return _fail("ต้องไปดูรถที่ 🛒 ห้างสรรพสินค้า ก่อน")
+	if v.id == vehicle: return _fail("ใช้คันนี้อยู่แล้ว")
+	var cur := get_veh()
+	var cfg = WQData.cfg
+	if WQData.vehicle_index(v.id) < WQData.vehicle_index(cur.id):
+		cash += roundf(float(cur.price) * float(cfg.vehicle_downgrade_refund))
+		vehicle = v.id
+		_log("ขาย %s %s แล้วเปลี่ยนเป็น %s %s" % [cur.icon, cur.name, v.icon, v.name], "sell")
+		changed.emit()
+		return {"ok": true}
+	var down := roundf(float(v.price) * float(v.downPct))
+	if down <= 0: down = float(v.price)
+	var debt := float(v.price) - down
+	if cash < down: return _fail("เงินดาวน์ไม่พอ ต้องใช้ %d บาท" % int(down))
+	if debt > get_credit_left(): return _fail("วงเงินกู้ไม่พอ")
+	if float(cur.price) > 0: cash += roundf(float(cur.price) * float(cfg.vehicle_tradein))
+	cash -= down
+	if debt > 0:
+		liabilities.append({"name": "ผ่อน" + str(v.name), "balance": debt,
+			"rate": float(cfg.vehicle_loan_rate)})
+	vehicle = v.id
+	_log("🛒 ซื้อ %s %s — ดาวน์ %d บาท • เวลาเดินทางเหลือ %d%% ค่าใช้จ่ายเพิ่ม %d บาท/เดือน" %
+		[v.icon, v.name, int(down), roundi(float(v.factor) * 100.0), int(v.upkeep)], "buy")
+	changed.emit()
+	return {"ok": true}
+
+func buy_device(id: String) -> Dictionary:
+	var d := WQData.device(id)
+	if d.is_empty(): return _fail("ไม่พบอุปกรณ์")
+	if place != "mall" and not has_device("smartphone"):
+		return _fail("ต้องไปที่ 🛒 ห้างสรรพสินค้า ก่อน")
+	if has_device(id): return _fail("มีอยู่แล้ว")
+	if cash < float(d.price): return _fail("เงินสดไม่พอ ต้องใช้ %d บาท" % int(d.price))
+	cash -= float(d.price)
+	devices.append(id)
+	_log("🛒 ซื้อ %s %s — %s" % [d.icon, d.name, d.note], "buy")
+	changed.emit()
+	return {"ok": true}
 
 # ========== เวลา ==========
 func get_sleep_need() -> int:
@@ -90,7 +201,8 @@ func get_work_hours() -> int:
 	return 0 if (retired or downsize_left > 0) else int(job.work)
 
 func get_commute_hours() -> int:
-	return 0 if (retired or downsize_left > 0) else int(job.commute)
+	if retired or downsize_left > 0: return 0
+	return roundi(float(job.commute) * get_travel_factor())
 
 func get_committed_hours() -> int:
 	return int(sleep_opt().hours) + get_work_hours() + get_commute_hours() \
@@ -140,8 +252,16 @@ func get_debt_payments() -> float:
 	for d in liabilities: t += d.balance * d.rate
 	return t * match_ref.get_mods().rate
 
+## ค่าดูแลพาหนะ + อุปกรณ์ — ราคาของ "การซื้อเวลา" ที่เดินต่อทุกเดือน
+func get_upkeep_cost() -> float:
+	var u := float(get_veh().upkeep)
+	for id in devices:
+		var d := WQData.device(id)
+		if not d.is_empty(): u += float(d.upkeep)
+	return u
+
 func get_total_expenses() -> float:
-	return fixed_expenses + get_food_cost() + child_cost + get_debt_payments()
+	return fixed_expenses + get_food_cost() + child_cost + get_upkeep_cost() + get_debt_payments()
 
 func get_current_salary() -> float:
 	return 0.0 if (retired or downsize_left > 0) else salary
@@ -190,6 +310,8 @@ func close_deal(deal_id: int) -> Dictionary:
 	var i := match_ref.find_deal(deal_id)
 	if i < 0: return _fail("ดีลนี้ถูกคนอื่นคว้าไปแล้ว")
 	var d: Dictionary = match_ref.deals[i]
+	var act := act_for_kind(d.kind)
+	if not can_do_here(act): return _fail("ต้องไปที่ %s ก่อน" % place_name(act))
 	var price: float = round(d.price * 0.9) if job.perkId == "discount" else float(d.price)
 	var down := roundf(price * (float(d.down) / float(d.price)))
 	var debt := price - down
@@ -218,6 +340,8 @@ func sell_asset(asset_id: int) -> Dictionary:
 		if assets[k].id == asset_id: i = k; break
 	if i < 0: return _fail("ไม่พบทรัพย์สิน")
 	var a: Dictionary = assets[i]
+	var s_act := act_for_kind(a.kind)
+	if not can_do_here(s_act): return _fail("ต้องไปที่ %s ก่อนถึงจะขายได้" % place_name(s_act))
 	hours -= c
 	var price: float = float(a.offer.price) if a.offer != null else asset_price(a) * float(WQData.cfg.sell_fee)
 	cash += price - a.debt
@@ -231,6 +355,8 @@ func sell_asset(asset_id: int) -> Dictionary:
 	return {"ok": true}
 
 func take_loan(amount: float) -> Dictionary:
+	if not can_do_here("loan"):
+		return _fail("ต้องไปที่ %s ก่อน (หรือซื้อ 📱 สมาร์ตโฟนเพื่อทำออนไลน์)" % place_name("loan"))
 	var c := int(WQData.cfg.action_cost.loan)
 	if not can_spend(c): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % c)
 	amount = round(amount / 10000.0) * 10000.0
@@ -247,6 +373,8 @@ func take_loan(amount: float) -> Dictionary:
 
 ## ชำระหนี้ได้ทั้งก้อนหรือบางส่วน — ไม่เสียเวลา (เป็นแค่การโอนเงิน)
 func repay_debt(index: int, amount: float) -> Dictionary:
+	if not can_do_here("repay"):
+		return _fail("ต้องไปที่ %s ก่อน (หรือซื้อ 📱 สมาร์ตโฟน)" % place_name("repay"))
 	if index < 0 or index >= liabilities.size(): return _fail("ไม่พบหนี้")
 	if cash <= 0: return _fail("ไม่มีเงินสดเหลือ")
 	var d: Dictionary = liabilities[index]
@@ -262,21 +390,30 @@ func repay_debt(index: int, amount: float) -> Dictionary:
 	changed.emit()
 	return {"ok": true}
 
-func side_job() -> Dictionary:
-	if retired: return _fail("ลาออกจากงานประจำแล้ว")
-	if downsize_left > 0: return _fail("ตอนนี้ไม่มีงานประจำอยู่")
+## งานเสริมมีสองแบบ: OT ที่ออฟฟิศ กับ freelance ที่ co-working (หรือที่บ้านถ้ามีโน้ตบุ๊ก)
+func side_job(kind := "ot") -> Dictionary:
+	if kind == "ot":
+		if retired: return _fail("ลาออกจากงานประจำแล้ว รับ OT ไม่ได้")
+		if downsize_left > 0: return _fail("ตอนนี้ไม่มีงานประจำอยู่")
+	var act := "ot" if kind == "ot" else "freelance"
+	if not can_do_here(act): return _fail("ต้องไปที่ %s ก่อน" % place_name(act))
 	var c := int(WQData.cfg.action_cost.side)
 	if not can_spend(c): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % c)
 	if side_used >= int(WQData.cfg.side_job_max_count): return _fail("รับงานเสริมได้สูงสุด 3 ครั้ง/เดือน")
 	hours -= c; side_used += 1
 	var mul := 1.5 if job.perkId == "hustle" else 1.0
-	var gain := roundf(salary * match_ref.rng.range_f(WQData.cfg.side_job_min, WQData.cfg.side_job_max) * mul)
+	# freelance ที่ co-working ได้ดีกว่า OT 25% · ทำที่บ้านได้เท่า OT
+	var rate_mul := 1.0
+	if kind == "freelance" and place == "cowork": rate_mul = float(WQData.cfg.freelance_cowork_mul)
+	var gain := roundf(salary * match_ref.rng.range_f(WQData.cfg.side_job_min, WQData.cfg.side_job_max) * mul * rate_mul)
 	cash += gain
-	if not is_ai: _log("รับงานเสริม %d ชม. ได้ %d บาท" % [c, int(gain)], "work")
+	if not is_ai:
+		_log("%s %d ชม. ได้ %d บาท" % ["⏱️ รับ OT" if kind == "ot" else "💻 รับงาน freelance", c, int(gain)], "work")
 	changed.emit()
 	return {"ok": true}
 
 func scout() -> Dictionary:
+	if not can_do_here("scout"): return _fail("ต้องไปที่ %s ก่อน" % place_name("scout"))
 	var c := int(WQData.cfg.action_cost.scout)
 	if not can_spend(c): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % c)
 	hours -= c
@@ -287,30 +424,66 @@ func scout() -> Dictionary:
 	changed.emit()
 	return {"ok": true}
 
+## เรียนที่สถาบันคืบหน้าเร็วกว่าเรียนออนไลน์ที่บ้าน แต่ค่าเรียนแพงกว่า
 func study() -> Dictionary:
-	var c := int(WQData.cfg.action_cost.study)
+	if not can_do_here("study"):
+		return _fail("ต้องไปที่ %s ก่อน (หรือซื้อ 💻 โน้ตบุ๊กเพื่อเรียนออนไลน์)" % place_name("study"))
+	var cfg = WQData.cfg
+	var c := int(cfg.action_cost.study)
 	if not can_spend(c): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % c)
-	var fee := roundf(salary * float(WQData.cfg.study_fee_ratio))
+	var online := place != "school"
+	var fee := roundf(salary * float(cfg.study_fee_ratio_online if online else cfg.study_fee_ratio))
 	if cash < fee: return _fail("ค่าเรียน %d บาท — เงินสดไม่พอ" % int(fee))
 	hours -= c; cash -= fee
-	study_progress += 1.5 if job.perkId == "hustle" else 1.0
+	var speed := 1.5 if job.perkId == "hustle" else 1.0
+	study_progress += speed * (float(cfg.study_progress_online) if online else 1.0)
 	if study_progress >= get_study_need():
 		study_progress = 0.0
 		study_level += 1
-		salary = round(salary * (1.0 + float(WQData.cfg.study_raise)))
+		salary = round(salary * (1.0 + float(cfg.study_raise)))
 		_log("🎓 เรียนจบคอร์ส! เงินเดือนขึ้นเป็น %d บาท — และรายจ่ายไม่ได้ขึ้นตาม" % int(salary), "good")
 	changed.emit()
 	return {"ok": true}
 
-func exercise() -> Dictionary:
-	var c := int(WQData.cfg.action_cost.exercise)
-	if not can_spend(c): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % c)
-	hours -= c
-	health = clampf(health + (6.0 if job.id == "nurse" else 5.0), 0, 100)
+## ออกกำลังกายที่ฟิตเนส — แพ็กเกจรายเดือนจ่ายครั้งเดียวใช้ได้ทั้งเดือน
+func exercise(pack_id := "") -> Dictionary:
+	if not can_do_here("gym"): return _fail("ต้องไปที่ %s ก่อน" % place_name("gym"))
+	var want := pack_id if pack_id != "" else (gym_pack if gym_pack != "" else "daily")
+	var pk := WQData.gym_pack(want)
+	if pk.is_empty(): pk = WQData.gym_packs[0]
+	var owned: bool = pk.get("monthly", false) and gym_pack == pk.id
+	var fee: float = 0.0 if owned else float(pk.cost)
+	var h := int(pk.hours)
+	if not can_spend(h): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % h)
+	if cash < fee: return _fail("เงินสดไม่พอ ต้องจ่าย %d บาท" % int(fee))
+	hours -= h; cash -= fee; exercise_this_month += 1
+	if pk.get("monthly", false) and not owned: gym_pack = pk.id
+	var gain: float = float(pk.hp) + (1.0 if job.id == "nurse" else 0.0)
+	health = clampf(health + gain, 0, 100)
+	if not is_ai:
+		_log("🏋️ %s %s — %d ชม. → สุขภาพ +%s" % [pk.icon, pk.name, h, str(gain)], "good")
+	changed.emit()
+	return {"ok": true}
+
+## ไปพักผ่อนที่โรงแรม/รีสอร์ต — ฟื้นสุขภาพเยอะและได้โล่กันเหตุการณ์ร้าย
+func vacation(pack_id := "") -> Dictionary:
+	if not can_do_here("resort"): return _fail("ต้องไปที่ %s ก่อน" % place_name("resort"))
+	var pk := WQData.resort_pack(pack_id)
+	if pk.is_empty(): pk = WQData.resort_packs[0]
+	var h := int(pk.hours)
+	if not can_spend(h): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % h)
+	if cash < float(pk.cost): return _fail("เงินสดไม่พอ ต้องจ่าย %d บาท" % int(pk.cost))
+	hours -= h; cash -= float(pk.cost)
+	health = clampf(health + float(pk.hp), 0, 100)
+	shield = maxf(shield, float(pk.shield))
+	rested_this_month = true
+	if not is_ai:
+		_log("%s %s — %d ชม. จ่าย %d บาท → สุขภาพ +%d" % [pk.icon, pk.name, h, int(pk.cost), int(pk.hp)], "good")
 	changed.emit()
 	return {"ok": true}
 
 func rest() -> Dictionary:
+	if not can_do_here("rest"): return _fail("ต้องกลับ %s ก่อน" % place_name("rest"))
 	var c := int(WQData.cfg.action_cost.rest)
 	if not can_spend(c): return _fail("เวลาไม่พอ ต้องใช้ %d ชม." % c)
 	hours -= c
@@ -369,7 +542,8 @@ func settle() -> void:
 	if downsize_left > 0: downsize_left -= 1
 
 	# --- สุขภาพ ---
-	var dh: float = float(sleep_opt().health) + float(food_opt().health) - 0.35 - get_sleep_debt() * 1.3
+	var dh: float = float(sleep_opt().health) + float(food_opt().health) - 0.35 \
+		- get_sleep_debt() * 1.3 + float(get_veh().hp)
 	var load := get_work_hours() + side_used * int(cfg.action_cost.side)
 	if load > 300: dh -= 3.0
 	elif load > 255: dh -= 1.5
@@ -384,7 +558,9 @@ func settle() -> void:
 		health = clampf(health + 18, 0, 100)
 		_log("🏥 สุขภาพวิกฤต! ล้มป่วยหนัก ค่ารักษา %d บาท" % int(bill), "bad")
 
-	var ev_chance := float(cfg.event_chance) - (float(cfg.rest_event_reduction) if rested_this_month else 0.0)
+	# โล่จากการไปพักผ่อนคูณลดโอกาสก่อน แล้วการพักผ่อนธรรมดาค่อยหักออกอีกทีหนึ่ง
+	var ev_chance := float(cfg.event_chance) * (1.0 - shield)
+	if rested_this_month: ev_chance -= float(cfg.rest_event_reduction)
 	if r.next() < ev_chance: roll_event()
 	rested_this_month = false
 
@@ -404,7 +580,9 @@ func settle() -> void:
 	history.append({"m": match_ref.month, "passive": roundi(get_passive_income()),
 		"exp": roundi(get_total_expenses()), "nw": roundi(get_net_worth()),
 		"cash": roundi(cash), "hp": snappedf(health, 0.1), "hours": get_hours_max(),
-		"assets": assets.size(), "debt": roundi(get_total_debt()), "phase": phase})
+		"assets": assets.size(), "debt": roundi(get_total_debt()), "phase": phase,
+		"salary": salary, "sleep": int(sleep_opt().h), "food": food_id,
+		"travel": travel_used, "vehicle": vehicle, "devices": "|".join(devices)})
 
 	if not bankrupt and get_debt_payments() > (get_current_salary() + get_passive_income()) * 1.25 \
 			and get_net_worth() < 0:
@@ -424,6 +602,11 @@ func settle() -> void:
 
 	time_penalty = maxi(0, time_penalty - 90)
 	side_used = 0
+	exercise_this_month = 0
+	place = "home"          # สิ้นเดือนกลับบ้านเสมอ
+	travel_used = 0
+	gym_pack = ""           # แพ็กเกจฟิตเนสหมดอายุรายเดือน
+	shield = 0.0
 	hours = get_hours_max()
 	changed.emit()
 

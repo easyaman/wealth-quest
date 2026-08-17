@@ -3,7 +3,7 @@ extends RefCounted
 ## บันทึก/โหลด — เก็บ state ของตัวสุ่มด้วยเสมอ ไม่งั้นผู้เล่นจะ save-scum ได้
 ## ไฟล์เซฟอยู่ที่ user://saves/ (ต่อ Steam Cloud ได้ตรงๆ)
 
-const VERSION := 4
+const VERSION := 5   # 5 = เพิ่มระบบแผนที่/การเดินทาง (place, vehicle, devices, gym_pack, shield)
 const DIR := "user://saves"
 
 static func to_dict(m: WQMatch) -> Dictionary:
@@ -21,7 +21,11 @@ static func to_dict(m: WQMatch) -> Dictionary:
 			"downsize_left": p.downsize_left, "bankrupt": p.bankrupt,
 			"finished": p.finished, "phase": p.phase, "dream": p.dream,
 			"dream_done": p.dream_done, "retired": p.retired,
-			"pending_dream": p.pending_dream, "hours": p.hours, "history": p.history})
+			"pending_dream": p.pending_dream, "hours": p.hours, "history": p.history,
+			"place": p.place, "travel_used": p.travel_used, "vehicle": p.vehicle,
+			"devices": p.devices, "gym_pack": p.gym_pack, "shield": p.shield,
+			"exercise_this_month": p.exercise_this_month,
+			"rested_this_month": p.rested_this_month})
 	var ds: Array = []
 	for d in m.active_disasters:
 		ds.append({"id": d.def.id, "left": d.left})
@@ -63,6 +67,11 @@ static func from_dict(data: Dictionary) -> WQMatch:
 		p.finished = int(pd.finished); p.phase = int(pd.phase); p.dream = pd.dream
 		p.dream_done = int(pd.dream_done); p.retired = pd.retired
 		p.pending_dream = pd.pending_dream; p.hours = int(pd.hours); p.history = pd.history
+		p.place = pd.get("place", "home"); p.travel_used = int(pd.get("travel_used", 0))
+		p.vehicle = pd.get("vehicle", "public"); p.devices = pd.get("devices", [])
+		p.gym_pack = pd.get("gym_pack", ""); p.shield = float(pd.get("shield", 0.0))
+		p.exercise_this_month = int(pd.get("exercise_this_month", 0))
+		p.rested_this_month = pd.get("rested_this_month", false)
 		m.players.append(p)
 	return m
 

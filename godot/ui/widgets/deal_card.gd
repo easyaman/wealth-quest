@@ -105,10 +105,8 @@ func _build() -> void:
 	tag.add_theme_color_override("font_color", KIND_COLOR.get(d.kind, DIM))
 	col.add_child(tag)
 
-	var nm := Label.new()
-	nm.text = "%s %s" % [d.icon, d.name]
-	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(nm)
+	# ไอคอนของดีลอ้างด้วย "ประเภท" เพราะ id ของดีลเป็นเลขรันไทม์ ผูกโมเดลไว้กับตัวดีลไม่ได้
+	col.add_child(WQIcon.row(String(d.kind), String(d.icon), String(d.name), 22))
 
 	_row(col, "ราคา", WQFmt.m(price) + "฿" + (" −10%" if discount else ""), GOLD)
 	_row(col, "ใช้เงินตัวเอง (ดาวน์)", WQFmt.m(down) + "฿", GOLD if p.cash >= down else BAD)
@@ -125,8 +123,8 @@ func _build() -> void:
 	var ttl: int = int(d.ttl)
 	_row(col, "🔥 กำลังจะหลุดจากตลาด!" if ttl <= 1 else "อยู่ในตลาดอีก ~%d เดือน" % ttl,
 		"⏳%d ชม." % hours, HOT if ttl <= 1 else DIM)
-	_row(col, "%s %s%s" % [venue.icon, venue.name, " ✓" if at_venue else ""], "",
-		GOOD if at_venue else DIM)
+	_row(col, "%s%s" % [venue.name, " ✓" if at_venue else ""], "",
+		GOOD if at_venue else DIM, String(venue.id), String(venue.icon))
 
 	var b := Button.new()
 	if at_venue:
@@ -141,8 +139,12 @@ func _build() -> void:
 	col.add_child(b)
 
 
-func _row(box: VBoxContainer, left: String, right: String, color: Color) -> void:
+func _row(box: VBoxContainer, left: String, right: String, color: Color,
+		icon_id := "", icon_emoji := "") -> void:
 	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 5)
+	if icon_id != "" or icon_emoji != "":
+		h.add_child(WQIcon.make(icon_id, icon_emoji, 16))
 	var a := Label.new()
 	a.text = left
 	a.add_theme_font_size_override("font_size", 11)

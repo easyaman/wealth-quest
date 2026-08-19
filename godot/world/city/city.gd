@@ -55,8 +55,8 @@ func _init() -> void:
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = WQPalette.BG_DEEP
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color("6f86b5")
-	e.ambient_light_energy = 0.5
+	e.ambient_light_color = Color("9fb0c9")
+	e.ambient_light_energy = 0.45
 	# หมอกสีเดียวกับพื้นหลัง เพื่อละลายขอบฉากไม่ให้เห็นว่าถนนจบตรงไหน (ART-DIRECTION 2.2)
 	e.fog_enabled = true
 	e.fog_light_color = WQPalette.BG_DEEP
@@ -65,7 +65,7 @@ func _init() -> void:
 	_vp.add_child(env)
 
 	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-45, -35, 0)
+	light.rotation_degrees = Vector3(-45, 30, 0)
 	light.light_energy = 1.1
 	light.shadow_enabled = true
 	_vp.add_child(light)

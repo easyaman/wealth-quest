@@ -72,8 +72,8 @@ func refresh() -> void:
 	if p.child_cost > 0:
 		_row(_income, "ค่าเลี้ยงลูก", "−" + WQFmt.n(p.child_cost) + "฿", BAD)
 	if p.get_upkeep_cost() > 0:
-		_row(_income, "ค่าพาหนะ/อุปกรณ์ %s" % p.get_veh().icon,
-			"−" + WQFmt.n(p.get_upkeep_cost()) + "฿", BAD)
+		_row(_income, "ค่าพาหนะ/อุปกรณ์", "−" + WQFmt.n(p.get_upkeep_cost()) + "฿", BAD,
+			false, String(p.vehicle), String(p.get_veh().icon))
 	_row(_income, "ดอกเบี้ย/ค่าผ่อน (%d ก้อน)" % p.liabilities.size(),
 		"−" + WQFmt.n(p.get_debt_payments()) + "฿", BAD)
 	_row(_income, "รวมรายจ่าย", "−" + WQFmt.n(p.get_total_expenses()) + "฿", BAD, true)
@@ -108,8 +108,12 @@ func _heading(text: String) -> Label:
 	return l
 
 
-func _row(box: VBoxContainer, left: String, right: String, color: Color, strong := false) -> void:
+func _row(box: VBoxContainer, left: String, right: String, color: Color, strong := false,
+		icon_id := "", icon_emoji := "") -> void:
 	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 5)
+	if icon_id != "" or icon_emoji != "":
+		h.add_child(WQIcon.make(icon_id, icon_emoji, 16))
 	var a := Label.new()
 	a.text = left
 	a.add_theme_font_size_override("font_size", 13 if strong else 12)

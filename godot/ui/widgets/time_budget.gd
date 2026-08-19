@@ -133,11 +133,12 @@ func refresh() -> void:
 		_note("🚗 เดือนนี้เสียเวลาไปกับการเดินทางแล้ว %d ชม." % p.travel_used, SEG_COLORS["commute"])
 	if p.vehicle != "public":
 		var veh: Dictionary = p.get_veh()
-		_note("%s %s ทำให้เวลาไปทำงานเหลือ %d ชม. (จาก %d)" %
-			[veh.icon, veh.name, p.get_commute_hours(), int(p.job.commute)], GOOD)
+		_note("%s ทำให้เวลาไปทำงานเหลือ %d ชม. (จาก %d)" %
+			[veh.name, p.get_commute_hours(), int(p.job.commute)], GOOD,
+			String(p.vehicle), String(veh.icon))
 	if p.place != "home":
-		_note("📍 ตั้งค่าการนอนและอาหารได้ที่ 🏠 บ้าน เท่านั้น (เดินทาง %d ชม.)" %
-			p.travel_cost("home"), WARN)
+		_note("ตั้งค่าการนอนและอาหารได้ที่ บ้าน เท่านั้น (เดินทาง %d ชม.)" %
+			p.travel_cost("home"), WARN, "home", "🏠")
 
 	var hmax: int = p.get_hours_max()
 	_left.set_stat("เหลือใช้เดือนนี้", "%d / %d ชม." % [p.hours, hmax],
@@ -159,11 +160,19 @@ func _dim_label(t: String) -> Label:
 	return l
 
 
-func _note(text: String, color: Color) -> void:
-	var l := _dim_label(text)
-	l.add_theme_color_override("font_color", color)
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_notes.add_child(l)
+## หมายเหตุหนึ่งบรรทัด — ใส่ไอคอนนำหน้าได้ถ้าบรรทัดนั้นพูดถึงของที่มีโมเดล
+func _note(text: String, color: Color, icon_id := "", icon_emoji := "") -> void:
+	if icon_id != "" or icon_emoji != "":
+		var row := WQIcon.row(icon_id, icon_emoji, text, 16)
+		var l := row.get_child(1) as Label
+		l.add_theme_color_override("font_color", color)
+		l.add_theme_font_size_override("font_size", 14)
+		_notes.add_child(row)
+		return
+	var lbl := _dim_label(text)
+	lbl.add_theme_color_override("font_color", color)
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_notes.add_child(lbl)
 
 
 func _chip(color: Color, text: String) -> Control:

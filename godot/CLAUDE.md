@@ -22,10 +22,13 @@
   ให้เดือนที่จบ · ความมั่งคั่ง · สุขภาพ · พาหนะ · อุปกรณ์ ตรงกันทุกช่อง (ดู "ตรวจว่ายังตรงกับ JS")
 - ✅ headless sim รันครบ 16 อาชีพ มัธยฐาน 57 เดือน ผ่านเกณฑ์ 40–60
 - ⬜ UI ยังเป็นแค่ RichTextLabel ตัวเดียว — ยังเดินทางบนแผนที่ผ่าน UI ไม่ได้
-- ✅ **Sprint A ของงานอาร์ตเสร็จแล้ว** — โครง 3D ทั้งชุดใช้เมชแทนที่ (ยังไม่มี `.glb` จริงสักไฟล์):
-  palette + วัสดุกลาง · แท่นโชว์ · ฉากเมือง 10 อาคาร + ตัวละครเดินได้ · `stat_bar` กลาง ·
-  ตัวอบไอคอน · `sim/world_check.gd`
-- ⬜ ยังไม่มีโมเดล `.glb` จริง ตัวละครยังเป็นแคปซูล อาคารยังเป็นกล่อง — ต่อที่ Sprint B
+- ✅ **Sprint A เสร็จแล้ว** — โครง 3D ทั้งชุด: palette + วัสดุกลาง · แท่นโชว์ ·
+  ฉากเมือง 10 อาคาร + ตัวละครเดินได้ · `stat_bar` กลาง · ตัวอบไอคอน · `sim/world_check.gd`
+- ✅ **Sprint B เสร็จแล้ว** — พาหนะ 5 คันและอุปกรณ์ 2 ชิ้นเป็นเมช "ต่อกล่อง" จากโค้ดแล้ว ·
+  UI เลิกใช้อีโมจิเป็นไอคอน (ใช้รูปที่อบจากเมช อีโมจิเหลือไว้เป็นตัวสำรอง) ·
+  ร้านพาหนะที่ห้าง · ตัวตรวจโมเดล + เช็กลิสต์ที่สร้างจากสคริปต์
+- ⬜ **ยังไม่มีไฟล์ `.glb` จริงสักไฟล์** — 0/35 ชิ้น ดูเช็กลิสต์ใน `world/models/README.md`
+  พาหนะ/อุปกรณ์เป็นเมชต่อกล่องชั่วคราว · อาคารกับตัวละครยังเป็นกล่องกับแคปซูล
 - ⬜ ยังไม่มีเสียง
 
 ## ✅ งานแรกทำเสร็จแล้ว — พอร์ตรันได้ ตัวสุ่มตรง
@@ -135,7 +138,8 @@ core/       ตรรกะบริสุทธิ์ — rng, game_data, playe
 data/       ตารางสมดุลทั้งหมดเป็น JSON (สร้างจาก engine.js เดิม)
 sim/        headless simulation
 ui/         หน้าจอและ widget (ยังเป็น placeholder)
-world/      ฉาก 3D low poly — city/ showcase/ materials/ tools/ พร้อมแล้ว · models/ ยังว่าง (รอ .glb)
+world/      ฉาก 3D low poly — city/ showcase/ materials/ tools/ พร้อมแล้ว
+            models/ ยังไม่มี .glb สักไฟล์ (ดูเช็กลิสต์ใน world/models/README.md)
 ```
 
 ## ลำดับงานที่แนะนำ
@@ -149,8 +153,9 @@ world/      ฉาก 3D low poly — city/ showcase/ materials/ tools/ พร�
 4. **ด่าน 2** — ทอยเต๋าสุ่มความฝัน + เลือกลาออก/ทำงานต่อ (บทที่ 9)
 5. **บันทึก/โหลด + autosave 3 ช่อง** (`core/save.gd` พร้อมแล้ว ต่อ UI อย่างเดียว)
 6. **tutorial 5 เดือนแรก** — ลอกสเต็ปจากต้นแบบเว็บได้เลย (ตัวแปร `TUT` ใน `../ui.html`)
-7. งานอาร์ต 3D — ~~Sprint A~~ ✅ เสร็จแล้ว → **ทำต่อที่ Sprint B** ใน `../CLAUDE-CODE-BRIEF.md`
-   (โมเดล `.glb` ชุดแรก + เลิกใช้อีโมจิใน UI) แล้วค่อย Sprint C (ฉากเมืองจริง + ภัยพิบัติ + VFX)
+7. งานอาร์ต 3D — ~~Sprint A~~ ✅ ~~Sprint B~~ ✅ → **ทำต่อที่ Sprint C** ใน `../CLAUDE-CODE-BRIEF.md`
+   (อาคาร 10 หลังจากโมเดลจริง · สภาพภัยพิบัติในฉาก · VFX 4 ตัว · แอนิเมชันตัวละคร)
+   งานปั้น `.glb` จริงเดินคู่ขนานได้ตลอด — สเปกและเช็กลิสต์อยู่ใน `world/models/README.md`
 
 ## สิ่งที่ห้ามทำโดยไม่ถามเจ้าของโปรเจกต์ก่อน
 
@@ -171,8 +176,10 @@ godot --headless --quit                                # เช็ค syntax err
 godot                                                  # เปิดเกม
 WQ_SHOT=/tmp/ui.png godot                              # เปิด ถ่ายภาพหน้าจอ แล้วปิดเอง
 
-godot --headless --script res://world/tools/palette_bake.gd   # อบ palette.png ใหม่จาก palette.gd
-godot --script res://world/tools/icon_bake.gd                 # อบไอคอนจากเมช (ห้ามใส่ --headless)
+godot --headless --script res://world/tools/palette_bake.gd    # อบ palette.png ใหม่จาก palette.gd
+godot --headless --script res://world/tools/model_lint.gd      # ตรวจโมเดล: tris · วัสดุเดียว · ฐาน y=0 · ชื่อ
+godot --headless --script res://world/tools/models_readme.gd   # สร้าง world/models/README.md ใหม่
+godot --script res://world/tools/icon_bake.gd                  # อบไอคอนจากเมช (ห้ามใส่ --headless)
 ```
 
 **เพิ่ม `class_name` ใหม่แล้วต้องรัน `godot --headless --path . --import` ก่อน** ไม่งั้น
@@ -220,6 +227,12 @@ godot --script res://world/tools/icon_bake.gd                 # อบไอค�
 | `world/tools/palette_bake.gd` | อบ `palette.png` จากค่าใน `palette.gd` |
 | `world/tools/icon_bake.gd` | อบไอคอน 34 ชิ้นจากเมช → `ui/theme/icons/<id>.png` |
 | `sim/world_check.gd` | เทสต์ฉาก 3D แบบ headless |
+| `ui/widgets/icon.gd` | `WQIcon` — ไอคอนจากรูปที่อบไว้ ไม่มีก็ตกกลับไปใช้อีโมจิเดิม |
+| `ui/widgets/shop.gd` | `WQShop` — ร้านพาหนะ/อุปกรณ์ที่ห้าง + แถบสเปกสำหรับแท่นโชว์ |
+| `world/tools/kitbash.gd` | `WQKitbash` — เมชต่อกล่องจากโค้ด (พาหนะ 5 · อุปกรณ์ 2) ของชั่วคราวแทน `.glb` |
+| `world/tools/model_ids.gd` | `WQModelIds` — รายชื่อโมเดลที่เกมต้องมี + งบสามเหลี่ยม อ่านจาก data ที่เดียว |
+| `world/tools/model_lint.gd` | ตรวจโมเดลตามเช็กลิสต์ก่อน export |
+| `world/tools/models_readme.gd` | สร้าง `world/models/README.md` (**ห้ามแก้ README ด้วยมือ**) |
 
 ### กฎเพิ่มสำหรับ `world/`
 
@@ -232,7 +245,13 @@ godot --script res://world/tools/icon_bake.gd                 # อบไอค�
 4. แอนิเมชันเดินไปอาคารต้องข้ามได้ (สั่งซ้ำระหว่างเดิน = วาร์ป) — ห้ามให้ผู้เล่นรอแอนิเมชัน
 5. ตัวเลขบนแท่นโชว์ต้องมาจาก `core` — ดีลใช้ `WQPlayer.deal_terms()` ตัวเดียวกับที่ `deal_card` ใช้
    และเป็นสูตรชุดเดียวกับตอน `close_deal()` หักเงินจริง
-6. ก่อนจบทุก Sprint: `godot --headless --quit` + sim ทั้งชุด + `WQ_SHOT=/tmp/ui.png godot` แล้วเปิดดูภาพจริง
+6. โมเดลใหม่ทุกชิ้นต้องผ่าน `model_lint` — งบสามเหลี่ยม · วัสดุเดียว · ฐานอยู่ที่ y=0 · ชื่อโหนด = id
+   และ `world/models/README.md` ต้องสร้างใหม่ด้วย `models_readme.gd` ทุกครั้งที่รายการเปลี่ยน
+7. สีของเมชมาจากการ map UV ไปที่ช่องบน `palette.png` (`WQPalette.slot_u()`)
+   **ห้ามตั้ง `albedo_color` รายชิ้น** ยกเว้นกล่องเปล่าที่ยังไม่มีโมเดล
+8. ไอคอนใน UI ต้องผ่าน `WQIcon` เสมอ ห้ามโหลด `ui/theme/icons/*.png` ตรงๆ
+   เพราะ `WQIcon` เป็นคนจัดการ fallback เป็นอีโมจิและตั้ง filter ให้ย่อรูปแล้วไม่แตก
+9. ก่อนจบทุก Sprint: `godot --headless --quit` + sim ทั้งชุด + `WQ_SHOT=/tmp/ui.png godot` แล้วเปิดดูภาพจริง
 
 ### ที่ของจริงต่างจาก ART-DIRECTION / CLAUDE-CODE-BRIEF — อย่าแก้กลับ
 
@@ -247,5 +266,10 @@ godot --script res://world/tools/icon_bake.gd                 # อบไอค�
 - **`SubViewport` ทุกตัวต้องตั้ง `own_world_3d = true`** ค่าเริ่มต้นคือใช้โลก 3D ร่วมกับพ่อ
   ถ้าลืม ฉากเมืองกับแท่นโชว์จะไปกองในโลกใบเดียวกัน แล้วถนนกับตึกจะโผล่หลังของบนแท่นโชว์
   (`world_check` ตรวจข้อนี้ให้แล้ว)
+- **มุมไฟหลักคือ yaw +30° ไม่ใช่ −35°** ตอนแรกตั้งตามคำว่า "บนซ้าย" ตรงๆ แล้วแสงไปตกด้านหลัง
+  ที่กล้องมองไม่เห็น หน้าที่เห็นได้แต่ ambient สีฟ้า ของทุกชิ้นเลยออกมาเป็นสีน้ำเงินหมด
+  ไม่ว่าจะ map UV ไปที่ช่องสีไหนก็ตาม
+- **ไอคอนต้องเปิด mipmap** (`mipmaps/generate=true` ใน `.import`) เพราะอบมาที่ 128px
+  แล้ว UI ย่อเหลือ ~18px — `icon_bake` ตามไปแก้ค่าให้เองทุกครั้งที่รัน
 - **`palette.png.import` ตั้ง `detect_3d/compress_to=0` ไว้** ห้ามเปลี่ยน —
   ไม่งั้น Godot จะ reimport เป็น texture บีบอัดตอนเอาไปใช้ใน 3D แล้วสีในพาเลตจะเพี้ยนทีละนิด

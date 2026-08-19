@@ -61,12 +61,44 @@ func _init() -> void:
 	_has("แสดงค่าของผู้เล่นคนใหม่", w._usable.text, str(q.get_hours_max()))
 
 	w.free()
+	_check_icons(m)
 	_check_deal_market(m)
 	_check_statement(m)
 	_check_debt_list(m)
+	_check_shop(m)
 
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
+
+
+## ข้อ 4 ของ Sprint B — UI ต้องใช้ไอคอนที่อบจากเมช ไม่ใช่อีโมจิ
+## แต่ของที่ไม่มีเมช (อาหาร สถานะ) ต้องยังเห็นอีโมจิเดิม ห้ามกลายเป็นช่องว่าง
+func _check_icons(m: WQMatch) -> void:
+	_eq("มีไอคอนของพาหนะที่อบไว้แล้ว", WQIcon.exists("usedcar"), true)
+	_eq("มีไอคอนของสถานที่ที่อบไว้แล้ว", WQIcon.exists("bank"), true)
+	_eq("ไม่มีไอคอนของสิ่งที่ไม่มีเมช", WQIcon.exists("ค่าอาหาร"), false)
+
+	var got := WQIcon.make("usedcar", "🚗", 16)
+	_eq("id ที่มีไอคอน ต้องได้รูป ไม่ใช่ตัวอักษร", got is TextureRect, true)
+	got.free()
+
+	var fallback := WQIcon.make("ไม่มีจริง", "🚗", 16)
+	_eq("id ที่ไม่มีไอคอน ต้องตกกลับไปเป็นอีโมจิเดิม", fallback is Label, true)
+	_eq("อีโมจิสำรองต้องไม่ใช่ช่องว่าง", (fallback as Label).text, "🚗")
+	fallback.free()
+
+	# การ์ดดีลจริงต้องมีรูปติดอยู่ ไม่ใช่ตกกลับไปเป็นอีโมจิทุกใบ
+	var p = m.players[0]
+	var card := WQDealCard.new()
+	card.bind(p, m.deals[0])
+	_eq("การ์ดดีลใช้รูปไอคอนจริง", _textures_in(card) > 0, true)
+	card.free()
+
+
+func _textures_in(node: Node) -> int:
+	var n := 1 if node is TextureRect else 0
+	for c in node.get_children(): n += _textures_in(c)
+	return n
 
 
 func _check_deal_market(m: WQMatch) -> void:
@@ -185,6 +217,86 @@ func _check_debt_list(m: WQMatch) -> void:
 	dl.free()
 
 
+## ร้านพาหนะ/อุปกรณ์ (Sprint B ข้อ 5)
+func _check_shop(m: WQMatch) -> void:
+	var p = m.players[0]
+	p.place = "mall"
+	p.vehicle = "public"
+	p.devices = []
+	p.liabilities = []
+	p.cash = 400000.0
+	p.changed.emit()
+
+	var shop := WQShop.new()
+	shop.bind(p)
+	_eq("ร้านมีครบทั้งพาหนะและอุปกรณ์", shop._list.get_child_count(),
+		WQData.vehicles.size() + WQData.devices.size())
+
+	# --- ตัวเลขต้องคำนวณจาก commute จริงของผู้เล่นคนนี้ ไม่ใช่ค่ากลางๆ ---
+	var t: Dictionary = p.vehicle_terms("usedcar")
+	var want_commute: int = roundi(float(p.job.commute) * 0.42)
+	_eq("ชั่วโมงเดินทางของรถมือสองคำนวณจาก commute ของอาชีพนี้", int(t.commute), want_commute)
+	_eq("เวลาที่ได้คืนคือส่วนต่างจากพาหนะปัจจุบัน",
+		int(t.hours_saved), p.get_commute_hours() - want_commute)
+	_eq("ค่าใช้จ่ายที่เพิ่มขึ้นเทียบกับพาหนะปัจจุบัน",
+		float(t.upkeep_delta), float(WQData.vehicle("usedcar").upkeep))
+
+	# คนที่เดินทางไกลกว่าต้องได้เวลาคืนมากกว่า จากรถคันเดียวกัน — นี่คือเหตุผลที่ต้องเป็น pure function ใน core
+	var far = WQPlayer.new()
+	far.setup(m, {"name": "คนเดินทางไกล", "job_id": "nurse", "is_ai": true})
+	var near = WQPlayer.new()
+	near.setup(m, {"name": "คนเดินทางใกล้", "job_id": "programmer", "is_ai": true})
+	if int(far.job.commute) != int(near.job.commute):
+		var a := int(far.vehicle_terms("usedcar").hours_saved)
+		var b := int(near.vehicle_terms("usedcar").hours_saved)
+		_eq("รถคันเดียวกันให้ผลต่างกันตาม commute ของแต่ละอาชีพ", a != b, true)
+
+	# --- แถบบนแท่นโชว์ต้องตรงกับ core ---
+	var stats := WQShop.vehicle_stats(p, "usedcar")
+	_eq("พาหนะมีแถบครบ 3 อย่างตามข้อ 5 ของ Sprint B", stats.size(), 3)
+	_has("แถบเวลาที่ได้คืนตรงกับ core", String(stats[2].text), "%+d ชม." % int(t.hours_saved))
+	_has("แถบค่าใช้จ่ายตรงกับ core", String(stats[1].text), WQFmt.n(float(t.upkeep)))
+
+	# --- กด "ดู" ต้องบอกออกไปว่าเลือกอะไร ไม่ใช่เปลี่ยนสถานะเอง ---
+	var picked: Array = []
+	shop.picked.connect(func(k, i): picked.append([k, i]))
+	var look := _button_named(shop, "ดู")
+	look.pressed.emit()
+	_eq("กดดูแล้วบอกออกไปว่าเลือกของชิ้นไหน", picked.size() > 0, true)
+
+	# --- ซื้อจริง ---
+	var before_vehicle: String = p.vehicle
+	var buy := _button_named(shop, "ดาวน์ %s฿" % WQFmt.m(float(p.vehicle_terms("usedcar").down)))
+	if buy == null:
+		_fails += 1
+		print("  ❌ หาปุ่มซื้อรถมือสองไม่เจอ")
+	else:
+		_eq("อยู่ที่ห้างและเงินพอ ปุ่มซื้อต้องกดได้", buy.disabled, false)
+		buy.pressed.emit()
+		_eq("กดซื้อแล้วเปลี่ยนพาหนะจริง", p.vehicle, "usedcar")
+		_ne("พาหนะเปลี่ยนไปจากเดิม", p.vehicle, before_vehicle)
+
+	# --- ไม่ได้อยู่ที่ห้าง = ซื้อไม่ได้ ---
+	p.vehicle = "public"
+	p.place = "home"
+	p.changed.emit()
+	shop._rebuild()
+	var buy2 := _button_named(shop, "ดาวน์ %s฿" % WQFmt.m(float(p.vehicle_terms("usedcar").down)))
+	if buy2 != null:
+		_eq("ไม่ได้อยู่ที่ห้าง ปุ่มซื้อต้องกดไม่ได้", buy2.disabled, true)
+
+	shop.free()   # WQPlayer เป็น RefCounted คืนหน่วยความจำเองเมื่อหมดการอ้างอิง ไม่ต้อง free()
+
+
+## หาปุ่มตัวแรกที่มีข้อความตามที่ระบุ
+func _button_named(node: Node, text: String) -> Button:
+	if node is Button and (node as Button).text == text: return node
+	for c in node.get_children():
+		var b := _button_named(c, text)
+		if b != null: return b
+	return null
+
+
 ## หาปุ่มลัด (25% / 50% / ทั้งหมด) ของหนี้ก้อนที่ชื่อขึ้นต้นตามที่ระบุ
 func _quick_button(dl: WQDebtList, debt_name: String, label: String) -> Button:
 	for row in dl._list.get_children():
@@ -217,10 +329,12 @@ func _card_for_deal(mk: WQDealMarket, id: int) -> WQDealCard:
 	return null
 
 
+## หมายเหตุบางบรรทัดมีไอคอนนำหน้าแล้ว จึงเป็น HBox[ไอคอน, Label] ไม่ใช่ Label เปล่าๆ
+## ต้องไล่ลงไปในลูกด้วย ไม่งั้นจะนับไม่เจอทั้งที่ข้อความอยู่บนจอจริงๆ
 func _notes_with(w: WQTimeBudget, needle: String) -> int:
 	var n := 0
 	for c in w._notes.get_children():
-		if c is Label and (c as Label).text.contains(needle): n += 1
+		n += _labels_with(c, needle)
 	return n
 
 

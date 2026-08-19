@@ -92,15 +92,15 @@ func _init() -> void:
 	var e := Environment.new()
 	e.background_mode = Environment.BG_CANVAS
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color("6f86b5")     # ambient ฟ้าอ่อนตาม ART-DIRECTION 2.2
-	e.ambient_light_energy = 0.55
+	e.ambient_light_color = Color("9fb0c9")     # ambient ฟ้าอ่อนตาม ART-DIRECTION 2.2
+	e.ambient_light_energy = 0.52
 	env.environment = e
 	_vp.add_child(env)
 
 	# แสงดวงเดียวจากบนซ้าย-หน้า — low poly ต้องการแสงเดียวเพื่อให้แต่ละหน้าได้สีต่างกันชัดๆ
 	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-40, -35, 0)
-	light.light_energy = 1.15
+	light.rotation_degrees = Vector3(-42, 30, 0)
+	light.light_energy = 1.25
 	light.shadow_enabled = true
 	_vp.add_child(light)
 
@@ -159,17 +159,25 @@ func _set_model(item_kind: String, item_id: String) -> void:
 		c.free()
 	_model = null
 
-	var path := model_path(item_kind, item_id)
-	if ResourceLoader.exists(path):
-		var packed := load(path)
-		if packed is PackedScene:
-			_model = (packed as PackedScene).instantiate()
-	if _model == null:
-		_model = placeholder_for(item_kind)
+	_model = model_for(item_kind, item_id)
 	_pivot.add_child(_model)
 	_pivot.add_child(_pedestal())
 
 	_frame_camera(aabb_of(_model))
+
+
+## ลำดับการหาของมาโชว์ — ที่เดียวในเกมที่ตัดสินใจเรื่องนี้ ตัวอบไอคอนก็เรียกตัวนี้
+## เพื่อให้ไอคอนกับของบนแท่นเป็นชิ้นเดียวกันเสมอ ไม่ใช่คนละอย่างที่บังเอิญชื่อเหมือนกัน
+##   1. .glb จริง  2. เมชต่อกล่องจาก WQKitbash  3. กล่องเปล่าตามกลุ่มของ (ห้าม error)
+static func model_for(item_kind: String, item_id: String) -> Node3D:
+	var path := model_path(item_kind, item_id)
+	if ResourceLoader.exists(path):
+		var packed := load(path)
+		if packed is PackedScene:
+			return (packed as PackedScene).instantiate()
+	var kit := WQKitbash.build(item_kind, item_id)
+	if kit != null: return kit
+	return placeholder_for(item_kind)
 
 
 ## กล่องแทนโมเดลจริง — สูงต่างกันตามกลุ่มของ เพื่อให้เห็นว่าเปลี่ยนของแล้วจริงๆ

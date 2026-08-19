@@ -156,6 +156,52 @@ func travel_to(to_id: String) -> Dictionary:
 	return {"ok": true}
 
 ## ซื้อพาหนะ — ดาวน์ + กู้ส่วนที่เหลือ · ลดระดับได้โดยขายคันเดิมทิ้ง
+## สเปกของพาหนะคันหนึ่งเมื่อมองจากผู้เล่นคนนี้ — pure function ไม่แตะ state
+## ต้องคำนวณจาก commute จริงของผู้เล่น ไม่ใช่ตัวเลขกลางๆ
+## เพราะ "ประหยัดเวลาได้กี่ชั่วโมง" ขึ้นกับว่างานของคนนี้เดินทางไกลแค่ไหน
+## คนที่ commute 40 ชม./เดือน กับคนที่ 8 ชม./เดือน ซื้อรถคันเดียวกันได้ผลไม่เท่ากันเลย
+func vehicle_terms(id: String) -> Dictionary:
+	var v := WQData.vehicle(id)
+	if v.is_empty(): return {}
+	var cfg = WQData.cfg
+	var cur := get_veh()
+	var factor := float(v.factor)
+	var commute := 0 if (retired or downsize_left > 0) else roundi(float(job.commute) * factor)
+	var down := roundf(float(v.price) * float(v.downPct))
+	if down <= 0: down = float(v.price)
+	var debt := float(v.price) - down
+	var downgrade := WQData.vehicle_index(id) < WQData.vehicle_index(String(cur.id))
+	return {
+		"id": id, "factor": factor, "price": float(v.price),
+		"down": down, "debt": debt, "upkeep": float(v.upkeep),
+		"upkeep_delta": float(v.upkeep) - float(cur.upkeep),
+		"commute": commute,
+		# บวก = ได้เวลาคืน · ลบ = เสียเวลาเพิ่ม (ตอนขายรถลงมาใช้คันถูกกว่า)
+		"hours_saved": get_commute_hours() - commute,
+		"health_delta": float(v.hp) - float(cur.hp),
+		"is_current": id == vehicle,
+		"is_downgrade": downgrade,
+		"tradein": roundf(float(cur.price) * float(cfg.vehicle_tradein)) if float(cur.price) > 0 else 0.0,
+		"refund": roundf(float(cur.price) * float(cfg.vehicle_downgrade_refund)),
+		# ขายลงมาคันถูกกว่าไม่ต้องมีเงินดาวน์ — ได้เงินคืนด้วยซ้ำ
+		"affordable": downgrade or (cash >= down and debt <= get_credit_left()),
+		"at_shop": place == "mall",
+	}
+
+
+## สเปกของอุปกรณ์หนึ่งชิ้น — pure function เช่นกัน
+func device_terms(id: String) -> Dictionary:
+	var d := WQData.device(id)
+	if d.is_empty(): return {}
+	return {
+		"id": id, "price": float(d.price), "upkeep": float(d.upkeep),
+		"owned": has_device(id),
+		"affordable": cash >= float(d.price),
+		# มีสมาร์ตโฟนแล้วสั่งซื้อของชิ้นอื่นจากที่บ้านได้ ตามกติกาใน buy_device()
+		"at_shop": place == "mall" or has_device("smartphone"),
+	}
+
+
 func buy_vehicle(id: String) -> Dictionary:
 	var v := WQData._by_id(WQData.vehicles, id)
 	if v.is_empty(): return _fail("ไม่พบพาหนะ")

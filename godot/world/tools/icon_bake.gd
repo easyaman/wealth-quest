@@ -44,16 +44,16 @@ func _init() -> void:
 
 	# แสงและมุมกล้องชุดเดียวกับแท่นโชว์ ไอคอนจะได้ดูเป็นของชิ้นเดียวกับที่เห็นบนแท่น
 	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-40, -35, 0)
-	light.light_energy = 1.15
+	light.rotation_degrees = Vector3(-42, 30, 0)
+	light.light_energy = 1.25
 	vp.add_child(light)
 
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_CLEAR_COLOR
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color("6f86b5")
-	e.ambient_light_energy = 0.6
+	e.ambient_light_color = Color("9fb0c9")
+	e.ambient_light_energy = 0.72
 	env.environment = e
 	vp.add_child(env)
 
@@ -65,16 +65,21 @@ func _init() -> void:
 
 	var made := 0
 	var placeholders := 0
+	var kitbashed := 0
 	for it in items:
-		var node := _load_or_placeholder(it.kind, it.id)
-		if not WQShowcase.has_model(it.kind, it.id): placeholders += 1
+		var node := WQShowcase.model_for(it.kind, it.id)
+		if not WQShowcase.has_model(it.kind, it.id):
+			if WQKitbash.has(it.kind, it.id): kitbashed += 1
+			else: placeholders += 1
 		vp.add_child(node)
 
 		var box := WQShowcase.aabb_of(node)
 		var center := box.get_center()
-		# ยืดกรอบให้พอดีของแต่ละชิ้น ของเล็กของใหญ่จะได้เต็มไอคอนเท่ากัน
-		cam.size = maxf(0.4, box.size.length() * 1.05)   # เผื่อขอบไว้ ไม่ให้ของชนกรอบไอคอน
-		cam.position = center + Vector3(0, 0, 0) + cam.transform.basis.z * 30.0
+		# ยืดกรอบให้พอดี "เงาของกล่องหุ้มบนจอ" ไม่ใช่ความยาวเส้นทแยงมุมของกล่อง
+		# เส้นทแยงมุมมักยาวกว่าที่ตาเห็นมาก ของเลยลอยอยู่กลางไอคอนตัวเล็กนิดเดียว
+		# แล้วพอย่อลงเหลือ 22px ในแถวของ UI จะกลายเป็นจุดดำจุดเดียว ดูไม่ออกว่าอะไร
+		cam.size = maxf(0.25, _fit_size(box, cam.transform.basis) * 1.06)
+		cam.position = center + cam.transform.basis.z * 30.0
 
 		await process_frame
 		await process_frame
@@ -95,36 +100,59 @@ func _init() -> void:
 		vp.remove_child(node)
 		node.free()
 
-	print("icon_bake: เขียนไอคอน %d ไฟล์ (เป็นกล่องแทน %d ชิ้นเพราะยังไม่มี .glb)%s" % [
-		made, placeholders, "" if _fails == 0 else "  ❌ พลาด %d ชิ้น" % _fails])
+	var fixed := _fix_import_settings()
+	if fixed > 0:
+		print("icon_bake: แก้ค่านำเข้าให้ %d ไฟล์ (เปิด mipmap · ปิดการบีบอัดแบบ 3D)" % fixed)
+
+	print("icon_bake: เขียนไอคอน %d ไฟล์ (.glb จริง %d · เมชต่อกล่อง %d · กล่องเปล่า %d)%s" % [
+		made, made - kitbashed - placeholders, kitbashed, placeholders,
+		"" if _fails == 0 else "  ❌ พลาด %d ชิ้น" % _fails])
 	quit(1 if _fails > 0 else 0)
 
 
-func _load_or_placeholder(kind: String, id: String) -> Node3D:
-	var path := WQShowcase.model_path(kind, id)
-	if ResourceLoader.exists(path):
-		var packed := load(path)
-		if packed is PackedScene:
-			return (packed as PackedScene).instantiate()
-	return WQShowcase.placeholder_for(kind)
+## ไอคอนถูกอบที่ 128px แล้ว UI ย่อลงเหลือ ~18px — ถ้าไม่มี mipmap การย่อ 7 เท่าจะแตกเป็นจุด
+## และถ้าปล่อยให้ detect_3d บีบอัดเป็น texture แบบ VRAM สีที่อบไว้จะเพี้ยนทีละนิด
+## Godot สร้างไฟล์ .import ให้เองตอน import ครั้งแรก ที่นี่จึงแค่ตามไปแก้ค่าให้ถูก
+## (รันครั้งแรกอาจยังไม่มีไฟล์ .import — รัน --import แล้วอบซ้ำอีกรอบจะครบเอง)
+func _fix_import_settings() -> int:
+	var dir := DirAccess.open(OUT_DIR)
+	if dir == null: return 0
+	var n := 0
+	for f in dir.get_files():
+		if not f.ends_with(".png.import"): continue
+		var path := "%s/%s" % [OUT_DIR, f]
+		var text := FileAccess.get_file_as_string(path)
+		var fixed := text.replace("mipmaps/generate=false", "mipmaps/generate=true") \
+			.replace("detect_3d/compress_to=1", "detect_3d/compress_to=0")
+		if fixed == text: continue
+		var fh := FileAccess.open(path, FileAccess.WRITE)
+		if fh == null: continue
+		fh.store_string(fixed)
+		fh.close()
+		n += 1
+	return n
 
 
-## รายการของที่ต้องมีไอคอน — อ่านจาก data/*.json ทั้งหมด ไม่พิมพ์รายชื่อด้วยมือ
-## ดีลไม่มี id คงที่ (id เป็นเลขรันไทม์) จึงอบตาม "ประเภทของดีล" แทน
+## ครึ่งหนึ่งของด้านที่กว้างที่สุดของกล่องหุ้ม เมื่อฉายลงบนแกนขวา/แกนขึ้นของกล้อง ×2
+static func _fit_size(box: AABB, basis: Basis) -> float:
+	var right := basis.x
+	var up := basis.y
+	var center := box.get_center()
+	var ex := 0.0
+	var ey := 0.0
+	for i in 8:
+		var c := box.position + Vector3(
+			box.size.x if (i & 1) else 0.0,
+			box.size.y if (i & 2) else 0.0,
+			box.size.z if (i & 4) else 0.0) - center
+		ex = maxf(ex, absf(c.dot(right)))
+		ey = maxf(ey, absf(c.dot(up)))
+	return maxf(ex, ey) * 2.0
+
+
+## รายการของที่ต้องมีไอคอน — มาจาก WQModelIds เพื่อให้ตรงกับตัวตรวจโมเดลและ README เสมอ
 func _items() -> Array:
-	var out: Array = []
-	for p in WQData.places: out.append({"kind": "places", "id": String(p.id)})
-	for v in WQData.vehicles: out.append({"kind": "vehicles", "id": String(v.id)})
-	for d in WQData.devices: out.append({"kind": "devices", "id": String(d.id)})
-	for g in WQData.gym_packs: out.append({"kind": "packs", "id": "gym_" + String(g.id)})
-	for r in WQData.resort_packs: out.append({"kind": "packs", "id": "resort_" + String(r.id)})
-	for dr in WQData.dreams: out.append({"kind": "dreams", "id": "dream_%d" % int(dr.roll)})
-
-	var kinds := {}
-	for pool in [WQData.deal_pool, WQData.big_deals, WQData.mega_deals]:
-		for t in pool: kinds[String(t.kind)] = true
-	for k in kinds: out.append({"kind": "assets", "id": String(k)})
-
+	var out := WQModelIds.all()
 	# ชื่อไฟล์ไอคอนอยู่ในโฟลเดอร์เดียวกันหมด id ซ้ำกันข้ามกลุ่มจะทับกันเงียบๆ
 	var seen := {}
 	for it in out:

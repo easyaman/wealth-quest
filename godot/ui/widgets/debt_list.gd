@@ -69,9 +69,15 @@ func _rebuild() -> void:
 	var can_repay: bool = p.can_do_here("repay")
 	if not can_repay:
 		var bank: Dictionary = WQData.place(p.place_for("repay"))
-		# ไม่ใส่ 📱 — อีโมจิโทรศัพท์เป็นสีเข้ม วางบนพื้นเข้มแล้วอ่านไม่ออก กลายเป็นกล่องดำ
-		_list.add_child(_text("📍 ต้องไปที่ %s %s ก่อนถึงจะชำระหนี้ได้ (เดินทาง %d ชม.) — หรือซื้อสมาร์ตโฟนเพื่อทำผ่านแอป"
-			% [bank.icon, bank.name, p.travel_cost(bank.id)], BAD))
+		# เดิมตัด 📱 ทิ้ง เพราะอีโมจิโทรศัพท์สีเข้มวางบนพื้นเข้มแล้วกลายเป็นกล่องดำ
+		# ตอนนี้ใช้ไอคอนที่อบจากเมชแทน คุมสีเองได้ เลยใส่กลับมาได้
+		var note := WQIcon.row(String(bank.id), String(bank.icon),
+			"ต้องไปที่ %s ก่อนถึงจะชำระหนี้ได้ (เดินทาง %d ชม.) — หรือซื้อสมาร์ตโฟนเพื่อทำผ่านแอป"
+			% [bank.name, p.travel_cost(bank.id)], 16)
+		var nl := note.get_child(1) as Label
+		nl.add_theme_color_override("font_color", BAD)
+		nl.add_theme_font_size_override("font_size", 12)
+		_list.add_child(note)
 	_list.add_child(_text("💡 ปิดหนี้ดอกแพงที่สุดก่อนเสมอ — ดอกเบี้ยที่ประหยัดได้คือรายได้ที่ไม่มีวันขาดทุน", DIM))
 
 	var max_rate := 0.0

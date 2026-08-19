@@ -10,6 +10,7 @@ var time_budget: WQTimeBudget
 var deal_market: WQDealMarket
 var statement: WQStatement
 var debt_list: WQDebtList
+var shop: WQShop
 var showcase: WQShowcase
 var city: WQCity
 var health_bar: WQStatBar
@@ -36,6 +37,7 @@ func _ready() -> void:
 	# (ART-DIRECTION 4.1 · world/ อ่านสถานะได้ แต่ห้ามแก้)
 	city.place_clicked.connect(_on_place_clicked)
 	deal_market.deal_hovered.connect(_on_deal_hovered)
+	shop.picked.connect(_on_shop_picked)
 	_refresh()
 
 	# ถ่ายภาพหน้าจอแล้วปิดตัวเอง — ใช้ตรวจงาน UI จาก terminal ได้โดยไม่ต้องเปิดเกมเอง
@@ -97,6 +99,9 @@ func _build_layout() -> void:
 	debt_list = WQDebtList.new()
 	center.add_child(debt_list)
 
+	shop = WQShop.new()
+	center.add_child(shop)
+
 	# คอลัมน์ขวา: ฉากเมือง 3D อยู่บน แท่นโชว์อยู่กลาง บันทึกอยู่ล่าง
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -125,6 +130,7 @@ func _refresh() -> void:
 	deal_market.bind(p, m)
 	statement.bind(p)
 	debt_list.bind(p)
+	shop.bind(p)
 	city.bind_player(p)
 	health_bar.set_stat("สุขภาพ", "%d / 100" % int(p.health), p.health / 100.0,
 		WQPalette.HEALTH if p.health >= 40.0 else WQPalette.DANGER)
@@ -150,6 +156,16 @@ func _on_deal_hovered(d: Dictionary) -> void:
 	if p == null: return
 	showcase.show_item("assets", String(d.kind),
 		WQDealCard.showcase_stats(p, d), "%s %s" % [d.icon, d.name])
+
+
+## กด "ดู" ในร้าน → เอาของขึ้นแท่นโชว์พร้อมแถบสเปก
+func _on_shop_picked(kind: String, id: String) -> void:
+	var p = m.get_current()
+	if p == null: return
+	var stats: Array = WQShop.vehicle_stats(p, id) if kind == "vehicles" \
+		else WQShop.device_stats(p, id)
+	var item: Dictionary = WQData.vehicle(id) if kind == "vehicles" else WQData.device(id)
+	showcase.show_item(kind, id, stats, "%s %s" % [item.get("icon", ""), item.get("name", id)])
 
 
 func _on_place_clicked(place_id: String) -> void:

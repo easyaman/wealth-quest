@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# navenv pre-push hook — refuse pushing to a repo/branch outside this project's key.
+remote="$1"; url="$2"
+root="$(git rev-parse --show-toplevel)"; a="$root/.navenv.json"
+[ -f "$a" ] || exit 0
+key=$(jq -r .key "$a"); repo=$(jq -r '.git.repo // empty' "$a")
+prefix=$(jq -r '.git.branch_prefix // empty' "$a"); base=$(jq -r '.git.default_branch // "main"' "$a")
+if [ -n "$repo" ] && [[ "$url" != *"$repo"* ]]; then
+  echo "navenv[$key]: BLOCKED push — remote '$remote' ($url) is not $repo" >&2; exit 1
+fi
+if [ -n "${NAVENV_KEY:-}" ] && [ "$NAVENV_KEY" != "$key" ]; then
+  echo "navenv[$key]: BLOCKED push — shell NAVENV_KEY=$NAVENV_KEY ≠ $key (wrong terminal/project?)" >&2; exit 1
+fi
+while read -r local_ref local_sha remote_ref remote_sha; do
+  b="${local_ref#refs/heads/}"
+  [ -z "$prefix" ] && continue
+  case "$b" in "$prefix"*|"$base"|main|master|develop|release/*|hotfix/*) ;;
+    *) echo "navenv[$key]: BLOCKED push — branch '$b' lacks prefix '$prefix'. Rename: git branch -m $b ${prefix}$b" >&2; exit 1;;
+  esac
+done
+exit 0

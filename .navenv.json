@@ -1,0 +1,31 @@
+{
+  "$schema": "navenv/v2",
+  "key": "WEALTH-QUEST",
+  "name": "wealth-quest",
+  "git": {
+    "remote": "origin",
+    "repo": "easyaman/wealth-quest",
+    "default_branch": "main",
+    "branch_prefix": "",
+    "commit_tag": ""
+  },
+  "pr": {
+    "base": "main",
+    "title_prefix": "",
+    "labels": []
+  },
+  "services": {
+    "github": {
+      "account": "easyaman",
+      "email": "111627236+easyaman@users.noreply.github.com",
+      "repo": "easyaman/wealth-quest",
+      "visibility": "public"
+    }
+  },
+  "not_used": ["vercel", "supabase", "clerk", "stripe", "mongodb"],
+  "paths": ["."],
+  "env_file": ".env.local",
+  "secrets_env": "~/.claude/navenv/WEALTH-QUEST.env",
+  "profile": "~/.claude/navenv/WEALTH-QUEST.md",
+  "updated": "2026-08-19"
+}

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# navenv commit-msg hook — commit subject must start with the project's commit_tag.
+root="$(git rev-parse --show-toplevel)"; a="$root/.navenv.json"
+[ -f "$a" ] || exit 0
+tag=$(jq -r '.git.commit_tag // empty' "$a" 2>/dev/null); key=$(jq -r .key "$a")
+[ -z "$tag" ] && exit 0
+subject=$(head -n1 "$1")
+case "$subject" in
+  "$tag"*|Merge*|Revert*|fixup!*|squash!*) exit 0;;
+esac
+echo "navenv[$key]: commit subject must start with '$tag' — got: '$subject'" >&2
+echo "  e.g.  git commit -m '$tag feat: ...'   (or amend the message)" >&2
+exit 1

@@ -21,11 +21,18 @@ const GOOD := Color("7ee08a")
 const BAD := Color("ff8080")
 const GOLD := Color("ffd76a")
 const HOT := Color("c9962e")
+const TIME_COLOR := Color("4fc3f7")
+const ROI_FULL_PCT := 5.0   ## แถบเต็มที่ 5%/เดือน — สูงกว่านี้คือดีลที่ดีผิดปกติอยู่แล้ว
 
 signal acted   ## ยิงหลังผู้เล่นกดปุ่มบนการ์ด เพื่อให้ตัวที่ถือการ์ดอยู่รู้ว่าต้องวาดใหม่
+signal hovered(deal: Dictionary)   ## เมาส์เข้าการ์ด → แท่นโชว์เปลี่ยนมาโชว์ดีลใบนี้
 
 var _p = null
 var _deal: Dictionary = {}
+
+
+func _init() -> void:
+	mouse_entered.connect(func(): hovered.emit(_deal))
 
 
 func bind(player, deal: Dictionary) -> void:
@@ -34,29 +41,54 @@ func bind(player, deal: Dictionary) -> void:
 	_build()
 
 
+## แถบสถิติสำหรับแท่นโชว์ — ตัวเลขมาจาก core ทั้งหมด ที่นี่แค่เลือกว่าจะวัดเทียบกับอะไร
+## (ตัวหารของแถบเป็นเรื่องการนำเสนอ ไม่ใช่สูตรเกม — เช่น "เงินดาวน์กินเงินสดที่มีไปเท่าไหร่")
+static func showcase_stats(p, d: Dictionary) -> Array:
+	var t: Dictionary = p.deal_terms(d)
+	var hmax: int = maxi(1, p.get_hours_max())
+	return [
+		{"label": "ผลตอบแทนต่อทุน", "value": maxf(0.0, t.roi), "max": ROI_FULL_PCT,
+			"text": "%.1f%%/เดือน" % t.roi, "color": GOOD if t.cashflow > 0 else BAD},
+		{"label": "เงินดาวน์ (ควักเอง)", "value": t.down, "max": maxf(t.down, p.cash),
+			"text": WQFmt.m(t.down) + "฿", "color": GOLD if t.affordable else BAD},
+		{"label": "เวลาปิดดีล", "value": t.hours, "max": hmax,
+			"text": "%d / %d ชม." % [t.hours, hmax], "color": TIME_COLOR},
+		{"label": "ความผันผวน", "value": t.vol, "max": _max_vol(),
+			"text": "%.0f%%" % (float(t.vol) * 100.0), "color": HOT},
+	]
+
+
+## เพดานความผันผวนอ่านจาก data จริง ไม่ตั้งตัวเลขลอยๆ ไว้ในโค้ด
+## ไม่งั้นวันที่มีคนแก้ deals.json แถบจะเต็มค้างหรือไม่ขยับโดยไม่มีใครรู้
+static func _max_vol() -> float:
+	var mx := 0.0
+	for pool in [WQData.deal_pool, WQData.big_deals, WQData.mega_deals]:
+		for t in pool: mx = maxf(mx, float(t.get("vol", 0.0)))
+	return mx if mx > 0.0 else 1.0
+
+
 func _build() -> void:
 	for c in get_children():
 		remove_child(c); c.free()
 
 	var p = _p
 	var d := _deal
-	var cfg = WQData.cfg
 
-	var discount: bool = p.job.perkId == "discount"
-	var price: float = roundf(float(d.price) * 0.9) if discount else float(d.price)
-	var down := roundf(price * (float(d.down) / float(d.price)))
-	var debt := price - down
-	var income := roundf(float(d.income) * (price / float(d.price)))
-	var payment := debt * float(cfg.mortgage)
-	var cash_flow := roundf(income - payment)
-	# นี่คือตัวเลขที่ตัดสินใจจริง — กระแสเงินสดต่อเดือน หารด้วยเงินที่ต้องควักเอง
-	var roi: float = (cash_flow / down * 100.0) if down > 0 else 0.0
+	# ตัวเลขทั้งใบมาจาก core ที่เดียว (WQPlayer.deal_terms) — การ์ดไม่คำนวณสูตรเกมเอง
+	var t: Dictionary = p.deal_terms(d)
+	var discount: bool = t.discount
+	var price: float = t.price
+	var down: float = t.down
+	var debt: float = t.debt
+	var income: float = t.income
+	var payment: float = t.payment
+	var cash_flow: float = t.cashflow
+	var roi: float = t.roi
 
-	var act: String = p.act_for_kind(d.kind)
-	var at_venue: bool = p.can_do_here(act)
-	var venue: Dictionary = WQData.place(p.place_for(act))
-	var hours: int = p.action_cost(int(cfg.action_cost.deal))
-	var affordable: bool = p.cash >= down and debt <= p.get_credit_left()
+	var at_venue: bool = t.at_venue
+	var venue: Dictionary = WQData.place(t.venue)
+	var hours: int = t.hours
+	var affordable: bool = t.affordable
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:

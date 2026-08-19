@@ -16,7 +16,6 @@ const SEG_COLORS := {
 }
 const BAR_BG := Color("0d1a26")
 const BAR_BORDER := Color("3d5c80")
-const METER_FILL := Color("2f6f96")   # เข้มพอให้ตัวเลขสีขาวทับแล้วยังอ่านออก
 const DIM := Color("8fa6bd")
 const WARN := Color("ff8080")
 const GOOD := Color("7ee08a")
@@ -30,7 +29,7 @@ var _legend: HFlowContainer
 var _eff: Label
 var _usable: Label
 var _notes: VBoxContainer
-var _left: _MeterBar
+var _left: WQStatBar
 
 
 func _init() -> void:
@@ -75,8 +74,9 @@ func _init() -> void:
 	_notes.add_theme_constant_override("separation", 2)
 	col.add_child(_notes)
 
-	_left = _MeterBar.new()
-	_left.custom_minimum_size = Vector2(0, 18)
+	# แถบ "เหลือเท่าไหร่" ใช้ WQStatBar ตัวเดียวกับทั้งเกม (ART-DIRECTION 2.5)
+	# ไม่ทำแถบเฉพาะกิจของตัวเองอีก เพื่อให้ผู้เล่นอ่านแถบเป็นครั้งเดียวแล้วใช้ได้ทุกหน้า
+	_left = WQStatBar.new()
 	col.add_child(_left)
 
 
@@ -140,9 +140,8 @@ func refresh() -> void:
 			p.travel_cost("home"), WARN)
 
 	var hmax: int = p.get_hours_max()
-	_left.fill = float(p.hours) / float(hmax) if hmax > 0 else 0.0
-	_left.text = "เหลือใช้เดือนนี้ %d / %d ชม." % [p.hours, hmax]
-	_left.queue_redraw()
+	_left.set_stat("เหลือใช้เดือนนี้", "%d / %d ชม." % [p.hours, hmax],
+		float(p.hours) / float(hmax) if hmax > 0 else 0.0, WQPalette.TIME)
 
 
 ## ลบลูกทิ้งทันที ไม่ใช้ queue_free เพราะ refresh ถูกเรียกได้หลายรอบในเฟรมเดียว
@@ -192,25 +191,6 @@ class _StackedBar extends Control:
 			draw_rect(Rect2(x, 0, w, size.y), s.color)
 			x += w
 		draw_rect(r, WQTimeBudget.BAR_BORDER, false, 1.0)
-
-
-## แถบ "เหลือเท่าไหร่" พร้อมตัวเลขทับกลาง
-class _MeterBar extends Control:
-	var fill := 0.0
-	var text := ""
-
-	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		draw_rect(r, WQTimeBudget.BAR_BG)
-		draw_rect(Rect2(0, 0, size.x * clampf(fill, 0.0, 1.0), size.y), WQTimeBudget.METER_FILL)
-		draw_rect(r, WQTimeBudget.BAR_BORDER, false, 1.0)
-		var font := get_theme_default_font()
-		var fs := get_theme_default_font_size()
-		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		var at := Vector2((size.x - w) * 0.5, size.y * 0.5 + fs * 0.36)
-		# เงาบางๆ กันตัวเลขจมหายตรงรอยต่อระหว่างส่วนที่เติมกับพื้นหลัง
-		draw_string(font, at + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.7))
-		draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
 
 
 class _Swatch extends Control:

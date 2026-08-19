@@ -7,6 +7,8 @@ const DIM := Color("8fa6bd")
 const GOOD := Color("7ee08a")
 const BAD := Color("ff8080")
 
+signal deal_hovered(deal: Dictionary)   ## ส่งต่อจากการ์ดใบที่เมาส์ชี้อยู่ ให้แท่นโชว์ไปใช้
+
 var _p = null
 var _match: WQMatch
 var _title: Label
@@ -78,3 +80,4 @@ func _rebuild() -> void:
 		_grid.add_child(card)
 		card.bind(_p, d)
 		card.acted.connect(_queue_rebuild)
+		card.hovered.connect(func(dd): deal_hovered.emit(dd))

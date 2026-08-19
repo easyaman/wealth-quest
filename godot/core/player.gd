@@ -312,6 +312,30 @@ func get_study_need() -> int: return 3 + study_level
 func _fail(msg: String) -> Dictionary: return {"ok": false, "msg": msg}
 func _log(t: String, kind := "info") -> void: match_ref.log_line(t, kind, self)
 
+## ตัวเลขของดีลใบหนึ่งเมื่อมองจากผู้เล่นคนนี้ — pure function ไม่แตะ state
+## มีไว้ให้ UI และ world/ ใช้ตัวเลขชุดเดียวกับตอนกดซื้อจริงใน close_deal() เป๊ะๆ
+## ถ้าปล่อยให้แต่ละหน้าจอคำนวณเอง วันหนึ่งการ์ดจะโชว์เลขหนึ่ง แต่ตอนหักเงินได้อีกเลขหนึ่ง
+func deal_terms(d: Dictionary) -> Dictionary:
+	var cfg = WQData.cfg
+	var discount: bool = job.perkId == "discount"
+	var price: float = roundf(float(d.price) * 0.9) if discount else float(d.price)
+	var down := roundf(price * (float(d.down) / float(d.price)))
+	var debt := price - down
+	var income := roundf(float(d.income) * (price / float(d.price)))
+	var payment := debt * float(cfg.mortgage)
+	var cash_flow := roundf(income - payment)
+	var venue := place_for(act_for_kind(d.kind))
+	return {
+		"discount": discount, "price": price, "down": down, "debt": debt,
+		"income": income, "payment": payment, "cashflow": cash_flow,
+		# ผลตอบแทนต่อทุน %/เดือน — ตัวเลขที่ตัดสินใจจริงตามกฎ 12.2.1 ไม่ใช่ราคา
+		"roi": (cash_flow / down * 100.0) if down > 0 else 0.0,
+		"vol": float(d.get("vol", 0.0)),
+		"hours": action_cost(int(cfg.action_cost.deal)),
+		"venue": venue, "at_venue": venue == place, "travel": travel_cost(venue),
+		"affordable": cash >= down and debt <= get_credit_left(),
+	}
+
 func close_deal(deal_id: int) -> Dictionary:
 	var h := action_cost(int(WQData.cfg.action_cost.deal))
 	if not can_spend(h): return _fail("เวลาไม่พอ ต้องใช้ %d ชม. (เหลือ %d)" % [h, hours])

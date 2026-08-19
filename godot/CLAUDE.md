@@ -4,11 +4,13 @@
 
 ## โปรเจกต์นี้คืออะไร
 
-**Wealth Quest** — เกมการเงิน 2.5D สำหรับ PC/Steam ทำโดยนักพัฒนาคนเดียว
+**Wealth Quest** — เกมการเงิน 3D low poly (flat-shaded, กล้อง isometric) สำหรับ PC/Steam ทำโดยนักพัฒนาคนเดียว
 ผู้เล่นสวมบทอาชีพจริงในไทย แล้วต้องสร้างรายได้จากทรัพย์สินให้มากกว่ารายจ่าย
 โดยบริหารทรัพยากรสามอย่างที่ขัดแย้งกัน: **เงิน · เวลา (720 ชม./เดือน) · สุขภาพ**
 
 เอกสารออกแบบฉบับเต็มอยู่ที่ `../WEALTH-QUEST-GDD.md` — **อ่านบทที่ 3, 4, 13 ก่อนเริ่ม**
+ทิศทางงานอาร์ตอยู่ที่ `../ART-DIRECTION.md` — **อ่านก่อนแตะ `world/` หรือ `ui/theme/`**
+งานที่ต้องทำเป็น Sprint อยู่ที่ `../CLAUDE-CODE-BRIEF.md`
 
 ## สถานะปัจจุบัน
 
@@ -20,7 +22,11 @@
   ให้เดือนที่จบ · ความมั่งคั่ง · สุขภาพ · พาหนะ · อุปกรณ์ ตรงกันทุกช่อง (ดู "ตรวจว่ายังตรงกับ JS")
 - ✅ headless sim รันครบ 16 อาชีพ มัธยฐาน 57 เดือน ผ่านเกณฑ์ 40–60
 - ⬜ UI ยังเป็นแค่ RichTextLabel ตัวเดียว — ยังเดินทางบนแผนที่ผ่าน UI ไม่ได้
-- ⬜ ยังไม่มีงานอาร์ต เสียง หรือฉาก 2.5D
+- ✅ **Sprint A ของงานอาร์ตเสร็จแล้ว** — โครง 3D ทั้งชุดใช้เมชแทนที่ (ยังไม่มี `.glb` จริงสักไฟล์):
+  palette + วัสดุกลาง · แท่นโชว์ · ฉากเมือง 10 อาคาร + ตัวละครเดินได้ · `stat_bar` กลาง ·
+  ตัวอบไอคอน · `sim/world_check.gd`
+- ⬜ ยังไม่มีโมเดล `.glb` จริง ตัวละครยังเป็นแคปซูล อาคารยังเป็นกล่อง — ต่อที่ Sprint B
+- ⬜ ยังไม่มีเสียง
 
 ## ✅ งานแรกทำเสร็จแล้ว — พอร์ตรันได้ ตัวสุ่มตรง
 
@@ -129,7 +135,7 @@ core/       ตรรกะบริสุทธิ์ — rng, game_data, playe
 data/       ตารางสมดุลทั้งหมดเป็น JSON (สร้างจาก engine.js เดิม)
 sim/        headless simulation
 ui/         หน้าจอและ widget (ยังเป็น placeholder)
-world/      ฉาก 2.5D (ยังว่าง)
+world/      ฉาก 3D low poly — city/ showcase/ materials/ tools/ พร้อมแล้ว · models/ ยังว่าง (รอ .glb)
 ```
 
 ## ลำดับงานที่แนะนำ
@@ -143,7 +149,8 @@ world/      ฉาก 2.5D (ยังว่าง)
 4. **ด่าน 2** — ทอยเต๋าสุ่มความฝัน + เลือกลาออก/ทำงานต่อ (บทที่ 9)
 5. **บันทึก/โหลด + autosave 3 ช่อง** (`core/save.gd` พร้อมแล้ว ต่อ UI อย่างเดียว)
 6. **tutorial 5 เดือนแรก** — ลอกสเต็ปจากต้นแบบเว็บได้เลย (ตัวแปร `TUT` ใน `../ui.html`)
-7. ฉาก 2.5D และงานอาร์ต — **ทำท้ายสุด** ดูเหตุผลในบทที่ 12.3
+7. งานอาร์ต 3D — ~~Sprint A~~ ✅ เสร็จแล้ว → **ทำต่อที่ Sprint B** ใน `../CLAUDE-CODE-BRIEF.md`
+   (โมเดล `.glb` ชุดแรก + เลิกใช้อีโมจิใน UI) แล้วค่อย Sprint C (ฉากเมืองจริง + ภัยพิบัติ + VFX)
 
 ## สิ่งที่ห้ามทำโดยไม่ถามเจ้าของโปรเจกต์ก่อน
 
@@ -159,9 +166,13 @@ godot --headless --script res://sim/headless_sim.gd   # ทดสอบสมด
 godot --headless --script res://sim/save_check.gd     # เซฟ/โหลดเก็บครบไหม (รวม state ตัวสุ่ม)
 godot --headless --script res://sim/rng_check.gd      # ตัวสุ่มตรงกับ JS ไหม
 godot --headless --script res://sim/ui_check.gd       # ตรรกะวิดเจ็ต UI (ไม่ต้องเปิดหน้าต่าง)
+godot --headless --script res://sim/world_check.gd    # ฉาก 3D: เมือง + แท่นโชว์ + กฎ core ไม่รู้จัก world/
 godot --headless --quit                                # เช็ค syntax error ทั้งโปรเจกต์
 godot                                                  # เปิดเกม
 WQ_SHOT=/tmp/ui.png godot                              # เปิด ถ่ายภาพหน้าจอ แล้วปิดเอง
+
+godot --headless --script res://world/tools/palette_bake.gd   # อบ palette.png ใหม่จาก palette.gd
+godot --script res://world/tools/icon_bake.gd                 # อบไอคอนจากเมช (ห้ามใส่ --headless)
 ```
 
 **เพิ่ม `class_name` ใหม่แล้วต้องรัน `godot --headless --path . --import` ก่อน** ไม่งั้น
@@ -184,3 +195,57 @@ WQ_SHOT=/tmp/ui.png godot                              # เปิด ถ่า�
 - Godot มากับฟอนต์ที่ไม่มีสระ/วรรณยุกต์ไทย ข้อความจะกลายเป็นกล่องเปล่า
   `ui/main.gd` จึงยืมฟอนต์ไทยจากระบบผ่าน `SystemFont` — **ตอนจะปล่อยจริงต้องฝังฟอนต์ที่มีสิทธิ์ใช้งาน**
   ลงในโปรเจกต์ ไม่งั้นเครื่องที่ไม่มีฟอนต์ไทยจะอ่านไม่ออก
+
+## งานอาร์ต 3D (low poly · flat shaded)
+
+สรุปจาก `../ART-DIRECTION.md` — ถ้าขัดกัน ให้ยึด ART-DIRECTION **ยกเว้นข้อที่หมายเหตุไว้ว่าของจริงต่าง**
+
+- **สไตล์:** เมช low poly หน้าเรียบ สีจาก palette atlas แผ่นเดียว `world/materials/palette.png`
+  ไม่มี texture รายชิ้น · `DirectionalLight3D` ดวงเดียวมุมบนซ้าย · MSAA 4× · ไม่มี SSAO/SSR
+- **กล้องฉากเมือง:** Orthogonal size 22, rotation (-30°, 45°, 0) · x ของสถานที่ 0–100 → −25..+25 units
+- **สี** ทั้งเกมอ้าง `ui/theme/palette.gd` (`WQPalette`): money `#F2B233` · time `#4FC3F7`
+  · health `#F06292` · danger `#E53935` · win `#66BB6A` · bg `#0A1420`
+  — ตัวละคร/อาคาร/พาหนะ **ห้ามใช้สามสีแรกเป็นสีหลัก** เพราะจองไว้บอกสถานะ
+
+### มีอะไรอยู่แล้วบ้าง (Sprint A)
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `ui/theme/palette.gd` | `WQPalette` — สีกลางทั้งเกม + ตำแหน่งช่องสีบนแผ่น palette |
+| `ui/theme/fonts.gd` | `WQFonts.thai()` — ฟอนต์ไทยจากระบบ (Label3D ไม่กิน Theme จึงต้องยัดให้ตรงๆ) |
+| `ui/widgets/stat_bar.gd` | `WQStatBar` — แถบสถิติมาตรฐาน ใช้ทั้งงบเวลา สุขภาพ และแท่นโชว์ |
+| `world/materials/palette.png` + `flat.tres` | แผ่นสี 256×16 (32 ช่อง ใช้จริง 16) + วัสดุกลางของทุกเมช |
+| `world/showcase/` | `WQShowcase` — แท่นหมุน + gradient + กรอบมน + แถบสถิติใต้ภาพ |
+| `world/city/` | `WQCity` · `WQPlaceNode` · `WQAvatar` — ถนนเส้นเดียว 10 อาคาร + ตัวละครเดินได้ |
+| `world/tools/palette_bake.gd` | อบ `palette.png` จากค่าใน `palette.gd` |
+| `world/tools/icon_bake.gd` | อบไอคอน 34 ชิ้นจากเมช → `ui/theme/icons/<id>.png` |
+| `sim/world_check.gd` | เทสต์ฉาก 3D แบบ headless |
+
+### กฎเพิ่มสำหรับ `world/`
+
+1. `world/` **อ่าน** state ผ่าน `bind(player|match)` + สัญญาณเท่านั้น **ห้ามแก้ state** — คลิกอาคาร → ยิง
+   `place_clicked(place_id)` ให้ `ui/main.gd` เป็นคนเรียก `travel_to()`
+2. `core/` และ `sim/` ห้ามอ้างถึง `world/` — headless sim ต้องรันได้โดยไม่โหลด 3D เลย
+   (`sim/world_check.gd` บังคับกฎนี้ให้อัตโนมัติแล้ว)
+3. `randf()` ใน `world/` ใช้ได้เฉพาะแอนิเมชันที่ไม่กระทบสถานะและไม่กระทบการอ่านฉาก
+   — ตำแหน่งและความสูงอาคารคำนวณจาก `x` ใน `places.json` เสมอ ไม่งั้นเมืองจะสลับหน้าตาทุกครั้งที่เปิดเกม
+4. แอนิเมชันเดินไปอาคารต้องข้ามได้ (สั่งซ้ำระหว่างเดิน = วาร์ป) — ห้ามให้ผู้เล่นรอแอนิเมชัน
+5. ตัวเลขบนแท่นโชว์ต้องมาจาก `core` — ดีลใช้ `WQPlayer.deal_terms()` ตัวเดียวกับที่ `deal_card` ใช้
+   และเป็นสูตรชุดเดียวกับตอน `close_deal()` หักเงินจริง
+6. ก่อนจบทุก Sprint: `godot --headless --quit` + sim ทั้งชุด + `WQ_SHOT=/tmp/ui.png godot` แล้วเปิดดูภาพจริง
+
+### ที่ของจริงต่างจาก ART-DIRECTION / CLAUDE-CODE-BRIEF — อย่าแก้กลับ
+
+- **`icon_bake` รัน headless ไม่ได้** โหมด headless ของ Godot ใช้ตัวเรนเดอร์หลอก
+  `viewport.get_texture().get_image()` คืน `null` ต้องรันแบบเปิดหน้าต่าง (สคริปต์ปิดตัวเองให้)
+- **API ของแท่นโชว์ชื่อ `show_item()` ไม่ใช่ `show()`** เพราะ `Control` มี `show()` ของตัวเองอยู่แล้ว
+  ทับแล้ว GDScript จะ parse ไม่ผ่านทั้งไฟล์
+- **id ของพาหนะคือ `public · moto · usedcar · newcar · luxury`** ตาม `data/places.json`
+  (ART-DIRECTION ข้อ 3 เขียน `bus/motorbike/car_used/...` ไว้ผิด) — กฎ "ชื่อไฟล์ = id ใน data" ชนะเสมอ
+- **ดีลไม่มี id คงที่** (`id` เป็นเลขรันไทม์) โมเดลและไอคอนของดีลจึงอ้างด้วย *ประเภท* แทน
+  → `world/models/assets/<kind>.glb` เช่น `micro.glb`, `realestate.glb`
+- **`SubViewport` ทุกตัวต้องตั้ง `own_world_3d = true`** ค่าเริ่มต้นคือใช้โลก 3D ร่วมกับพ่อ
+  ถ้าลืม ฉากเมืองกับแท่นโชว์จะไปกองในโลกใบเดียวกัน แล้วถนนกับตึกจะโผล่หลังของบนแท่นโชว์
+  (`world_check` ตรวจข้อนี้ให้แล้ว)
+- **`palette.png.import` ตั้ง `detect_3d/compress_to=0` ไว้** ห้ามเปลี่ยน —
+  ไม่งั้น Godot จะ reimport เป็น texture บีบอัดตอนเอาไปใช้ใน 3D แล้วสีในพาเลตจะเพี้ยนทีละนิด

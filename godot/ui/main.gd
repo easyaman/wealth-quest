@@ -1,14 +1,18 @@
 extends Control
 ## หน้าจอหลักชั่วคราว — มีวิดเจ็ตจริงแล้ว: ⏳ งบเวลา · งบการเงิน · ตลาดดีล · หนี้สิน
-## งานถัดไปตามบทที่ 12 ของ GDD: health_bar → standings → แผงสถานที่/การเดินทาง
+## และงานอาร์ต 3D ชุดแรก: ฉากเมือง (world/city) + แท่นโชว์ (world/showcase)
+## งานถัดไปตามบทที่ 12 ของ GDD: health_bar เต็มรูปแบบ → standings → แผงสถานที่/การเดินทาง
 
-const BG := Color("0a1420")
+const BG := WQPalette.BG_DEEP
 
 var m: WQMatch
 var time_budget: WQTimeBudget
 var deal_market: WQDealMarket
 var statement: WQStatement
 var debt_list: WQDebtList
+var showcase: WQShowcase
+var city: WQCity
+var health_bar: WQStatBar
 var log_label: RichTextLabel
 var _scroll: ScrollContainer
 var _shot_path := ""
@@ -27,6 +31,11 @@ func _ready() -> void:
 		{"name": "บอท B", "job_id": "pilot", "is_ai": true},
 	]})
 	m.month_ended.connect(func(_mo): _refresh())
+	city.bind(m)
+	# คลิกอาคารในฉาก 3D ไม่เรียก travel_to() เอง — ยิงสัญญาณกลับมาให้ ui/ ตัดสินใจ
+	# (ART-DIRECTION 4.1 · world/ อ่านสถานะได้ แต่ห้ามแก้)
+	city.place_clicked.connect(_on_place_clicked)
+	deal_market.deal_hovered.connect(_on_deal_hovered)
 	_refresh()
 
 	# ถ่ายภาพหน้าจอแล้วปิดตัวเอง — ใช้ตรวจงาน UI จาก terminal ได้โดยไม่ต้องเปิดเกมเอง
@@ -37,15 +46,10 @@ func _ready() -> void:
 	if scroll_to != "": _scroll.set_deferred("scroll_vertical", scroll_to.to_int())
 
 
-## Godot มากับฟอนต์ที่ไม่มีสระและวรรณยุกต์ไทย ข้อความทั้งเกมจะกลายเป็นกล่องเปล่า
-## จึงต้องยืมฟอนต์ไทยจากระบบก่อน — ตอนจะปล่อยจริงค่อยฝังฟอนต์ที่มีสิทธิ์ใช้งานลงในโปรเจกต์
+## รายละเอียดว่าทำไมต้องยืมฟอนต์จากระบบอยู่ใน ui/theme/fonts.gd
 func _apply_thai_font() -> void:
-	var f := SystemFont.new()
-	f.font_names = PackedStringArray([
-		"Noto Sans Thai", "Sarabun", "Thonburi", "Leelawadee UI", "Tahoma"])
-	f.allow_system_fallback = true   # อีโมจิมาจากฟอนต์ระบบผ่านทางนี้ ไม่ต้องระบุชื่อเอง
 	var t := Theme.new()
-	t.default_font = f
+	t.default_font = WQFonts.thai()
 	t.default_font_size = 14
 	theme = t
 
@@ -80,6 +84,10 @@ func _build_layout() -> void:
 	time_budget = WQTimeBudget.new()
 	center.add_child(time_budget)
 
+	# แถบสุขภาพใช้ WQStatBar ตัวเดียวกับแถบเวลา — วิดเจ็ต health_bar เต็มรูปแบบยังเป็นงานถัดไป
+	health_bar = WQStatBar.new()
+	center.add_child(health_bar)
+
 	statement = WQStatement.new()
 	center.add_child(statement)
 
@@ -89,11 +97,25 @@ func _build_layout() -> void:
 	debt_list = WQDebtList.new()
 	center.add_child(debt_list)
 
+	# คอลัมน์ขวา: ฉากเมือง 3D อยู่บน แท่นโชว์อยู่กลาง บันทึกอยู่ล่าง
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 12)
+	cols.add_child(right)
+
+	city = load("res://world/city/City.tscn").instantiate()
+	city.custom_minimum_size = Vector2(0, 300)
+	right.add_child(city)
+
+	showcase = load("res://world/showcase/Showcase.tscn").instantiate()
+	showcase.custom_minimum_size = Vector2(0, 330)
+	right.add_child(showcase)
+
 	log_label = RichTextLabel.new()
 	log_label.bbcode_enabled = true
 	log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	log_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	cols.add_child(log_label)
+	right.add_child(log_label)
 
 
 func _refresh() -> void:
@@ -103,6 +125,12 @@ func _refresh() -> void:
 	deal_market.bind(p, m)
 	statement.bind(p)
 	debt_list.bind(p)
+	city.bind_player(p)
+	health_bar.set_stat("สุขภาพ", "%d / 100" % int(p.health), p.health / 100.0,
+		WQPalette.HEALTH if p.health >= 40.0 else WQPalette.DANGER)
+
+	# แท่นโชว์ตั้งต้นที่ดีลใบแรกในตลาด เพื่อไม่ให้แท่นว่างเปล่าตอนเปิดเกม
+	if showcase.id == "" and not m.deals.is_empty(): _on_deal_hovered(m.deals[0])
 
 	var s := "[b]เดือนที่ %d[/b]  |  %s %s\n" % [m.month, p.job.icon, p.pname]
 	s += "เงินสด %s  ·  สุทธิ %s  ·  📍 %s  ·  ❤️ %d\n" % [
@@ -113,6 +141,22 @@ func _refresh() -> void:
 	for i in mini(12, m.logs.size()):
 		s += "  [%d] %s\n" % [m.logs[i].month, m.logs[i].text]
 	log_label.text = s
+
+
+## ดีลไม่มี id ของตัวเองที่คงที่ (id เป็นเลขรันไทม์) โมเดลจึงอ้างด้วย "ประเภทของดีล"
+## → world/models/assets/<kind>.glb เช่น micro.glb, realestate.glb
+func _on_deal_hovered(d: Dictionary) -> void:
+	var p = m.get_current()
+	if p == null: return
+	showcase.show_item("assets", String(d.kind),
+		WQDealCard.showcase_stats(p, d), "%s %s" % [d.icon, d.name])
+
+
+func _on_place_clicked(place_id: String) -> void:
+	var p = m.get_current()
+	if p == null or p.is_ai: return
+	p.travel_to(place_id)
+	_refresh()
 
 
 func _unhandled_input(e: InputEvent) -> void:

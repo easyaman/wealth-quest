@@ -29,9 +29,9 @@ func _init() -> void:
 	_eq("จำนวนป้ายสีเท่าจำนวนช่วง", w._legend.get_child_count(), w._bar.segments.size())
 
 	# --- สัญญาณ changed ต้องพาวิดเจ็ตอัปเดตเอง ---
-	var before := w._left.text
+	var before := w._left.value_text
 	p.set_sleep(0)          # นอน 5 ชม. → เวลาว่างเพิ่ม ประสิทธิภาพตก
-	_ne("แถบเวลาที่เหลืออัปเดตหลังเปลี่ยนการนอน", w._left.text, before)
+	_ne("แถบเวลาที่เหลืออัปเดตหลังเปลี่ยนการนอน", w._left.value_text, before)
 	_has("ชั่วโมงที่ใช้ได้จริงอัปเดตตาม", w._usable.text, str(p.get_hours_max()))
 
 	# --- refresh ซ้ำในเฟรมเดียวต้องไม่ทำให้โหนดสะสม ---

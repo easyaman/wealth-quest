@@ -7,6 +7,10 @@ config/description="เกมการเงิน 2.5D — เงิน · เ�
 run/main_scene="res://ui/Main.tscn"
 config/features=PackedStringArray("4.3")
 
+[autoload]
+
+WQAudio="*res://audio/audio.gd"
+
 [display]
 window/size/viewport_width=1600
 window/size/viewport_height=900

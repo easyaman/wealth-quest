@@ -269,6 +269,90 @@ func get_committed_hours() -> int:
 func get_raw_free_hours() -> int:
 	return maxi(0, int(WQData.cfg.hours_per_month) - get_committed_hours() + bonus_hours - time_penalty)
 
+# ========== สุขภาพ ==========
+## ช่วงสุขภาพตาม GDD บทที่ 4 — ชื่อช่วง + ตัวคูณน้ำหนักเหตุการณ์สุขภาพ
+##
+## **ตัวคูณต้องให้ค่าเดียวกับที่ roll_event() เคยเขียนไว้ตรงๆ เป๊ะ**
+## (3.2 เมื่อ <40 · 2.0 เมื่อ <55 · 1.2 เมื่อ <70 · 0.6 ที่เหลือ)
+## ถ้าเพี้ยนแม้แต่ช่องเดียว ผลจะหลุดจาก engine.js แบบหาสาเหตุยาก
+## ตารางนี้มีหกช่วงแต่ตัวคูณมีสี่ค่า เพราะ "ย่ำแย่" กับ "วิกฤต" เจอน้ำหนักเท่ากัน
+## ต่างกันตรงที่วิกฤตมีโอกาสล้มป่วยหนักซ้อนเข้ามาอีกชั้น (ดู HEALTH_CRISIS)
+const HEALTH_BANDS := [
+	{"min": 85.0, "name": "แข็งแรงมาก", "event_mul": 0.6},
+	{"min": 70.0, "name": "ปกติดี", "event_mul": 0.6},
+	{"min": 55.0, "name": "เริ่มโทรม", "event_mul": 1.2},
+	{"min": 40.0, "name": "ไม่ค่อยดี", "event_mul": 2.0},
+	{"min": 25.0, "name": "ย่ำแย่", "event_mul": 3.2},
+	{"min": 0.0, "name": "วิกฤต", "event_mul": 3.2},
+]
+const HEALTH_CRISIS := 25.0        ## ต่ำกว่านี้ = 30%/เดือน ล้มป่วยหนัก
+const HEALTH_CRISIS_CHANCE := 0.30
+const OVERWORK_HARD := 300         ## ชั่วโมงงาน+งานเสริมเกินนี้ = −3.0 สุขภาพ/เดือน
+const OVERWORK_SOFT := 255         ## เกินนี้ = −1.5
+
+
+func health_band() -> Dictionary:
+	for b in HEALTH_BANDS:
+		if health >= float(b.min): return b
+	return HEALTH_BANDS[HEALTH_BANDS.size() - 1]
+
+
+## ตัวคูณน้ำหนักเหตุการณ์สุขภาพของช่วงที่อยู่ตอนนี้ — roll_event() กับ UI ใช้ตัวเดียวกัน
+func health_event_mul() -> float:
+	return float(health_band().event_mul)
+
+
+## ชั่วโมงงานรวมงานเสริมของเดือนนี้ — ตัวที่ตัดสินโทษทำงานหนัก
+func get_work_load() -> int:
+	return get_work_hours() + side_used * int(WQData.cfg.action_cost.side)
+
+
+## สุขภาพจะเปลี่ยนเท่าไหร่ตอนสิ้นเดือน — **settle() เรียกตัวนี้ตัวเดียว**
+## UI จึงโชว์ตัวเลขชุดเดียวกับที่จะเกิดขึ้นจริง ไม่ใช่คำนวณสูตรซ้ำแล้วค่อยๆ เพี้ยนจากกัน
+## ลำดับการบวกลบต้องเหมือนเดิมเป๊ะ ไม่งั้นทศนิยมจะไม่ตรงกับ engine.js
+func health_delta() -> float:
+	var dh: float = float(sleep_opt().health) + float(food_opt().health) - 0.35 \
+		- get_sleep_debt() * 1.3 + float(get_veh().hp)
+	var load := get_work_load()
+	if load > OVERWORK_HARD: dh -= 3.0
+	elif load > OVERWORK_SOFT: dh -= 1.5
+	if job.perkId == "hustle": dh += 0.8
+	return dh
+
+
+## แยกเป็นรายการว่าสุขภาพเดือนนี้บวกลบมาจากอะไรบ้าง — สำหรับให้ UI อธิบายผู้เล่น
+## ผลรวมของรายการนี้ต้องเท่ากับ health_delta() เสมอ (sim/ui_check.gd บังคับข้อนี้ไว้)
+func health_parts() -> Array:
+	var parts: Array = [
+		{"label": "การนอน (%d ชม./คืน)" % int(sleep_opt().h), "value": float(sleep_opt().health)},
+		{"label": "อาหาร (%s)" % String(food_opt().label), "value": float(food_opt().health)},
+		{"label": "อายุที่มากขึ้น", "value": -0.35},
+	]
+	var debt := get_sleep_debt()
+	if debt > 0:
+		parts.append({"label": "นอนขาดเกณฑ์อาชีพ %d ชม./คืน" % debt, "value": -debt * 1.3})
+	var veh_hp := float(get_veh().hp)
+	if veh_hp != 0.0:
+		parts.append({"label": "พาหนะ (%s)" % String(get_veh().name), "value": veh_hp})
+	var load := get_work_load()
+	if load > OVERWORK_HARD:
+		parts.append({"label": "ทำงานหนักมาก (%d ชม.)" % load, "value": -3.0})
+	elif load > OVERWORK_SOFT:
+		parts.append({"label": "ทำงานหนัก (%d ชม.)" % load, "value": -1.5})
+	if job.perkId == "hustle":
+		parts.append({"label": "เพิร์กขยัน", "value": 0.8})
+	return parts
+
+
+## อีกกี่เดือนถึงจะร่วงเข้าโซนวิกฤต ถ้าสุขภาพยังเปลี่ยนด้วยอัตราเดิม
+## คืน -1 ถ้าเดือนนี้สุขภาพไม่ได้ติดลบ (ไม่มีวันถึง) หรืออยู่ในโซนวิกฤตอยู่แล้ว
+func months_to_crisis() -> int:
+	if health < HEALTH_CRISIS: return 0
+	var dh := health_delta()
+	if dh >= 0.0: return -1
+	return int(ceil((health - HEALTH_CRISIS) / -dh))
+
+
 func get_efficiency() -> float:
 	var short_pen := get_sleep_debt() * 0.05
 	return clampf((0.40 + 0.60 * health / 100.0) * (1.0 - float(sleep_opt().penalty) - short_pen), 0.28, 1.05)
@@ -587,6 +671,18 @@ func enter_phase2(d: Dictionary, do_retire: bool) -> void:
 	hours = get_hours_max()
 	match_ref.log_line("%s ตั้งเป้าหมายใหม่: %s %s" % [pname, d.icon, d.name], "win", null)
 
+## ความคืบหน้าของความฝัน — ต้องผ่าน **ทั้งสองเกณฑ์** ถึงจะอ้างสิทธิ์ได้
+## คืนสัดส่วนของทั้งคู่ + บอกว่าข้อไหนคือตัวถ่วง เพื่อให้ UI ชี้ได้ว่ายังขาดอะไร
+## (อยู่ใน core เพราะเป็นเกณฑ์ชนะของเกม ไม่ใช่การจัดหน้าจอ — `can_claim_dream()` ใช้เกณฑ์เดียวกัน)
+func dream_progress() -> Dictionary:
+	if phase < 2 or dream.is_empty():
+		return {"wealth": 0.0, "income": 0.0, "worst": 0.0, "worst_label": ""}
+	var w := get_net_worth() / maxf(1.0, float(dream.cost))
+	var i := get_passive_income() / maxf(1.0, float(dream.passiveReq))
+	return {"wealth": w, "income": i, "worst": minf(w, i),
+		"worst_label": "ความมั่งคั่ง" if w <= i else "รายได้ต่อเดือน"}
+
+
 func can_claim_dream() -> bool:
 	return phase == 2 and get_net_worth() >= dream.cost and get_passive_income() >= dream.passiveReq
 
@@ -624,16 +720,10 @@ func settle() -> void:
 	cash += get_total_income() - get_total_expenses()
 	if downsize_left > 0: downsize_left -= 1
 
-	# --- สุขภาพ ---
-	var dh: float = float(sleep_opt().health) + float(food_opt().health) - 0.35 \
-		- get_sleep_debt() * 1.3 + float(get_veh().hp)
-	var load := get_work_hours() + side_used * int(cfg.action_cost.side)
-	if load > 300: dh -= 3.0
-	elif load > 255: dh -= 1.5
-	if job.perkId == "hustle": dh += 0.8
-	health = clampf(health + dh, 0, 100)
+	# --- สุขภาพ --- (สูตรอยู่ที่ health_delta() ที่เดียว UI อ่านตัวเดียวกันไปโชว์)
+	health = clampf(health + health_delta(), 0, 100)
 
-	if health < 25 and r.next() < 0.30:
+	if health < HEALTH_CRISIS and r.next() < HEALTH_CRISIS_CHANCE:
 		var bill := roundf(get_total_expenses() * (1.2 + r.next() * 1.6) * get_med_factor())
 		cash -= bill
 		downsize_left = maxi(downsize_left, 1)
@@ -697,7 +787,7 @@ func roll_event() -> void:
 	var r = match_ref.rng
 	var list: Array = WQData.events2 if phase >= 2 else WQData.events1
 	var base: float = get_total_expenses() if phase >= 2 else maxf(salary, get_total_expenses() * 0.6)
-	var hp_boost := 3.2 if health < 40 else (2.0 if health < 55 else (1.2 if health < 70 else 0.6))
+	var hp_boost := health_event_mul()
 	var total := 0.0
 	var weights: Array = []
 	for e in list:

@@ -1,7 +1,10 @@
 extends Control
-## หน้าจอหลักชั่วคราว — มีวิดเจ็ตจริงแล้ว: ⏳ งบเวลา · งบการเงิน · ตลาดดีล · หนี้สิน
-## และงานอาร์ต 3D ชุดแรก: ฉากเมือง (world/city) + แท่นโชว์ (world/showcase)
-## งานถัดไปตามบทที่ 12 ของ GDD: health_bar เต็มรูปแบบ → standings → แผงสถานที่/การเดินทาง
+## หน้าจอหลักชั่วคราว — มีวิดเจ็ตจริงแล้ว: 🏁 อันดับ · ⏳ งบเวลา · ❤️ สุขภาพ
+## · งบการเงิน · ตลาดดีล · หนี้สิน · ร้านค้า
+## และงานอาร์ต 3D: ฉากเมือง (world/city) + แท่นโชว์ (world/showcase) + หน้าเลือกอาชีพ
+##
+## **ยังไม่ได้จัดเป็นสามคอลัมน์ตามบทที่ 12 ของ GDD** — ตอนนี้ยังเป็นคอลัมน์กลางเลื่อนยาว
+## กับคอลัมน์ขวาที่เป็นฉาก 3D งานถัดไปคือแผงสถานที่/การเดินทาง แล้วค่อยจัดเลย์เอาต์จริง
 
 const BG := WQPalette.BG_DEEP
 const SEED := 20260815
@@ -14,7 +17,8 @@ var debt_list: WQDebtList
 var shop: WQShop
 var showcase: WQShowcase
 var city: WQCity
-var health_bar: WQStatBar
+var health_bar: WQHealthBar
+var standings: WQStandings
 var log_label: RichTextLabel
 var _scroll: ScrollContainer
 var setup_screen: WQJobSelect
@@ -107,11 +111,13 @@ func _build_layout() -> void:
 	center.add_theme_constant_override("separation", 12)
 	_scroll.add_child(center)
 
+	standings = WQStandings.new()
+	center.add_child(standings)
+
 	time_budget = WQTimeBudget.new()
 	center.add_child(time_budget)
 
-	# แถบสุขภาพใช้ WQStatBar ตัวเดียวกับแถบเวลา — วิดเจ็ต health_bar เต็มรูปแบบยังเป็นงานถัดไป
-	health_bar = WQStatBar.new()
+	health_bar = WQHealthBar.new()
 	center.add_child(health_bar)
 
 	statement = WQStatement.new()
@@ -157,8 +163,8 @@ func _refresh() -> void:
 	debt_list.bind(p)
 	shop.bind(p)
 	city.bind_player(p)
-	health_bar.set_stat("สุขภาพ", "%d / 100" % int(p.health), p.health / 100.0,
-		WQPalette.HEALTH if p.health >= 40.0 else WQPalette.DANGER)
+	health_bar.bind(p)
+	standings.bind(p, m)
 
 	# แท่นโชว์ตั้งต้นที่ดีลใบแรกในตลาด เพื่อไม่ให้แท่นว่างเปล่าตอนเปิดเกม
 	if showcase.id == "" and not m.deals.is_empty(): _on_deal_hovered(m.deals[0])

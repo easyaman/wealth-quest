@@ -66,6 +66,8 @@ func _init() -> void:
 	_check_statement(m)
 	_check_debt_list(m)
 	_check_shop(m)
+	_check_health_bar(m)
+	_check_standings(m)
 
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -295,6 +297,114 @@ func _button_named(node: Node, text: String) -> Button:
 		var b := _button_named(c, text)
 		if b != null: return b
 	return null
+
+
+## ❤️ สุขภาพ — ตัวเลขต้องเป็นชุดเดียวกับที่ settle() จะหักจริง ไม่ใช่คำนวณซ้ำในฝั่ง UI
+func _check_health_bar(m: WQMatch) -> void:
+	var p = m.players[0]
+	p.health = 75.0
+	p.set_sleep(2)                    # นอน 7 ชม. = ค่ามาตรฐาน
+	var w := WQHealthBar.new()
+	w.bind(p)
+
+	_has("โชว์สุขภาพปัจจุบัน", w._bar.value_text, "%d / 100" % int(p.health))
+	_has("โชว์ชื่อช่วงสุขภาพจาก core", w._bar.label_text, String(p.health_band().name))
+	_has("โชว์ประสิทธิภาพเป็น %", w._cost.text, "%d%%" % roundi(p.get_efficiency() * 100.0))
+	# หัวใจของวิดเจ็ต: แปลสุขภาพเป็นชั่วโมงที่หายไป ต้องเท่ากับ ดิบ − ใช้ได้จริง เป๊ะ
+	_has("แปลงสุขภาพเป็นชั่วโมงที่หายไป", w._cost.text,
+		"%d ชม." % (p.get_raw_free_hours() - p.get_hours_max()))
+	_eq("แยกรายการที่มาของสุขภาพครบ", w._parts.get_child_count(), p.health_parts().size())
+
+	# ผลรวมของรายการย่อยต้องเท่ากับยอดที่ core จะหักจริง ไม่งั้นวิดเจ็ตกำลังโกหก
+	var sum := 0.0
+	for part in p.health_parts(): sum += float(part.value)
+	_eq("ผลรวมรายการย่อย = ยอดที่ core จะหักจริง",
+		snappedf(sum, 0.0001), snappedf(p.health_delta(), 0.0001))
+
+	# --- คำใบ้ต้องเปลี่ยนตามสถานการณ์ (กฎ 12.2.6) ไม่ใช่ข้อความคงที่ ---
+	p.set_sleep(0)                    # นอน 5 ชม. → นอนขาดเกณฑ์อาชีพ
+	_eq("นอนขาดจริงแล้ว", p.get_sleep_debt() > 0, true)
+	_eq("เตือนเรื่องนอนขาดเฉพาะตอนนอนขาดจริง", _notes_in(w, "นอนน้อยกว่า") > 0, true)
+	p.set_sleep(3)                    # นอน 8 ชม. → ไม่ขาดแล้ว
+	_eq("นอนพอแล้วคำเตือนต้องหายไป", _notes_in(w, "นอนน้อยกว่า"), 0)
+
+	p.health = 20.0
+	p.changed.emit()
+	_eq("สุขภาพต่ำกว่าเกณฑ์วิกฤตแล้วเตือนเรื่องล้มป่วย", _notes_in(w, "โซนวิกฤต") > 0, true)
+	_eq("อยู่ในโซนวิกฤตแล้วไม่ต้องนับถอยหลังอีก", _notes_in(w, "จะเข้าโซนวิกฤต"), 0)
+
+	# --- refresh ซ้ำต้องไม่ทำให้โหนดสะสม ---
+	var n_parts := w._parts.get_child_count()
+	var n_notes := w._notes.get_child_count()
+	for _i in 3: w.refresh()
+	_eq("รายการย่อยไม่สะสมเมื่อ refresh ซ้ำ", w._parts.get_child_count(), n_parts)
+	_eq("คำใบ้ไม่สะสมเมื่อ refresh ซ้ำ", w._notes.get_child_count(), n_notes)
+
+	p.health = 75.0
+	p.set_sleep(2)
+	w.free()
+
+
+## 🏆 อันดับ — ลำดับต้องมาจาก core และแถบต้องเปลี่ยนความหมายตามด่านของแต่ละคน
+func _check_standings(m: WQMatch) -> void:
+	var mm := WQMatch.new()
+	mm.setup({"mode": "solo", "seed": 20260815, "players": [
+		{"name": "คุณ", "job_id": "teacher", "is_ai": false},
+		{"name": "บอท A", "job_id": "programmer", "is_ai": true},
+		{"name": "บอท B", "job_id": "pilot", "is_ai": true},
+	]})
+	var me = mm.players[0]
+	var w := WQStandings.new()
+	w.bind(me, mm)
+
+	_eq("มีแถวครบทุกคนในแมตช์", w._rows.get_child_count(), mm.players.size())
+	_has("หัวข้อบอกเดือนปัจจุบัน", w._title.text, str(mm.month))
+	# ห้ามใช้ 🏁 เพราะเป็นอีโมจิขาวดำ จะเห็นเป็นกล่องเปล่าบนพื้นเข้มของเกม
+	_eq("ไม่ใช้อีโมจิขาวดำในหัวข้อ", w._title.text.contains("🏁"), false)
+
+	# เรียงตามลำดับที่ core จัดให้ ไม่ใช่ลำดับที่วิดเจ็ตคิดเอง
+	var order: Array = mm.standings()
+	_has("แถวแรกคือคนที่ core จัดไว้อันดับหนึ่ง",
+		_row_text(w, 0), String(order[0].pname))
+
+	# ด่าน 1 = โชว์อิสรภาพ · ด่าน 2 = โชว์ความคืบหน้าความฝัน
+	_has("ด่าน 1 โชว์อิสรภาพ", _row_text(w, 0), "ด่าน 1")
+	me.enter_phase2(WQData.dreams[0], false)
+	me.changed.emit()
+	var mine := _row_for(w, String(me.pname))
+	_has("เข้าด่าน 2 แล้วแถวเปลี่ยนไปพูดเรื่องความฝัน", mine, "ด่าน 2")
+	_has("บอกว่าข้อไหนคือตัวถ่วง", mine, String(me.dream_progress().worst_label))
+
+	# --- refresh ซ้ำต้องไม่ทำให้แถวสะสม ---
+	for _i in 3: w.refresh()
+	_eq("แถวไม่สะสมเมื่อ refresh ซ้ำ", w._rows.get_child_count(), mm.players.size())
+	w.free()
+
+
+func _notes_in(w: WQHealthBar, needle: String) -> int:
+	var n := 0
+	for c in w._notes.get_children(): n += _labels_with(c, needle)
+	return n
+
+
+func _row_text(w: WQStandings, i: int) -> String:
+	return _all_text(w._rows.get_child(i))
+
+
+func _row_for(w: WQStandings, pname: String) -> String:
+	for row in w._rows.get_children():
+		var t := _all_text(row)
+		if t.contains(pname): return t
+	return ""
+
+
+func _all_text(node: Node) -> String:
+	var out := ""
+	if node is Label: out += (node as Label).text + " "
+	if node is WQStatBar:
+		out += (node as WQStatBar).label_text + " " + (node as WQStatBar).value_text + " "
+	for c in node.get_children(): out += _all_text(c)
+	return out
 
 
 ## หาปุ่มลัด (25% / 50% / ทั้งหมด) ของหนี้ก้อนที่ชื่อขึ้นต้นตามที่ระบุ

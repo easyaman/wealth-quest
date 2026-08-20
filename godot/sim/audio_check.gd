@@ -96,7 +96,22 @@ func _check_files() -> void:
 	if stamp == null: return
 	var marks = JSON.parse_string(stamp.get_as_text())
 	stamp.close()
-	_eq("baked.json จดครบทุก id", marks is Dictionary and marks.size() == WQBank.ids().size(), true)
+	_eq("baked.json เป็น Dictionary", marks is Dictionary, true)
+	if not marks is Dictionary: return
+
+	# เช็กแค่ "จำนวนเท่ากัน" ไม่พอ — 30 รายการที่ key ผิดหรือแฮชเก่าก็นับผ่านได้เหมือนกัน
+	# ทั้งที่เป็นความเสียหายแบบเดียวกับที่ตราประทับนี้มีไว้จับ ต้องเทียบ "ชุด id" ตรงเป๊ะ
+	# แล้วไล่เทียบแฮชที่จดไว้กับแฮชจริงของไฟล์บนดิสก์ทีละตัว
+	var mark_ids: Array = marks.keys()
+	mark_ids.sort()
+	_eq("baked.json จดครบทุก id ไม่ขาดไม่เกิน", mark_ids, WQBank.ids())
+
+	for id in WQBank.ids():
+		var path := "%s/%s.wav" % [SFX_DIR, id]
+		if not ResourceLoader.exists(path): continue
+		var abs := ProjectSettings.globalize_path(path)
+		_eq("แฮชที่จดของ \"%s\" ตรงกับไฟล์บนดิสก์จริง" % id,
+			String(marks.get(id, "")), FileAccess.get_sha256(abs))
 
 
 func _eq(label: String, got, want) -> void:

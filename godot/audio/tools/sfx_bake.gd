@@ -10,6 +10,12 @@ extends SceneTree
 ## `save_to_wav()` เขียนแค่ chunk fmt กับ data ไม่มีช่องใส่ตราประทับแบบที่ glTF มี `copyright`
 ## จึงจด sha256 ของไฟล์ที่อบเองไว้ใน baked.json แทน — ถ้าแฮชของไฟล์บนดิสก์ไม่ตรงกับที่จด
 ## แปลว่ามีคนวางไฟล์จริงทับ **ตัวอบจะไม่แตะไฟล์นั้นเด็ดขาด**
+##
+## `baked.json` ถูกบันทึกทันทีหลังเขียน/ซ่อมตราของแต่ละไฟล์ ไม่ใช่รอจบทั้งชุด — ถ้าตัวอบโดน
+## ขัดจังหวะกลางทาง (ปิดเครื่อง, ctrl-C) ไฟล์ที่เขียนไปแล้วก่อนหน้าต้องมีตราจดครบ ไม่งั้นรอบถัดไป
+## จะเจอไฟล์ที่แฮชตรงกับของตัวเองเป๊ะแต่ไม่มีตราจด แล้วเข้าใจผิดว่าเป็นของคนทำเสียง — ไฟล์นั้นจะถูก
+## ปฏิเสธไม่ให้แตะไปตลอดกาลจนกว่าจะใช้ WQ_SFX_FORCE ทั้งที่มันเป็นผลผลิตของตัวอบเองแท้ๆ
+## (ดู _bake(): เช็ก "แฮชตรงกับที่ synth ผลิตตอนนี้เป๊ะไหม" ก่อนเช็กตราเสมอ เพื่อไม่ให้เกิดเคสนี้)
 
 const SFX_DIR := "res://audio/sfx"
 const STAMP := "res://audio/sfx/baked.json"
@@ -32,6 +38,14 @@ func _init() -> void:
 	for id in WQBank.ids():
 		if not only.is_empty() and not only.has(id): continue
 		_bake(String(id), marks, force)
+
+	# ลบตราของ id ที่หลุดออกจาก WQBank.SPEC ไปแล้ว — ไม่งั้น baked.json จะมีคีย์ค้างเก่าตลอดไป
+	# ทำเฉพาะรอบที่อบครบทุกตัว (ไม่ได้กรองด้วย -- id...) เท่านั้น — รอบที่กรองเห็นแค่บางส่วน
+	# ถ้าลบตรงนี้ตอนกรองไว้ ตราของ id ที่ไม่ได้แตะรอบนี้จะหายไปทั้งหมด แล้วรอบถัดไปจะเจอ
+	# ปัญหาเดียวกับที่คอมเมนต์บนสุดอธิบายไว้ (ไฟล์ตัวเองถูกเข้าใจผิดว่าเป็นของคนทำ) กับทุก id ที่เหลือ
+	if only.is_empty():
+		for k in marks.keys().duplicate():
+			if not WQBank.ids().has(k): marks.erase(k)
 
 	_save_marks(marks)
 	print("sfx_bake: เขียน %d ตัว · ข้ามของที่คนทำ %d · ไม่เปลี่ยน %d%s" % [
@@ -58,28 +72,38 @@ func _bake(id: String, marks: Dictionary, force: bool) -> void:
 	if err != OK:
 		_fails += 1
 		print("  ❌ %s — เขียนไฟล์ที่พักไม่ได้ (error %d)" % [id, err])
+		DirAccess.remove_absolute(tmp_abs)
 		return
 	var fresh := FileAccess.get_sha256(tmp_abs)
 
 	if FileAccess.file_exists(abs):
 		var have := FileAccess.get_sha256(abs)
+
+		# แฮชของไฟล์บนดิสก์ตรงกับที่ synth ผลิตตอนนี้เป๊ะ = ไฟล์นี้เป็นของตัวอบเองแน่นอน
+		# ไม่ว่า baked.json จะมีตราจดไว้หรือไม่ก็ตาม — เช็กข้อนี้ก่อนเช็กตราเสมอ ไม่งั้นไฟล์ของตัวอบเอง
+		# ที่ตราหายไป (เช่นตัวอบโดนขัดจังหวะก่อนบันทึก baked.json) จะโดนเข้าใจผิดว่าเป็นของคนทำ
+		if have == fresh:
+			if String(marks.get(id, "")) != fresh:
+				marks[id] = fresh
+				_save_marks(marks)  # ซ่อมตราที่หายไปทันที ไม่รอจบทั้งชุด
+			_skipped_same += 1
+			DirAccess.remove_absolute(tmp_abs)
+			return
+
 		if have != String(marks.get(id, "")) and not force:
 			_skipped_human += 1
 			print("  🙌 %s — มีเสียงที่คนทำอยู่แล้ว ไม่แตะ" % id)
-			DirAccess.remove_absolute(tmp_abs)
-			return
-		if have == fresh:
-			_skipped_same += 1
-			marks[id] = fresh
 			DirAccess.remove_absolute(tmp_abs)
 			return
 
 	if DirAccess.copy_absolute(tmp_abs, abs) != OK:
 		_fails += 1
 		print("  ❌ %s — ก๊อปจากที่พักไม่ได้" % id)
+		DirAccess.remove_absolute(tmp_abs)
 		return
 	DirAccess.remove_absolute(tmp_abs)
 	marks[id] = fresh
+	_save_marks(marks)  # จดตราทันทีหลังเขียนไฟล์ — ถ้าตัวอบโดนขัดจังหวะพอดีหลังจากนี้ ไฟล์จะไม่ถูกเข้าใจผิดว่าเป็นของคนทำ
 	_written += 1
 	print("  ✅ %s -> %s" % [id, path])
 

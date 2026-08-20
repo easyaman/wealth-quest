@@ -6,12 +6,15 @@ extends SceneTree
 ## "มีของครบไหม · ยิงถูกจังหวะไหม" ไม่ได้ตรวจว่าฟังแล้วรู้เรื่อง
 ## ฟังจริงด้วย:  WQ_SFX=<id> godot --path .
 
+const SFX_DIR := "res://audio/sfx"
+
 var _fails := 0
 
 
 func _init() -> void:
 	_check_bank()
 	_check_synth()
+	_check_files()
 	print("audio_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
 
@@ -64,6 +67,36 @@ func _check_synth() -> void:
 	_eq("สตรีมเป็น 16-bit", st.format, AudioStreamWAV.FORMAT_16_BITS)
 	_eq("สตรีมเป็น mono", st.stereo, false)
 	_eq("อัตราสุ่มตรงกับ synth", st.mix_rate, WQSynth.RATE)
+
+
+## ไฟล์เสียงต้องครบและต้องไม่มีไฟล์กำพร้า
+## ไฟล์กำพร้า = เคยมี id นี้แล้วลบออกจาก bank แต่ลืมลบไฟล์ → repo โตขึ้นเรื่อยๆ โดยไม่มีใครเล่น
+func _check_files() -> void:
+	var on_disk := {}
+	var d := DirAccess.open(SFX_DIR)
+	if d == null:
+		_fails += 1
+		print("  ❌ ไม่มีโฟลเดอร์ %s" % SFX_DIR)
+		return
+	for f in d.get_files():
+		if f.ends_with(".wav"): on_disk[f.get_basename()] = true
+
+	for id in WQBank.ids():
+		var path := "%s/%s.wav" % [SFX_DIR, id]
+		_eq("มีไฟล์เสียง \"%s\"" % id, ResourceLoader.exists(path), true)
+		if not ResourceLoader.exists(path): continue
+		var st = load(path)
+		_eq("\"%s\" โหลดเป็น AudioStreamWAV ได้" % id, st is AudioStreamWAV, true)
+		on_disk.erase(id)
+
+	_eq("ไม่มีไฟล์เสียงกำพร้า", on_disk.keys(), [])
+
+	var stamp := FileAccess.open("%s/baked.json" % SFX_DIR, FileAccess.READ)
+	_eq("มี baked.json", stamp != null, true)
+	if stamp == null: return
+	var marks = JSON.parse_string(stamp.get_as_text())
+	stamp.close()
+	_eq("baked.json จดครบทุก id", marks is Dictionary and marks.size() == WQBank.ids().size(), true)
 
 
 func _eq(label: String, got, want) -> void:

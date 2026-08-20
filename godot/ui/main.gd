@@ -1,6 +1,6 @@
 extends Control
 ## หน้าจอหลักชั่วคราว — มีวิดเจ็ตจริงแล้ว: 🏆 อันดับ · ⏳ งบเวลา · ❤️ สุขภาพ
-## · 📍 สถานที่/การเดินทาง · งบการเงิน · ตลาดดีล · หนี้สิน · ร้านค้า
+## · 📍 สถานที่/การเดินทาง · งบการเงิน · ตลาดดีล · 🏘️ ทรัพย์สิน · หนี้สิน · ร้านค้า
 ## และงานอาร์ต 3D: ฉากเมือง (world/city) + แท่นโชว์ (world/showcase) + หน้าเลือกอาชีพ
 ##
 ## **ยังไม่ได้จัดเป็นสามคอลัมน์ตามบทที่ 12 ของ GDD** — ตอนนี้ยังเป็นคอลัมน์กลางเลื่อนยาว
@@ -20,6 +20,7 @@ var city: WQCity
 var health_bar: WQHealthBar
 var standings: WQStandings
 var travel_panel: WQTravelPanel
+var asset_list: WQAssetList
 var log_label: RichTextLabel
 var _scroll: ScrollContainer
 var setup_screen: WQJobSelect
@@ -132,6 +133,10 @@ func _build_layout() -> void:
 	deal_market = WQDealMarket.new()
 	center.add_child(deal_market)
 
+	# ทรัพย์สินอยู่ถัดจากตลาดดีลตามเลย์เอาต์บทที่ 12 — ซื้อจากตลาดแล้วมากองตรงนี้
+	asset_list = WQAssetList.new()
+	center.add_child(asset_list)
+
 	debt_list = WQDebtList.new()
 	center.add_child(debt_list)
 
@@ -172,6 +177,7 @@ func _refresh() -> void:
 	health_bar.bind(p)
 	standings.bind(p, m)
 	travel_panel.bind(p)
+	asset_list.bind(p)
 
 	# แท่นโชว์ตั้งต้นที่ดีลใบแรกในตลาด เพื่อไม่ให้แท่นว่างเปล่าตอนเปิดเกม
 	if showcase.id == "" and not m.deals.is_empty(): _on_deal_hovered(m.deals[0])

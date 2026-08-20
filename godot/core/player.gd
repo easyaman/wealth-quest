@@ -389,23 +389,26 @@ func can_spend(h: int) -> bool: return hours >= h
 # ========== เงิน ==========
 func get_food_cost() -> float: return round(food_base * float(food_opt().costMul))
 
+## ตัวคูณรายได้ของทรัพย์สินชิ้นนี้จากภัยพิบัติที่กำลังมีผลอยู่
+## แยกออกมาเพราะเดิมเขียนซ้ำอยู่สองที่ พอ Sprint C ทำ UI ที่ต้องโชว์รายได้รายชิ้น
+## ก็เกือบจะมีที่ที่สาม — ถ้าวันหนึ่งเพิ่มภัยพิบัติที่กระทบทรัพย์สินประเภทใหม่ จะได้แก้ที่เดียว
+## (รับ mods เข้ามาแทนที่จะเรียก get_mods() เอง เพื่อให้ลูปที่วนทรัพย์สินหลายชิ้นเรียกครั้งเดียวพอ)
+func asset_kind_mod(a: Dictionary, m: Dictionary) -> float:
+	if a.kind == "business" or a.kind == "micro": return float(m.business)
+	if a.kind == "realestate": return float(m.realestate)
+	return 1.0
+
 func get_passive_income() -> float:
 	var m: Dictionary = match_ref.get_mods()
 	var total := 0.0
 	for a in assets:
 		if a.burned > 0: continue
-		var k := 1.0
-		if a.kind == "business" or a.kind == "micro": k = m.business
-		elif a.kind == "realestate": k = m.realestate
-		total += a.income * k
+		total += a.income * asset_kind_mod(a, m)
 	return total
 
 func asset_net(a: Dictionary) -> float:
 	var m: Dictionary = match_ref.get_mods()
-	var k := 1.0
-	if a.kind == "business" or a.kind == "micro": k = m.business
-	elif a.kind == "realestate": k = m.realestate
-	var inc: float = 0.0 if a.burned > 0 else a.income * k
+	var inc: float = 0.0 if a.burned > 0 else a.income * asset_kind_mod(a, m)
 	return inc - a.debt * float(WQData.cfg.mortgage) * m.rate
 
 func get_debt_payments() -> float:
@@ -437,6 +440,44 @@ func get_total_debt() -> float:
 
 func asset_price(a: Dictionary) -> float:
 	return a.value * match_ref.market_index * a.drift
+
+## สเปกของทรัพย์สินหนึ่งชิ้นเมื่อมองจากผู้เล่นคนนี้ — pure function ไม่แตะ state
+##
+## **ราคาขายต้องคำนวณแบบเดียวกับ `sell_asset()` เป๊ะ** ไม่งั้นผู้เล่นจะกดขายแล้วได้เงินไม่ตรง
+## กับที่เห็นบนจอ ซึ่งเป็นการโกหกที่ร้ายแรงที่สุดแบบหนึ่งของเกมการเงิน
+##
+## `roi` คิดจาก "เงินที่ควักเองไปจริง" (`cost` = เงินดาวน์) ไม่ใช่ราคาเต็มของทรัพย์สิน
+## ตามกฎการนำเสนอข้อ 12.2.1 — อสังหาฯ ที่ดาวน์ 20% ให้ผลตอบแทนต่อทุนสูงกว่าที่เห็นจากราคาเต็มมาก
+func asset_terms(a: Dictionary) -> Dictionary:
+	var m: Dictionary = match_ref.get_mods()
+	var price := asset_price(a)
+	var has_offer: bool = a.offer != null
+	# ไม่มีข้อเสนอ = ขายเองโดนหักค่านายหน้า/ภาษี (GDD 5.3)
+	var sell_price: float = float(a.offer.price) if has_offer \
+		else price * float(WQData.cfg.sell_fee)
+	var net := asset_net(a)
+	var act := act_for_kind(String(a.kind))
+	return {
+		"price": price,
+		"income": 0.0 if a.burned > 0 else float(a.income) * asset_kind_mod(a, m),
+		"payment": float(a.debt) * float(WQData.cfg.mortgage) * float(m.rate),
+		"net": net,
+		"cost": float(a.cost),
+		"roi": net / maxf(1.0, float(a.cost)) * 100.0,
+		"debt": float(a.debt),
+		"has_offer": has_offer,
+		"offer_ttl": int(a.offer.ttl) if has_offer else 0,
+		"sell_price": sell_price,
+		# เงินที่จะเข้ากระเป๋าจริงหลังปิดหนี้ที่ผูกกับชิ้นนี้ (ตรงกับบรรทัดใน sell_asset)
+		"proceeds": sell_price - float(a.debt),
+		"gain": sell_price - float(a.value),
+		"premium": sell_price / maxf(1.0, price) - 1.0,
+		"hours": int(WQData.cfg.action_cost.sell),
+		"can_sell_here": can_do_here(act),
+		"sell_place": place_name(act),
+		"sick": int(a.sick),
+		"burned": int(a.burned),
+	}
 
 func get_asset_value() -> float:
 	var t := 0.0

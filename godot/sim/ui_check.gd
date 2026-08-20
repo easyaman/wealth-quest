@@ -69,6 +69,7 @@ func _init() -> void:
 	_check_health_bar(m)
 	_check_standings(m)
 	await _check_travel_panel(m)
+	await _check_asset_list(m)
 
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -446,6 +447,85 @@ func _check_travel_panel(m: WQMatch) -> void:
 	w.free()
 
 
+## 🏘️ ทรัพย์สิน — ตัวเลขต้องตรงกับตอนขายจริง และข้อเสนอต้องไม่จมอยู่กลางรายการ
+func _check_asset_list(m: WQMatch) -> void:
+	var p = m.players[0]
+	p.assets.clear()
+	p.place = "estate"
+	p.hours = p.get_hours_max()
+	var w := WQAssetList.new()
+	w.bind(p)
+	_has("ไม่มีทรัพย์สินแล้วบอกให้ไปซื้อดีลใบแรก", _all_text(w._list), "ยังไม่มีทรัพย์สิน")
+
+	# ซื้อดีลจริงจากตลาด ไม่ใช่ยัด dictionary ปลอมเข้าไป
+	var deal: Dictionary = {}
+	for d in m.deals:
+		if String(d.kind) == "micro" and float(d.down) <= p.cash: deal = d
+	if deal.is_empty(): deal = m.deals[0]
+	p.cash = maxf(p.cash, float(deal.down) + 1000.0)
+	p.place = WQData.place(p.place_for(p.act_for_kind(String(deal.kind)))).id
+	var res: Dictionary = p.close_deal(int(deal.id))
+	_eq("ซื้อดีลสำเร็จ", res.get("ok", false), true)
+	await process_frame
+	_eq("มีแถวทรัพย์สินหนึ่งชิ้น", w._list.get_child_count(), 1)
+
+	var a: Dictionary = p.assets[0]
+	var t: Dictionary = p.asset_terms(a)
+	var text := _all_text(w._list)
+	_has("โชว์ผลตอบแทนต่อทุนเป็น %/เดือน (กฎ 12.2.1)", text, "%.1f%%" % float(t.roi))
+	_has("ปุ่มขายติดราคาเป็นชั่วโมง", text, "%d ชม." % int(t.hours))
+	_has("ราคาขายบนปุ่มตรงกับที่ core คิด", text, WQFmt.m(float(t.sell_price)))
+
+	# ไม่มีข้อเสนอต้องเตือนว่าขายเองโดนหักค่านายหน้า ก่อนกด ไม่ใช่หลังกด
+	_eq("ยังไม่มีข้อเสนอ", bool(t.has_offer), false)
+	_has("เตือนเรื่องค่านายหน้าตอนยังไม่มีข้อเสนอ", text, "ค่านายหน้า")
+
+	# --- มีข้อเสนอแล้วต้องถูกดันขึ้นบนสุด (GDD 5.3 = วิธีเร่งที่เร็วที่สุดในเกม) ---
+	var second: Dictionary = {}
+	for d in m.deals:
+		if float(d.down) <= p.cash: second = d
+	if not second.is_empty():
+		p.cash = maxf(p.cash, float(second.down) + 1000.0)
+		p.hours = p.get_hours_max()
+		p.place = WQData.place(p.place_for(p.act_for_kind(String(second.kind)))).id
+		p.close_deal(int(second.id))
+	await process_frame
+	if p.assets.size() >= 2:
+		# ใส่ข้อเสนอให้ "ชิ้นที่กระแสเงินสดน้อยกว่า" เพื่อพิสูจน์ว่าข้อเสนอชนะการเรียงตามรายได้
+		var lo = p.assets[0] if p.asset_terms(p.assets[0]).net <= p.asset_terms(p.assets[1]).net 			else p.assets[1]
+		lo.offer = {"price": p.asset_price(lo) * 1.25, "ttl": 2}
+		p.changed.emit()
+		await process_frame
+		_has("ชิ้นที่มีข้อเสนออยู่แถวบนสุด", _all_text(w._list.get_child(0)), String(lo.name))
+		_has("บอกส่วนต่างเหนือราคาตลาด", _all_text(w._list.get_child(0)), "สูงกว่าราคาตลาด")
+		_has("บอกว่าข้อเสนอเหลือกี่เดือน", _all_text(w._list.get_child(0)), "เหลือ 2 เดือน")
+
+	# --- กดขายแล้วต้องขายได้จริง และแถวหายไป ---
+	var before: int = p.assets.size()
+	p.hours = p.get_hours_max()
+	var sell_btn := _sell_button(w, String(p.assets[0].name))
+	if sell_btn != null and not sell_btn.disabled:
+		sell_btn.pressed.emit()
+		await process_frame
+		_eq("กดขายแล้วทรัพย์สินหายไปจริง", p.assets.size(), before - 1)
+		_eq("แถวหายตามไปด้วย", w._list.get_child_count(), maxi(1, p.assets.size()))
+
+	# --- refresh ซ้ำต้องไม่ทำให้แถวสะสม ---
+	var n := w._list.get_child_count()
+	for _i in 3: w.refresh()
+	_eq("แถวไม่สะสมเมื่อ refresh ซ้ำ", w._list.get_child_count(), n)
+	w.free()
+	p.assets.clear()
+	p.place = "home"
+
+
+func _sell_button(w: WQAssetList, asset_name: String) -> Button:
+	for row in w._list.get_children():
+		if _labels_with(row, asset_name) == 0: continue
+		return _button_of(row)
+	return null
+
+
 func _button_text(node: Node) -> String:
 	var b := _button_of(node)
 	return "" if b == null else b.text
@@ -486,6 +566,8 @@ func _row_for(w: WQStandings, pname: String) -> String:
 func _all_text(node: Node) -> String:
 	var out := ""
 	if node is Label: out += (node as Label).text + " "
+	# ต้องเก็บข้อความบนปุ่มด้วย — ราคาชั่วโมงตามกฎ 12.2.3 อยู่บนปุ่ม ไม่ใช่บน Label
+	if node is Button: out += (node as Button).text + " "
 	if node is WQStatBar:
 		out += (node as WQStatBar).label_text + " " + (node as WQStatBar).value_text + " "
 	for c in node.get_children(): out += _all_text(c)

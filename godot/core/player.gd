@@ -92,6 +92,11 @@ func food_opt() -> Dictionary:
 		if f.id == food_id: return f
 	return WQData.cfg.food_options[1]
 
+## โทษของการนอนไม่ถึงเกณฑ์อาชีพ คิดต่อ 1 ชม./คืนที่ขาด — โทษนี้ซ้อนบนค่าของตัวเลือกเอง
+## อยู่ตรงนี้ที่เดียวเพราะมันถูกใช้ทั้งใน health_delta() · get_efficiency() และป้ายราคาบนปุ่ม
+const SLEEP_DEBT_HP := 1.3       ## สุขภาพที่หายไป/เดือน
+const SLEEP_DEBT_EFF := 0.05     ## ประสิทธิภาพที่หายไป
+
 func set_sleep(i: int) -> Dictionary:
 	if not can_do_here("sleep"): return _fail("ตั้งค่าการนอนได้ที่บ้านเท่านั้น")
 	sleep_idx = clampi(i, 0, WQData.cfg.sleep_options.size() - 1)
@@ -107,6 +112,37 @@ func set_food(id: String) -> Dictionary:
 			break
 	changed.emit()
 	return {"ok": true}
+
+## ตัวเลขของ "ตัวเลือกการนอน" หนึ่งอันเมื่อมองจากอาชีพของคนนี้ — pure function ไม่แตะ state
+##
+## มีไว้เพราะโทษของการนอนน้อยมี **สองชั้น**: ค่าคงที่ของตัวเลือกเอง กับโทษที่เพิ่มตามจำนวน
+## ชั่วโมงที่ขาดจากเกณฑ์อาชีพ ("นอน 6 ชม." แปลว่าคนละอย่างกันสำหรับครูกับนักบิน)
+## ถ้าปล่อยให้ UI คูณเลขพวกนี้เอง ปุ่มจะโชว์โทษของอาชีพผิดคนโดยไม่มีใครรู้
+func sleep_terms(i: int) -> Dictionary:
+	var opts: Array = WQData.cfg.sleep_options
+	var idx := clampi(i, 0, opts.size() - 1)
+	var o: Dictionary = opts[idx]
+	var debt := maxi(0, get_sleep_need() - int(o.h))
+	return {
+		"index": idx, "label": String(o.label), "note": String(o.note),
+		"h": int(o.h), "hours": int(o.hours), "debt": debt, "meets_need": debt == 0,
+		"health": float(o.health) - debt * SLEEP_DEBT_HP,
+		"eff_penalty": float(o.penalty) + debt * SLEEP_DEBT_EFF,
+		"current": idx == sleep_idx,
+	}
+
+
+## ตัวเลขของ "ตัวเลือกอาหาร" หนึ่งอัน — ค่าอาหารคิดจากฐานของอาชีพ จึงเป็นคนละราคากันทุกคน
+func food_terms(id: String) -> Dictionary:
+	for f in WQData.cfg.food_options:
+		if String(f.id) != id: continue
+		return {
+			"id": id, "label": String(f.label), "icon": String(f.icon), "note": String(f.note),
+			"hours": int(f.hours), "cost": round(food_base * float(f.costMul)),
+			"health": float(f.health), "current": id == food_id,
+		}
+	return {}
+
 
 # ========== แผนที่และการเดินทาง ==========
 func get_veh() -> Dictionary: return WQData.vehicle(vehicle)
@@ -331,7 +367,7 @@ func get_work_load() -> int:
 ## ลำดับการบวกลบต้องเหมือนเดิมเป๊ะ ไม่งั้นทศนิยมจะไม่ตรงกับ engine.js
 func health_delta() -> float:
 	var dh: float = float(sleep_opt().health) + float(food_opt().health) - 0.35 \
-		- get_sleep_debt() * 1.3 + float(get_veh().hp)
+		- get_sleep_debt() * SLEEP_DEBT_HP + float(get_veh().hp)
 	var load := get_work_load()
 	if load > OVERWORK_HARD: dh -= 3.0
 	elif load > OVERWORK_SOFT: dh -= 1.5
@@ -349,7 +385,7 @@ func health_parts() -> Array:
 	]
 	var debt := get_sleep_debt()
 	if debt > 0:
-		parts.append({"label": "นอนขาดเกณฑ์อาชีพ %d ชม./คืน" % debt, "value": -debt * 1.3})
+		parts.append({"label": "นอนขาดเกณฑ์อาชีพ %d ชม./คืน" % debt, "value": -debt * SLEEP_DEBT_HP})
 	var veh_hp := float(get_veh().hp)
 	if veh_hp != 0.0:
 		parts.append({"label": "พาหนะ (%s)" % String(get_veh().name), "value": veh_hp})
@@ -373,7 +409,7 @@ func months_to_crisis() -> int:
 
 
 func get_efficiency() -> float:
-	var short_pen := get_sleep_debt() * 0.05
+	var short_pen := get_sleep_debt() * SLEEP_DEBT_EFF
 	return clampf((0.40 + 0.60 * health / 100.0) * (1.0 - float(sleep_opt().penalty) - short_pen), 0.28, 1.05)
 
 func get_hours_max() -> int:

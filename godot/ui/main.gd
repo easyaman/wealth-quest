@@ -19,6 +19,7 @@ var health_bar: WQHealthBar
 var statement: WQStatement
 var time_budget: WQTimeBudget
 var deal_market: WQDealMarket
+var action_panel: WQActionPanel
 var travel_panel: WQTravelPanel
 var asset_list: WQAssetList
 var debt_list: WQDebtList
@@ -105,6 +106,17 @@ func _start_match(job_id: String, roll: int, bonus_hours: int) -> void:
 	else:
 		tutorial.start()
 
+	# WQ_PLACE=<place_id> วางผู้เล่นไว้ที่นั่นเลยโดยไม่เสียเวลาเดินทาง — ใช้ถ่ายภาพหน้าจอ
+	# ของแผงที่หน้าตาเปลี่ยนตามสถานที่ (ฟิตเนส/รีสอร์ตกางแพ็กเกจ · ธนาคารกางปุ่มกู้)
+	var forced_place := OS.get_environment("WQ_PLACE")
+	if forced_place != "" and not WQData.place(forced_place).is_empty():
+		var me2 = m.get_current()
+		me2.place = forced_place
+		# ต้องยิง `changed` เอง — วิดเจ็ตฟังสัญญาณนี้ ไม่ได้อ่านค่าใหม่ตอน _refresh()
+		# (bind() ของวิดเจ็ตจะคืนทันทีถ้าเป็นผู้เล่นคนเดิม)
+		me2.changed.emit()
+		_refresh()
+
 	# WQ_DREAM=1 ดันผู้เล่นไปที่จังหวะ "ออกจากสนามแข่งหนูได้แล้ว" ทันที
 	# เพื่อดูหน้าทอยความฝัน (GDD บทที่ 9) โดยไม่ต้องเล่นจริง 20–50 เดือนก่อน
 	if OS.get_environment("WQ_DREAM") != "":
@@ -126,6 +138,7 @@ func _adopt_match(new_match: WQMatch) -> void:
 	tutorial.bind(m.get_current(), m, {
 		"time": time_budget, "deals": deal_market, "city": city, "shop": shop,
 		"travel": travel_panel, "statement": statement, "goal": goal_panel,
+		"actions": action_panel,
 		"health": health_bar, "standings": standings, "hud": hud,
 	})
 	_refresh()
@@ -214,6 +227,11 @@ func _build_layout() -> void:
 	center.add_child(time_budget)
 	deal_market = WQDealMarket.new()
 	center.add_child(deal_market)
+	# แผงลงมือทำอยู่ติดกับตลาดดีลโดยตั้งใจ — คำถามที่เกมนี้ถามซ้ำทุกเดือนคือ
+	# "ชั่วโมงก้อนนี้เอาไปแลกเงินก้อนเดียว หรือเอาไปซื้อของที่จ่ายเราทุกเดือน"
+	# ถ้าสองแผงนี้อยู่คนละที่ ผู้เล่นจะเทียบมันไม่ได้เลย
+	action_panel = WQActionPanel.new()
+	center.add_child(action_panel)
 	travel_panel = WQTravelPanel.new()
 	center.add_child(travel_panel)
 	asset_list = WQAssetList.new()
@@ -250,6 +268,7 @@ func _build_layout() -> void:
 	# (ART-DIRECTION 4.1 · world/ อ่านสถานะได้ แต่ห้ามแก้) แผงเดินทางเข้าทางเดียวกันเป๊ะ
 	city.place_clicked.connect(_on_place_clicked)
 	travel_panel.travel_requested.connect(_on_place_clicked)
+	action_panel.travel_requested.connect(_on_place_clicked)
 	deal_market.deal_hovered.connect(_on_deal_hovered)
 	shop.picked.connect(_on_shop_picked)
 	hud.end_turn_pressed.connect(_end_turn)
@@ -294,6 +313,7 @@ func _refresh() -> void:
 	health_bar.bind(p)
 	standings.bind(p, m)
 	travel_panel.bind(p)
+	action_panel.bind(p)
 	asset_list.bind(p)
 	hud.bind(p, m)
 	banner.bind(m)

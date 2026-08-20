@@ -74,6 +74,8 @@ func _init() -> void:
 	_check_banner(m)
 	_check_hint(m)
 	await _check_goal_panel(m)
+	await _check_action_panel()
+	_check_lifestyle()
 	await _check_dice()
 	await _check_dream_roll()
 
@@ -641,6 +643,198 @@ func _check_goal_panel(m: WQMatch) -> void:
 	_eq("กดแล้วทำความฝันสำเร็จจริง", p.phase, 3)
 	_has("จบแล้วหัวข้อเปลี่ยนเป็นสำเร็จ", w._title.text, "สำเร็จ")
 	w.free()
+
+
+## 🎯 แผงลงมือทำ — ปุ่มของการกระทำที่ core ทำได้ (ข้อ 7 ของลำดับงาน)
+## สิ่งที่ต้องจริงเสมอ: ราคาชั่วโมงอยู่บนปุ่ม · อยู่ผิดที่แล้วปุ่มกลายเป็นปุ่มเดินทางที่ไม่ย้ายเอง ·
+## กดไม่ได้ต้องบอกเหตุผล · และตัวเลขบนปุ่มต้องตรงกับที่ core หักจริงตอนกด
+func _check_action_panel() -> void:
+	var mm := WQMatch.new()
+	mm.setup({"mode": "solo", "seed": 20260815,
+		"players": [{"name": "คุณ", "job_id": "teacher", "is_ai": false}]})
+	var p = mm.players[0]
+	p.place = "home"
+	p.hours = p.get_hours_max()
+	var w := WQActionPanel.new()
+	w.bind(p)
+
+	_eq("มีแถวครบทุกการกระทำ", w._list.get_child_count(), WQActionPanel.ACTS.size())
+
+	# --- อยู่บ้าน: พักผ่อนกดได้ทันที และราคาต้องตรงกับที่ core หักจริง ---
+	var rest_btn := _act_button(w, "พักผ่อนที่บ้าน")
+	_eq("มีปุ่มพักผ่อนที่บ้าน", rest_btn != null, true)
+	_has("ปุ่มติดราคาเป็นชั่วโมง", rest_btn.text, "%d ชม." % p.act_cost("rest"))
+	_eq("อยู่บ้านแล้วกดได้", rest_btn.disabled, false)
+	var h0: int = p.hours
+	var hp0: float = p.health
+	rest_btn.pressed.emit()
+	await process_frame
+	_eq("กดแล้วเวลาถูกหักเท่าที่ปุ่มบอก", h0 - p.hours, p.act_cost("rest"))
+	_eq("กดแล้วสุขภาพเพิ่มจริง", p.health > hp0, true)
+
+	# --- อยู่ผิดที่: ปุ่มต้องกลายเป็นปุ่มเดินทาง และห้ามย้ายผู้เล่นเอง (กฎเดียวกับแผงเดินทาง) ---
+	var ot_btn := _act_button(w, "รับ OT")
+	_has("ปุ่มของที่ไกลบอกค่าเดินทาง", ot_btn.text, "เดินทาง %d ชม." % p.travel_cost("office"))
+	_eq("บอกว่าต้องไปที่ไหนก่อน", _labels_with(_row_of(w, "รับ OT"), "ต้องไปที่"), 1)
+	var got: Array = []
+	w.travel_requested.connect(func(id): got.append(id))
+	var place0: String = p.place
+	var hours0: int = p.hours
+	ot_btn.pressed.emit()
+	_eq("กดแล้วยิงสัญญาณบอกปลายทาง", got, ["office"])
+	_eq("แผงไม่ย้ายผู้เล่นเอง", p.place, place0)
+	_eq("แผงไม่หักเวลาผู้เล่นเอง", p.hours, hours0)
+
+	# --- กดไม่ได้ต้องบอกเหตุผล ไม่ใช่ปุ่มเทาเฉยๆ ---
+	p.place = "office"
+	p.side_used = int(WQData.cfg.side_job_max_count)
+	p.changed.emit()
+	await process_frame
+	ot_btn = _act_button(w, "รับ OT")
+	_eq("โควตางานเสริมเต็มแล้วกดไม่ได้", ot_btn.disabled, true)
+	_eq("บอกเหตุผลว่าโควตาเต็ม", _labels_with(_row_of(w, "รับ OT"), "ครบ"), 1)
+
+	p.side_used = 0
+	p.hours = 1
+	p.changed.emit()
+	await process_frame
+	_eq("เวลาไม่พอแล้วกดไม่ได้", _act_button(w, "รับ OT").disabled, true)
+	_eq("บอกเหตุผลว่าเวลาไม่พอ", _labels_with(_row_of(w, "รับ OT"), "เวลาไม่พอ"), 1)
+
+	# --- ยืนอยู่ที่ฟิตเนสแล้วต้องเห็นทุกแพ็กเกจ ไม่ใช่ปุ่มเดียวรวมๆ ---
+	p.place = "gym"
+	p.hours = p.get_hours_max()
+	p.cash = 20000.0
+	p.changed.emit()
+	await process_frame
+	for pk in WQData.gym_packs:
+		_eq("มีปุ่มของแพ็กเกจ %s" % String(pk.name),
+			_act_button(w, String(pk.name)) != null, true)
+	var daily: Dictionary = WQData.gym_packs[0]
+	var pack_btn := _act_button(w, String(daily.name))
+	_has("ปุ่มแพ็กเกจติดราคาเป็นชั่วโมง", pack_btn.text, "%d ชม." % int(daily.hours))
+	var cash0: float = p.cash
+	h0 = p.hours
+	hp0 = p.health
+	pack_btn.pressed.emit()
+	await process_frame
+	_eq("กดแพ็กเกจแล้วเวลาถูกหักเท่าที่ปุ่มบอก", h0 - p.hours, int(daily.hours))
+	_eq("กดแพ็กเกจแล้วเงินถูกหักเท่าราคาจริง", cash0 - p.cash, float(daily.cost))
+	_eq("กดแพ็กเกจแล้วสุขภาพเพิ่มจริง", p.health > hp0, true)
+
+	# แพ็กเกจรายเดือนที่ซื้อแล้วต้องกลายเป็น "ฟรี" ไม่ใช่เก็บเงินซ้ำ
+	p.gym_pack = "monthly"
+	p.changed.emit()
+	await process_frame
+	_eq("แพ็กเกจรายเดือนที่ซื้อแล้วบอกว่าจ่ายไปแล้ว",
+		_labels_with(_row_of(w, "แพ็กเกจรายเดือน"), "จ่ายไปแล้ว"), 1)
+
+	# --- ที่ธนาคาร: ปุ่มกู้ด่วนต้องกู้ได้ตามยอดที่เขียนไว้บนปุ่มเป๊ะ ---
+	p.place = "bank"
+	p.liabilities.clear()
+	p.hours = p.get_hours_max()
+	p.changed.emit()
+	await process_frame
+	var loan_row := _row_of(w, "ยื่นกู้")
+	_eq("มีปุ่มกู้ด่วนครบทุกระดับ", _buttons_in(loan_row).size(), WQActionPanel.LOAN_QUICK.size())
+	var full_btn: Button = _buttons_in(loan_row)[2]
+	_has("ปุ่มกู้ติดราคาเป็นชั่วโมง", full_btn.text, "%d ชม." % p.act_cost("loan"))
+	var want: float = roundf(p.get_credit_left() / WQActionPanel.LOAN_STEP) * WQActionPanel.LOAN_STEP
+	cash0 = p.cash
+	full_btn.pressed.emit()
+	await process_frame
+	_eq("กดแล้วได้เงินสดเท่ายอดที่ปุ่มบอก", p.cash - cash0, want)
+	_eq("หนี้ก้อนใหม่เท่ายอดที่ปุ่มบอก", float(p.liabilities[0].balance), want)
+
+	# --- refresh ซ้ำต้องไม่ทำให้แถวสะสม ---
+	p.place = "home"
+	p.changed.emit()
+	await process_frame
+	var n := w._list.get_child_count()
+	for _i in 3: w.refresh()
+	_eq("แถวไม่สะสมเมื่อ refresh ซ้ำ", w._list.get_child_count(), n)
+
+	# --- ผูกกับผู้เล่นคนใหม่ต้องถอดสัญญาณเดิม ---
+	var q := WQPlayer.new()
+	q.setup(mm, {"name": "อีกคน", "job_id": "programmer", "is_ai": true})
+	w.bind(q)
+	_eq("ถอดสัญญาณของผู้เล่นคนเดิมแล้ว", p.changed.is_connected(w._queue_rebuild), false)
+	_eq("ต่อสัญญาณของผู้เล่นคนใหม่แล้ว", q.changed.is_connected(w._queue_rebuild), true)
+	w.free()
+
+
+## 😴🍽️ ตัวเลือกการนอน/อาหารในแผงงบเวลา — ปุ่มพวกนี้ **ห้ามถูกสร้างใหม่ตอนกด**
+## เพราะแผงงบเวลาต่อ changed เข้ากับ refresh() ตรงๆ ถ้าสร้างใหม่ ปุ่มจะถูก free ระหว่างส่งสัญญาณ
+func _check_lifestyle() -> void:
+	var mm := WQMatch.new()
+	mm.setup({"mode": "solo", "seed": 20260815,
+		"players": [{"name": "คุณ", "job_id": "teacher", "is_ai": false}]})
+	var p = mm.players[0]
+	p.place = "home"
+	var w := WQTimeBudget.new()
+	w.bind(p)
+
+	_eq("มีปุ่มการนอนครบทุกตัวเลือก", w._sleep_rows.size(), WQData.cfg.sleep_options.size())
+	_eq("มีปุ่มอาหารครบทุกตัวเลือก", w._food_rows.size(), WQData.cfg.food_options.size())
+
+	# ตัวเลือกที่ใช้อยู่ต้องบอกให้เห็น และกดซ้ำไม่ได้
+	var cur: Button = w._sleep_rows[p.sleep_idx].btn
+	_has("ตัวเลือกการนอนที่ใช้อยู่ติดป้ายไว้", cur.text, "ใช้อยู่")
+	_eq("ตัวเลือกที่ใช้อยู่กดซ้ำไม่ได้", cur.disabled, true)
+
+	# โทษของการนอนขาดเกณฑ์อาชีพต้องโชว์ ไม่ใช่โชว์แค่ค่าคงที่ของตัวเลือก
+	var t0: Dictionary = p.sleep_terms(0)
+	_eq("ครูนอน 5 ชม. = ขาดเกณฑ์ 2 ชม./คืน", int(t0.debt), 2)
+	_has("ป้ายบอกว่านอนขาดเกณฑ์", (w._sleep_rows[0].desc as Label).text, "นอนขาดเกณฑ์")
+	_has("ป้ายบอกโทษสุขภาพรวมโทษที่ขาดเกณฑ์แล้ว",
+		(w._sleep_rows[0].desc as Label).text, "%+.1f" % float(t0.health))
+
+	# กดแล้วต้องเปลี่ยนจริง และ **ปุ่มต้องยังอยู่** (ห้ามถูก free ระหว่างส่งสัญญาณ)
+	var btn: Button = w._sleep_rows[3].btn
+	btn.pressed.emit()
+	_eq("กดแล้วเปลี่ยนการนอนจริง", p.sleep_idx, 3)
+	_eq("ปุ่มยังอยู่หลังกด (ไม่ถูกสร้างใหม่ทั้งชุด)", is_instance_valid(btn), true)
+	_has("ป้ายชั่วโมงที่ใช้ได้จริงอัปเดตตาม", w._usable.text, str(p.get_hours_max()))
+
+	var fb: Button = w._food_rows[2].btn
+	fb.pressed.emit()
+	_eq("กดแล้วเปลี่ยนอาหารจริง", p.food_id, String(WQData.cfg.food_options[2].id))
+	_eq("ปุ่มอาหารยังอยู่หลังกด", is_instance_valid(fb), true)
+	_has("ป้ายอาหารบอกค่าอาหารจริงของอาชีพนี้",
+		(w._food_rows[2].desc as Label).text, WQFmt.n(float(p.food_terms(p.food_id).cost)))
+
+	# ไม่ได้อยู่บ้านต้องกดไม่ได้ทั้งชุด (core บังคับไว้แล้ว UI ต้องบอกก่อนกด)
+	p.travel_to("bank")
+	w.refresh()
+	var locked := 0
+	for r in w._sleep_rows + w._food_rows:
+		if (r.btn as Button).disabled: locked += 1
+	_eq("ออกจากบ้านแล้วปุ่มไลฟ์สไตล์กดไม่ได้ทั้งหมด", locked,
+		w._sleep_rows.size() + w._food_rows.size())
+	w.free()
+
+
+## ปุ่มทั้งหมดใต้โหนดหนึ่ง — แถวกู้เงินมีหลายปุ่มในแถวเดียว _button_of จึงไม่พอ
+func _buttons_in(node: Node) -> Array:
+	var out: Array = []
+	if node is Button: out.append(node)
+	for c in node.get_children(): out += _buttons_in(c)
+	return out
+
+
+func _act_button(w: WQActionPanel, needle: String) -> Button:
+	for row in w._list.get_children():
+		for b in _buttons_in(row):
+			if (b as Button).text.contains(needle): return b
+	return null
+
+
+func _row_of(w: WQActionPanel, needle: String) -> Node:
+	for row in w._list.get_children():
+		for b in _buttons_in(row):
+			if (b as Button).text.contains(needle): return row
+		if _labels_with(row, needle) > 0: return row
+	return w
 
 
 func _sell_button(w: WQAssetList, asset_name: String) -> Button:

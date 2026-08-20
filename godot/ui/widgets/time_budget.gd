@@ -6,6 +6,10 @@ extends PanelContainer
 ## ให้ผู้เล่นเห็นว่าชีวิตหมดไปกับอะไรก่อน แล้วค่อยเห็นว่าเหลืออะไร
 ## ถ้าโชว์แต่ "เหลือ 144 ชม." ผู้เล่นจะไม่มีทางรู้ว่าตัวเลขนั้นมาจากไหน และปรับอะไรได้บ้าง
 ##
+## **ปุ่มการนอนกับอาหารอยู่ในแผงนี้ ไม่ได้อยู่ในแผง "ลงมือทำ"** เพราะสองอย่างนี้ไม่ใช่
+## การกระทำที่กินเวลา แต่เป็น **ตัวกำหนดรูปร่างของแถบข้างบน** — นอน 5 หรือ 8 ชม./คืน
+## ต่างกัน 90 ชม./เดือน ผู้เล่นต้องเห็นแถบขยับตอนกดเลือก ไม่ใช่กดที่แผงอื่นแล้วเดาเอา
+##
 ## แปะกับผู้เล่นด้วย bind(player) แล้ววิดเจ็ตจะ subscribe สัญญาณ changed เอง
 ## (กฎเหล็กข้อ 5 — ห้าม redraw ทุกเฟรม)
 
@@ -20,6 +24,7 @@ const DIM := Color("8fa6bd")
 const WARN := Color("ff8080")
 const GOOD := Color("7ee08a")
 const ACCENT := Color("7fd8ff")
+const OPT_BTN_W := 275.0     ## เท่าปุ่มของแผงเดินทาง/แผงลงมือทำ — คอลัมน์เดียวกัน ขอบต้องตรงกัน
 
 var _player = null
 var _title: Label
@@ -30,6 +35,11 @@ var _eff: Label
 var _usable: Label
 var _notes: VBoxContainer
 var _left: WQStatBar
+var _life: VBoxContainer         ## ส่วนตัวเลือกการนอน/อาหาร
+var _sleep_head: Label
+var _food_head: Label
+var _sleep_rows: Array = []      ## [{btn, desc}] — สร้างครั้งเดียวแล้วอัปเดตข้อความ ไม่สร้างใหม่
+var _food_rows: Array = []
 
 
 func _init() -> void:
@@ -78,6 +88,10 @@ func _init() -> void:
 	# ไม่ทำแถบเฉพาะกิจของตัวเองอีก เพื่อให้ผู้เล่นอ่านแถบเป็นครั้งเดียวแล้วใช้ได้ทุกหน้า
 	_left = WQStatBar.new()
 	col.add_child(_left)
+
+	_life = VBoxContainer.new()
+	_life.add_theme_constant_override("separation", 3)
+	col.add_child(_life)
 
 
 ## ผูกกับผู้เล่นคนหนึ่ง — เรียกซ้ำได้เมื่อสลับผู้เล่น จะถอดสัญญาณเดิมให้เอง
@@ -143,6 +157,98 @@ func refresh() -> void:
 	var hmax: int = p.get_hours_max()
 	_left.set_stat("เหลือใช้เดือนนี้", "%d / %d ชม." % [p.hours, hmax],
 		float(p.hours) / float(hmax) if hmax > 0 else 0.0, WQPalette.TIME)
+
+	_refresh_lifestyle(p)
+
+
+# ========== ตัวเลือกการนอน / อาหาร ==========
+## **สร้างปุ่มครั้งเดียวแล้วอัปเดตแต่ข้อความ** — ต่างจากแผงอื่นที่สร้างใหม่ทั้งชุดแบบ deferred
+## เพราะแผงนี้ต่อสัญญาณ `changed` เข้ากับ refresh() ตรงๆ การกดปุ่มจึงวิ่งกลับมาถึงที่นี่ทันที
+## ขณะที่ปุ่มนั้นยังส่งสัญญาณ pressed อยู่ — free() ตอนนั้น Godot ปฏิเสธแล้วฟังก์ชันหลุดกลางคัน
+## (เหตุผลเดียวกับที่ ui/main.gd::_close_screen อธิบายไว้)
+## ทำแบบนี้ได้เพราะรายการตัวเลือกมาจาก data ซึ่งไม่เปลี่ยนระหว่างเกม
+func _refresh_lifestyle(p) -> void:
+	if _sleep_rows.is_empty(): _build_lifestyle()
+	# ที่บ้านเท่านั้น (core บังคับไว้แล้ว) — ปุ่มจึงต้องเทาให้เห็นก่อน ไม่ใช่ให้กดแล้วเด้ง error
+	var at_home: bool = p.can_do_here("sleep")
+
+	_sleep_head.text = "😴 นอนกี่ชั่วโมง — %s ต้องการ %d ชม./คืน นอนน้อยกว่านี้โดนปรับสองชั้น" % [
+		String(p.job.name), p.get_sleep_need()]
+	for i in _sleep_rows.size():
+		var t: Dictionary = p.sleep_terms(i)
+		var row: Dictionary = _sleep_rows[i]
+		var btn: Button = row.btn
+		btn.text = String(t.label) + ("  ✓ ใช้อยู่" if t.current else "")
+		btn.disabled = not at_home or t.current
+		btn.tooltip_text = String(t.note)
+		var bits: Array = ["%d ชม./เดือน" % int(t.hours), "สุขภาพ %+.1f" % float(t.health)]
+		if float(t.eff_penalty) > 0.0:
+			bits.append("ประสิทธิภาพ −%d%%" % roundi(float(t.eff_penalty) * 100.0))
+		if int(t.debt) > 0:
+			bits.append("นอนขาดเกณฑ์ %d ชม./คืน" % int(t.debt))
+		var desc: Label = row.desc
+		desc.text = " · ".join(bits)
+		desc.add_theme_color_override("font_color",
+			GOOD if t.current else (WARN if int(t.debt) > 0 else DIM))
+
+	_food_head.text = "🍽️ กินอย่างไร — สามมิติที่ขัดกันเอง: เงิน / เวลา / สุขภาพ"
+	for row in _food_rows:
+		var t: Dictionary = p.food_terms(String(row.id))
+		var btn: Button = row.btn
+		btn.text = "%s %s%s" % [String(t.icon), String(t.label), "  ✓ ใช้อยู่" if t.current else ""]
+		btn.disabled = not at_home or t.current
+		btn.tooltip_text = String(t.note)
+		var desc: Label = row.desc
+		desc.text = "%d ชม./เดือน · %s฿/เดือน · สุขภาพ %+.1f" % [
+			int(t.hours), WQFmt.n(float(t.cost)), float(t.health)]
+		desc.add_theme_color_override("font_color", GOOD if t.current else DIM)
+
+
+func _build_lifestyle() -> void:
+	_sleep_head = _dim_label("")
+	_sleep_head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_sleep_head.add_theme_font_size_override("font_size", 13)
+	_life.add_child(_sleep_head)
+	for i in WQData.cfg.sleep_options.size():
+		var row := _option_row()
+		(row.btn as Button).pressed.connect(_pick_sleep.bind(i))
+		_sleep_rows.append(row)
+		_life.add_child(row.box)
+
+	_food_head = _dim_label("")
+	_food_head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_food_head.add_theme_font_size_override("font_size", 13)
+	_life.add_child(_food_head)
+	for f in WQData.cfg.food_options:
+		var row := _option_row()
+		row["id"] = String(f.id)
+		(row.btn as Button).pressed.connect(_pick_food.bind(String(f.id)))
+		_food_rows.append(row)
+		_life.add_child(row.box)
+
+
+## แถวหนึ่ง = [ปุ่มตัวเลือก][ผลของตัวเลือกนั้น] — ความกว้างปุ่มเท่ากับแผงอื่นในคอลัมน์เดียวกัน
+func _option_row() -> Dictionary:
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(OPT_BTN_W, 0)
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	box.add_child(btn)
+	var desc := Label.new()
+	desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.add_theme_font_size_override("font_size", 12)
+	box.add_child(desc)
+	return {"box": box, "btn": btn, "desc": desc, "id": ""}
+
+
+func _pick_sleep(i: int) -> void:
+	if _player != null: _player.set_sleep(i)
+
+
+func _pick_food(id: String) -> void:
+	if _player != null: _player.set_food(id)
 
 
 ## ลบลูกทิ้งทันที ไม่ใช้ queue_free เพราะ refresh ถูกเรียกได้หลายรอบในเฟรมเดียว

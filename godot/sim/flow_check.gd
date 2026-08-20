@@ -25,6 +25,7 @@ func _init() -> void:
 	await process_frame
 
 	await _check_setup_to_match()
+	await _check_tutorial()
 	await _check_match_to_phase2()
 	await _check_save_load()
 
@@ -52,6 +53,48 @@ func _check_setup_to_match() -> void:
 	_eq("แต้มที่ทอยได้ถูกส่งเข้าแมตช์", p.roll, 4)
 	_eq("โบนัสเวลาจากแต้มถูกส่งเข้าแมตช์", p.bonus_hours,
 		int(WQData.cfg.roll_table["4"].bonusHours))
+
+
+## การสอน 5 เดือนแรก — ต้องเปิดเองสำหรับเกมใหม่ ชี้ถูกวิดเจ็ต และสเต็ปที่ให้ลงมือทำต้องรอจริง
+func _check_tutorial() -> void:
+	var tut: WQTutorial = _main.tutorial
+	_eq("เกมใหม่ต้องเปิดการสอนให้เอง", tut.running, true)
+	_eq("เริ่มที่สเต็ปแรก", tut.step, 0)
+	_eq("การ์ดสอนต้องเห็น", tut.visible, true)
+	# ทั้งแผ่นต้องปล่อยคลิกผ่านไปที่เกม ไม่งั้นการสอนจะกลายเป็นกำแพงขวางการเล่น
+	_eq("โอเวอร์เลย์ต้องไม่กินคลิก", tut.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+	await process_frame
+
+	# วงแหวนต้องครอบวิดเจ็ตที่สเต็ปนั้นพูดถึงจริงๆ ไม่ใช่ลอยอยู่เฉยๆ
+	_eq("สเต็ปแรกชี้ที่แผงงบเวลา", tut._ring.visible, true)
+	var ring := Rect2(tut._ring.global_position, tut._ring.size)
+	var target := Rect2(_main.time_budget.global_position, _main.time_budget.size)
+	_eq("วงแหวนครอบแผงงบเวลาทั้งแผง", ring.encloses(target), true)
+
+	tut._next.pressed.emit()
+	_eq("กดถัดไปแล้วเดินไปสเต็ปหน้า", tut.step, 1)
+
+	# สเต็ปที่ให้ลงมือทำ: ห้ามมีปุ่มถัดไป และต้องข้ามเองเมื่อทำสำเร็จจริง
+	var wait_step := -1
+	for i in tut._steps.size():
+		if (tut._steps[i] as Dictionary).has("done"):
+			wait_step = i
+			break
+	tut.step = wait_step
+	tut.refresh()
+	_eq("สเต็ปที่ให้ลงมือทำต้องไม่มีปุ่มถัดไป", tut._next.visible, false)
+	_eq("และต้องบอกว่ากำลังรออะไรอยู่", tut._wait.visible, true)
+
+	var p = _main.m.get_current()
+	p.cash = 5_000_000.0
+	p.place = "estate"
+	p.hours = p.get_hours_max()
+	p.close_deal(int(_main.m.deals[0].id))
+	_main._refresh()
+	_eq("ปิดดีลแล้วการสอนต้องเดินต่อเอง", tut.step > wait_step, true)
+
+	# สถานะที่จะถูกเก็บลงไฟล์เซฟ
+	_eq("สถานะการสอนที่จะเซฟ = สเต็ปปัจจุบัน", int(_main._ui_state().get("tut")), tut.step)
 
 
 ## ออกจากสนามแข่งหนู → หน้าทอยความฝัน → เข้าด่าน 2
@@ -88,6 +131,7 @@ func _check_match_to_phase2() -> void:
 func _check_save_load() -> void:
 	var month_at_save: int = _main.m.month
 	var rng_at_save: int = _main.m.rng.s
+	var tut_at_save: int = _main.tutorial.step
 
 	_main.hud.save_pressed.emit()
 	_eq("กด 💾 แล้วหน้าบันทึกต้องเปิด", _main.save_panel != null, true)
@@ -109,6 +153,8 @@ func _check_save_load() -> void:
 	_eq("ย้อนกลับไปเดือนที่บันทึกไว้", _main.m.month, month_at_save)
 	# กฎเหล็กข้อ 4: state ตัวสุ่มต้องกลับมาด้วย ไม่งั้นผู้เล่นเซฟ-โหลดรีดผลที่ชอบได้
 	_eq("state ของตัวสุ่มกลับมาเหมือนตอนบันทึก", _main.m.rng.s, rng_at_save)
+	# การสอนต้องสอนต่อจากสเต็ปเดิม ไม่ใช่เริ่มสอนใหม่ทั้งหมดทุกครั้งที่โหลด
+	_eq("โหลดแล้วการสอนต่อจากสเต็ปเดิม", _main.tutorial.step, tut_at_save)
 
 	# หลังโหลด สัญญาณต้องไม่ต่อซ้ำ — กดเดินทางทีเดียวต้องเดินทางรอบเดียว
 	var p = _main.m.get_current()

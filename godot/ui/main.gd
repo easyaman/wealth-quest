@@ -30,6 +30,7 @@ var lessons: WQLessons
 var setup_screen: WQSetupScreen
 var dream_screen: WQDreamRoll     ## หน้าทอยความฝันด่าน 2 — มีอยู่แปลว่ากำลังรอผู้เล่นตัดสินใจ
 var save_panel: WQSavePanel       ## หน้าบันทึก/โหลด — มีอยู่แปลว่ากำลังเปิดค้างอยู่
+var tutorial: WQTutorial          ## การสอน 5 เดือนแรก — ซ่อนตัวเองเมื่อจบหรือถูกข้าม
 var _scroll: ScrollContainer          ## คอลัมน์กลาง — ตัวที่ WQ_SHOT_SCROLL เลื่อนตอนถ่ายภาพ
 var _shot_path := ""
 var _shot_frames := 0
@@ -94,6 +95,16 @@ func _start_match(job_id: String, roll: int, bonus_hours: int) -> void:
 	]})
 	_adopt_match(fresh)
 
+	# การสอนเปิดให้เองสำหรับเกมใหม่ (GDD 12.4) — ปิดได้ด้วยปุ่ม "ข้ามการสอน" บนการ์ด
+	# WQ_TUT=off ปิดตั้งแต่ต้นสำหรับถ่ายภาพหน้าจอ · WQ_TUT=<เลข> กระโดดไปสเต็ปนั้นเลย
+	var tut := OS.get_environment("WQ_TUT")
+	if tut == "off":
+		tutorial.stop()
+	elif tut != "":
+		tutorial.resume(tut.to_int())
+	else:
+		tutorial.start()
+
 	# WQ_DREAM=1 ดันผู้เล่นไปที่จังหวะ "ออกจากสนามแข่งหนูได้แล้ว" ทันที
 	# เพื่อดูหน้าทอยความฝัน (GDD บทที่ 9) โดยไม่ต้องเล่นจริง 20–50 เดือนก่อน
 	if OS.get_environment("WQ_DREAM") != "":
@@ -112,6 +123,11 @@ func _adopt_match(new_match: WQMatch) -> void:
 	m = new_match
 	m.month_ended.connect(_on_month_ended)
 	city.bind(m)
+	tutorial.bind(m.get_current(), m, {
+		"time": time_budget, "deals": deal_market, "city": city, "shop": shop,
+		"travel": travel_panel, "statement": statement, "goal": goal_panel,
+		"health": health_bar, "standings": standings, "hud": hud,
+	})
 	_refresh()
 
 
@@ -240,6 +256,11 @@ func _build_layout() -> void:
 	hud.save_pressed.connect(func(): _open_save_panel("save"))
 	hud.load_pressed.connect(func(): _open_save_panel("load"))
 
+	# การสอนต้องลอยอยู่เหนือทุกอย่างในหน้าจอหลัก แต่ยังอยู่ใต้หน้าจอเต็มจอ
+	# (หน้าทอยความฝัน/หน้าบันทึก ถูก add ทีหลัง จึงทับการ์ดสอนตอนเปิดอยู่แล้ว)
+	tutorial = WQTutorial.new()
+	add_child(tutorial)
+
 
 ## หนึ่งคอลัมน์ = ScrollContainer ของตัวเอง — ทุกคอลัมน์ยาวไม่เท่ากันและยาวเกินจอได้ทั้งสามอัน
 ## ถ้าใช้สกรอลล์เดียวร่วมกัน เลื่อนดูดีลทีเดียวแล้วสุขภาพกับบันทึกจะเลื่อนหายไปด้วย
@@ -282,6 +303,7 @@ func _refresh() -> void:
 	# แท่นโชว์ตั้งต้นที่ดีลใบแรกในตลาด เพื่อไม่ให้แท่นว่างเปล่าตอนเปิดเกม
 	if showcase.id == "" and not m.deals.is_empty(): _on_deal_hovered(m.deals[0])
 
+	tutorial.refresh()
 	_check_pending_dream()
 
 	var s := "[b]เดือนที่ %d[/b]  |  %s %s\n" % [m.month, p.job.icon, p.pname]
@@ -324,7 +346,7 @@ func _on_place_clicked(place_id: String) -> void:
 # ========== บันทึก / โหลด ==========
 ## สถานะฝั่ง UI ที่ต้องกลับมาเหมือนเดิมตอนโหลด — ฝากไว้ในไฟล์เซฟผ่านช่อง `ui`
 func _ui_state() -> Dictionary:
-	return {}
+	return {"tut": tutorial.save_state()}
 
 
 func _open_save_panel(mode: String) -> void:
@@ -368,6 +390,8 @@ func _on_load_slot(slot: String) -> void:
 		_close_screen(dream_screen)
 		dream_screen = null
 	_adopt_match(loaded)
+	# สอนต่อจากสเต็ปเดิม — ไฟล์ที่บันทึกตอนปิดการสอนไปแล้วจะได้ −1 แปลว่าไม่ต้องสอนอีก
+	tutorial.resume(int(WQSave.read_extra(slot).get("tut", -1)))
 	m.log_line("📂 โหลดจากช่อง %s แล้ว" % slot, "good", null)
 	_refresh()
 

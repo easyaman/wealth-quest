@@ -14,6 +14,11 @@ const NOISE_SEED := 20260820     ## คงที่ตลอดกาล — เ
 
 
 ## สเปก: [คลื่น, ความถี่เริ่ม, ความถี่จบ, ความยาว(วิ), attack(วิ), decay(วิ), ระดับเสียง]
+##
+## `noise` ก็ใช้ f0/f1 เหมือนคลื่นอื่น แต่ไม่ใช่ระดับเสียง (pitch) — เป็นความถี่ของ
+## "sample-and-hold" (เทคนิค noise channel คลาสสิกของชิปเสียงยุคเก่า): สุ่มค่าใหม่ทุกครั้ง
+## ที่ phase ครบรอบ ความถี่ต่ำ = สุ่มค่าห่างๆ ได้เสียงกร้าวหยาบ · ความถี่สูง = สุ่มถี่ ได้เสียงฟู่สว่าง
+## f0→f1 ที่ลดลงจึงกลายเป็นเสียงกวาดหยาบลงเรื่อยๆ ที่ฟังออกจริง (เช่น "disaster")
 static func render(spec: Array) -> PackedByteArray:
 	var wave := String(spec[0])
 	var f0 := float(spec[1])
@@ -30,15 +35,19 @@ static func render(spec: Array) -> PackedByteArray:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = NOISE_SEED
 	var phase := 0.0
+	var held := rng.randf_range(-1.0, 1.0)  ## ค่าที่ค้างไว้จนกว่า phase จะครบรอบครั้งถัดไป
 	for i in n:
 		var t := float(i) / float(RATE)
 		var freq: float = lerpf(f0, f1, t / maxf(dur, 0.0001))
+		var prev_phase := phase
 		phase = fmod(phase + freq / float(RATE), 1.0)
+		if phase < prev_phase:
+			held = rng.randf_range(-1.0, 1.0)  ## phase ครบรอบ — สุ่มค่าใหม่มาค้างไว้ (sample-and-hold)
 		var s := 0.0
 		match wave:
 			"square": s = 1.0 if phase < 0.5 else -1.0
 			"triangle": s = 4.0 * absf(phase - 0.5) - 1.0
-			"noise": s = rng.randf_range(-1.0, 1.0)
+			"noise": s = held
 		var v: float = clampf(s * _env(t, dur, attack, decay) * vol, -1.0, 1.0)
 		out.encode_s16(i * 2, int(v * 32767.0))
 	return out

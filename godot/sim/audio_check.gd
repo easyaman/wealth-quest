@@ -53,6 +53,13 @@ func _check_synth() -> void:
 	_eq("สังเคราะห์ซ้ำได้ผลเหมือนเดิม",
 		WQSynth.render(WQBank.SPEC["travel"]), WQSynth.render(WQBank.SPEC["travel"]))
 
+	# f0/f1 ของคลื่น noise ต้องมีผลกับเสียงจริง (sample-and-hold) ไม่ใช่แค่ตัวเลขในตารางที่ไม่ทำอะไร
+	# ตั้งความยาว/attack/decay/ระดับเสียงให้เหมือนกันทุกอย่าง เหลือแค่ความถี่ที่ต่างกัน
+	var noise_lo := ["noise", 60.0, 60.0, 0.30, 0.0, 0.0, 0.50]
+	var noise_hi := ["noise", 4000.0, 4000.0, 0.30, 0.0, 0.0, 0.50]
+	_eq("ความถี่ต่างกันของคลื่น noise ต้องได้ไบต์ต่างกัน",
+		WQSynth.render(noise_lo) == WQSynth.render(noise_hi), false)
+
 	var st := WQSynth.stream(spec)
 	_eq("สตรีมเป็น 16-bit", st.format, AudioStreamWAV.FORMAT_16_BITS)
 	_eq("สตรีมเป็น mono", st.stereo, false)

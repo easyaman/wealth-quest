@@ -140,6 +140,25 @@ func act_for_kind(kind: String) -> String:
 	if kind == "speculation": return "gold"
 	return "fund" if kind == "fund" else "estate"
 
+## ราคาเป็นชั่วโมงของการกระทำหนึ่ง เมื่อมองจากสถานะของผู้เล่นคนนี้ (รวมเพิร์กแล้ว)
+## UI ใช้ตัวนี้ติดป้ายราคาบนปุ่มตามกฎการนำเสนอข้อ 12.2.3 — ห้ามฝั่ง UI ไปอ่าน cfg เอง
+## เพราะเพิร์ก "ว่องไว" ลดค่าปิดดีลลง 20% ถ้า UI อ่านตัวเลขดิบจะโชว์ราคาผิดสำหรับอาชีพนั้น
+##
+## คืน -1 สำหรับการกระทำที่ราคาขึ้นกับแพ็กเกจที่เลือก (ฟิตเนส · รีสอร์ต)
+## และคืน 0 สำหรับการกระทำที่ไม่กินเวลาเลย (ตั้งค่าการนอน · วางแผนอาหาร · เดินดูของในห้าง)
+func act_cost(act: String) -> int:
+	var c = WQData.cfg.action_cost
+	match act:
+		"estate", "gold": return action_cost(int(c.deal))
+		"scout": return int(c.scout)
+		"loan", "repay", "fund": return int(c.loan)
+		"ot", "freelance": return int(c.side)
+		"study", "homestudy": return int(c.study)
+		"rest": return int(c.rest)
+		"gym", "resort": return -1
+	return 0
+
+
 ## คืน null ถ้าอยู่ถูกที่แล้ว · คืน {place, hours} ถ้าต้องเดินทางก่อน
 func need_travel(act: String):
 	var need := place_for(act)

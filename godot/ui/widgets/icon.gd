@@ -42,6 +42,21 @@ static func make(id: String, fallback_emoji: String, px := DEFAULT_PX) -> Contro
 	return l
 
 
+## ติดไอคอนให้ปุ่ม — คืน true ถ้าติดได้จริง ผู้เรียกจะได้รู้ว่าต้องใส่อีโมจิลงในข้อความไหม
+##
+## มีไว้เพราะ Button ใส่ลูกเป็น HBox ไม่ได้ ต้องใช้ช่อง `icon` ของมันเอง
+## แต่กติกา "ไอคอนใน UI ต้องผ่าน WQIcon เสมอ" ยังต้องเป็นจริง — ตัวเลือก fallback
+## กับการตั้ง filter จึงต้องอยู่ที่นี่ที่เดียว ไม่ใช่ให้แต่ละวิดเจ็ตไปเดาเอง
+static func decorate_button(btn: Button, id: String) -> bool:
+	if not exists(id): return false
+	btn.icon = load(path_of(id))
+	btn.expand_icon = true
+	# ไอคอนอบมาที่ 128px แล้วย่อลงเหลือความสูงของปุ่ม — ถ้าใช้ Nearest ตามค่าเริ่มต้นของโปรเจกต์
+	# จะแตกเป็นจุดๆ (เหตุผลเดียวกับใน make())
+	btn.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	return true
+
+
 ## แถวแนวนอน [ไอคอน][ข้อความ] — รูปแบบที่ใช้ซ้ำทั่ว UI
 static func row(id: String, fallback_emoji: String, text: String, px := DEFAULT_PX) -> HBoxContainer:
 	var h := HBoxContainer.new()

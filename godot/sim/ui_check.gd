@@ -68,6 +68,7 @@ func _init() -> void:
 	_check_shop(m)
 	_check_health_bar(m)
 	_check_standings(m)
+	await _check_travel_panel(m)
 
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -379,6 +380,90 @@ func _check_standings(m: WQMatch) -> void:
 	for _i in 3: w.refresh()
 	_eq("แถวไม่สะสมเมื่อ refresh ซ้ำ", w._rows.get_child_count(), mm.players.size())
 	w.free()
+
+
+## 📍 แผงสถานที่ — ต้อง "บอก" ว่าอยากไปไหน ไม่ใช่ย้ายผู้เล่นเอง (กฎเดียวกับฉากเมือง 3D)
+func _check_travel_panel(m: WQMatch) -> void:
+	var p = m.players[0]
+	p.place = "home"
+	p.hours = p.get_hours_max()
+	var w := WQTravelPanel.new()
+	w.bind(p)
+
+	_eq("มีแถวครบทุกสถานที่", w._list.get_child_count(), WQData.places.size())
+
+	# เรียงตามตำแหน่งบนถนน ไม่ใช่ตามระยะทางจากตัวเรา — ผู้เล่นต้องเห็นว่าอะไรอยู่ทางเดียวกัน
+	var xs: Array = []
+	for pl in WQData.places: xs.append(int(pl.x))
+	xs.sort()
+	var shown: Array = []
+	for row in w._list.get_children():
+		for pl in WQData.places:
+			if _labels_with(row, String(pl.name)) > 0 or _button_text(row).contains(String(pl.name)):
+				shown.append(int(pl.x))
+				break
+	_eq("เรียงตามตำแหน่งบนถนน (x)", shown, xs)
+
+	# ปุ่มต้องติดราคาเป็นชั่วโมงเสมอ (กฎ 12.2.3) และตรงกับที่ core คิด
+	var bank_btn := _place_button(w, "ธนาคาร")
+	_eq("มีปุ่มของธนาคาร", bank_btn != null, true)
+	_has("ปุ่มติดราคาเดินทางเป็นชั่วโมง", bank_btn.text, "%d ชม." % p.travel_cost("bank"))
+
+	# กดแล้วต้องแค่ยิงสัญญาณ ห้ามย้ายผู้เล่นเอง
+	var got: Array = []
+	w.travel_requested.connect(func(id): got.append(id))
+	var before_place: String = p.place
+	var before_hours: int = p.hours
+	bank_btn.pressed.emit()
+	_eq("กดแล้วยิงสัญญาณบอกปลายทาง", got, ["bank"])
+	_eq("แผงไม่ย้ายผู้เล่นเอง", p.place, before_place)
+	_eq("แผงไม่หักเวลาผู้เล่นเอง", p.hours, before_hours)
+
+	# ที่ที่ยืนอยู่ต้องกดไม่ได้ และบอกว่าอยู่ที่นี่
+	var home_btn := _place_button(w, "บ้าน")
+	_eq("ปุ่มของที่ที่ยืนอยู่กดไม่ได้", home_btn.disabled, true)
+	_has("บอกว่าอยู่ที่นี่", home_btn.text, "อยู่ที่นี่")
+
+	# เวลาไม่พอต้องกดไม่ได้ ไม่ใช่ปล่อยให้กดแล้วค่อยขึ้น error
+	p.hours = 0
+	p.changed.emit()
+	await process_frame          # แผงสร้างปุ่มใหม่แบบ deferred (กันปุ่มถูก free ระหว่างส่งสัญญาณ)
+	_eq("เวลาไม่พอแล้วปุ่มเดินทางกดไม่ได้", _place_button(w, "ธนาคาร").disabled, true)
+
+	# อุปกรณ์ตัดความจำเป็นในการเดินทางทิ้ง — ต้องบอก ไม่งั้นผู้เล่นเสียเวลาไปฟรีๆ (GDD 3A.3)
+	p.hours = p.get_hours_max()
+	p.devices.append("smartphone")
+	p.changed.emit()
+	await process_frame
+	_eq("มีสมาร์ตโฟนแล้วธุรกรรมทำที่ไหนก็ได้", p.can_do_here("loan"), true)
+	_eq("แผงบอกว่าไม่ต้องเดินทางไปธนาคารแล้ว",
+		_row_has(w, "ธนาคาร", "ไม่ต้องเดินทาง"), true)
+	p.devices.erase("smartphone")
+
+	# --- refresh ซ้ำต้องไม่ทำให้แถวสะสม ---
+	for _i in 3: w.refresh()
+	_eq("แถวไม่สะสมเมื่อ refresh ซ้ำ", w._list.get_child_count(), WQData.places.size())
+	w.free()
+
+
+func _button_text(node: Node) -> String:
+	var b := _button_of(node)
+	return "" if b == null else b.text
+
+
+func _place_button(w: WQTravelPanel, place_name: String) -> Button:
+	for row in w._list.get_children():
+		var b := _button_of(row)
+		if b != null and b.text.contains(place_name): return b
+	return null
+
+
+func _row_has(w: WQTravelPanel, place_name: String, needle: String) -> bool:
+	for row in w._list.get_children():
+		var b := _button_of(row)
+		if b == null or not b.text.contains(place_name): continue
+		return _labels_with(row, needle) > 0
+	return false
 
 
 func _notes_in(w: WQHealthBar, needle: String) -> int:

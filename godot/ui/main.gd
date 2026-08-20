@@ -1,6 +1,6 @@
 extends Control
-## หน้าจอหลักชั่วคราว — มีวิดเจ็ตจริงแล้ว: 🏁 อันดับ · ⏳ งบเวลา · ❤️ สุขภาพ
-## · งบการเงิน · ตลาดดีล · หนี้สิน · ร้านค้า
+## หน้าจอหลักชั่วคราว — มีวิดเจ็ตจริงแล้ว: 🏆 อันดับ · ⏳ งบเวลา · ❤️ สุขภาพ
+## · 📍 สถานที่/การเดินทาง · งบการเงิน · ตลาดดีล · หนี้สิน · ร้านค้า
 ## และงานอาร์ต 3D: ฉากเมือง (world/city) + แท่นโชว์ (world/showcase) + หน้าเลือกอาชีพ
 ##
 ## **ยังไม่ได้จัดเป็นสามคอลัมน์ตามบทที่ 12 ของ GDD** — ตอนนี้ยังเป็นคอลัมน์กลางเลื่อนยาว
@@ -19,6 +19,7 @@ var showcase: WQShowcase
 var city: WQCity
 var health_bar: WQHealthBar
 var standings: WQStandings
+var travel_panel: WQTravelPanel
 var log_label: RichTextLabel
 var _scroll: ScrollContainer
 var setup_screen: WQJobSelect
@@ -73,6 +74,8 @@ func _start_match(job_id: String, roll: int, bonus_hours: int) -> void:
 	city.place_clicked.connect(_on_place_clicked)
 	deal_market.deal_hovered.connect(_on_deal_hovered)
 	shop.picked.connect(_on_shop_picked)
+	# แผงเดินทางกับฉากเมือง 3D เข้าทางเดียวกันเป๊ะ — ทั้งคู่แค่ "บอก" ว่าอยากไปไหน
+	travel_panel.travel_requested.connect(_on_place_clicked)
 	_refresh()
 
 
@@ -120,6 +123,9 @@ func _build_layout() -> void:
 	health_bar = WQHealthBar.new()
 	center.add_child(health_bar)
 
+	travel_panel = WQTravelPanel.new()
+	center.add_child(travel_panel)
+
 	statement = WQStatement.new()
 	center.add_child(statement)
 
@@ -165,6 +171,7 @@ func _refresh() -> void:
 	city.bind_player(p)
 	health_bar.bind(p)
 	standings.bind(p, m)
+	travel_panel.bind(p)
 
 	# แท่นโชว์ตั้งต้นที่ดีลใบแรกในตลาด เพื่อไม่ให้แท่นว่างเปล่าตอนเปิดเกม
 	if showcase.id == "" and not m.deals.is_empty(): _on_deal_hovered(m.deals[0])

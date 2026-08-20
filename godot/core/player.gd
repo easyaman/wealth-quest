@@ -9,6 +9,13 @@ signal changed
 ## สัญญาณนี้ไม่แตะตัวสุ่มและไม่เปลี่ยนตัวเลขใดๆ ผลการจำลองจึงยังตรงกับ engine.js เหมือนเดิม
 signal deal_closed(deal: Dictionary)
 
+## การกระทำที่ทำ **สำเร็จ** แล้ว — เสียงและเอฟเฟกต์ฟังตัวนี้
+##
+## มีเพราะทุกการกระทำยิงแค่ `changed` เหมือนกันหมด คนฟังจึงแยกไม่ออกว่าเกิดอะไรขึ้น
+## **ห้ามยิงตอนคืน `_fail()`** ไม่งั้นผู้เล่นจะได้ยินเสียง "สำเร็จ" ตอนที่ทำไม่ได้
+## `core/` ไม่รู้จักระบบเสียงเลย มันแค่ประกาศว่าเกิดอะไรขึ้น ใครจะฟังเป็นเรื่องของคนนั้น
+signal acted(kind: String)
+
 ## อ้างกลับไปหาแมตช์แบบ **อ่อน** — `WQMatch.players` ถือผู้เล่นไว้แบบแข็งอยู่แล้ว
 ## ถ้าฝั่งนี้ถือแบบแข็งด้วยจะกลายเป็นวงอ้างอิง RefCounted แล้วทั้งแมตช์จะไม่ถูกคืนหน่วยความจำเลย
 ## (เดิมรัน sim ทีนึงรั่วหลักพัน object) เจ้าของอายุจริงของแมตช์คือคนที่สร้างมันขึ้นมา
@@ -101,6 +108,7 @@ func set_sleep(i: int) -> Dictionary:
 	if not can_do_here("sleep"): return _fail("ตั้งค่าการนอนได้ที่บ้านเท่านั้น")
 	sleep_idx = clampi(i, 0, WQData.cfg.sleep_options.size() - 1)
 	hours = mini(hours, get_hours_max()); changed.emit()
+	acted.emit("lifestyle")
 	return {"ok": true}
 
 func set_food(id: String) -> Dictionary:
@@ -111,6 +119,7 @@ func set_food(id: String) -> Dictionary:
 			hours = mini(hours, get_hours_max())
 			break
 	changed.emit()
+	acted.emit("lifestyle")
 	return {"ok": true}
 
 ## ตัวเลขของ "ตัวเลือกการนอน" หนึ่งอันเมื่อมองจากอาชีพของคนนี้ — pure function ไม่แตะ state
@@ -212,6 +221,7 @@ func travel_to(to_id: String) -> Dictionary:
 	if not is_ai:
 		_log("%s เดินทางจาก%s → %s %s (%d ชม.)" % [get_veh().icon, from.name, to.icon, to.name, h], "move")
 	changed.emit()
+	acted.emit("travel")
 	return {"ok": true}
 
 ## ซื้อพาหนะ — ดาวน์ + กู้ส่วนที่เหลือ · ลดระดับได้โดยขายคันเดิมทิ้ง
@@ -273,6 +283,7 @@ func buy_vehicle(id: String) -> Dictionary:
 		vehicle = v.id
 		_log("ขาย %s %s แล้วเปลี่ยนเป็น %s %s" % [cur.icon, cur.name, v.icon, v.name], "sell")
 		changed.emit()
+		acted.emit("buy")
 		return {"ok": true}
 	var down := roundf(float(v.price) * float(v.downPct))
 	if down <= 0: down = float(v.price)
@@ -288,6 +299,7 @@ func buy_vehicle(id: String) -> Dictionary:
 	_log("🛒 ซื้อ %s %s — ดาวน์ %d บาท • เวลาเดินทางเหลือ %d%% ค่าใช้จ่ายเพิ่ม %d บาท/เดือน" %
 		[v.icon, v.name, int(down), roundi(float(v.factor) * 100.0), int(v.upkeep)], "buy")
 	changed.emit()
+	acted.emit("buy")
 	return {"ok": true}
 
 func buy_device(id: String) -> Dictionary:
@@ -301,6 +313,7 @@ func buy_device(id: String) -> Dictionary:
 	devices.append(id)
 	_log("🛒 ซื้อ %s %s — %s" % [d.icon, d.name, d.note], "buy")
 	changed.emit()
+	acted.emit("buy")
 	return {"ok": true}
 
 # ========== เวลา ==========
@@ -615,6 +628,7 @@ func sell_asset(asset_id: int) -> Dictionary:
 	var gain: float = price - float(a.value)
 	_log("ขาย %s %s ได้ %d บาท" % [a.icon, a.name, int(price)], "sell" if gain >= 0 else "bad")
 	changed.emit()
+	acted.emit("sell")
 	return {"ok": true}
 
 func take_loan(amount: float) -> Dictionary:
@@ -632,6 +646,7 @@ func take_loan(amount: float) -> Dictionary:
 	cash += amount
 	_log("กู้เงิน %d บาท (ดอกเบี้ย %d%%/ปี)" % [int(amount), int(rate * 1200)], "debt")
 	changed.emit()
+	acted.emit("loan")
 	return {"ok": true}
 
 ## ชำระหนี้ได้ทั้งก้อนหรือบางส่วน — ไม่เสียเวลา (เป็นแค่การโอนเงิน)
@@ -651,6 +666,7 @@ func repay_debt(index: int, amount: float) -> Dictionary:
 		[d.name, int(amount), " — ปิดหนี้ก้อนนี้เรียบร้อย!" if closed else "", int(saved)], "debt")
 	if closed: liabilities.remove_at(index)
 	changed.emit()
+	acted.emit("repay")
 	return {"ok": true}
 
 ## งานเสริมมีสองแบบ: OT ที่ออฟฟิศ กับ freelance ที่ co-working (หรือที่บ้านถ้ามีโน้ตบุ๊ก)
@@ -673,6 +689,7 @@ func side_job(kind := "ot") -> Dictionary:
 	if not is_ai:
 		_log("%s %d ชม. ได้ %d บาท" % ["⏱️ รับ OT" if kind == "ot" else "💻 รับงาน freelance", c, int(gain)], "work")
 	changed.emit()
+	acted.emit("ot" if kind == "ot" else "freelance")
 	return {"ok": true}
 
 func scout() -> Dictionary:
@@ -685,6 +702,7 @@ func scout() -> Dictionary:
 		match_ref.deals.append(match_ref.make_deal(false, 0.0))
 	if not is_ai: _log("ออกดูทำเล พบดีลใหม่ 2 รายการ", "info")
 	changed.emit()
+	acted.emit("scout")
 	return {"ok": true}
 
 ## เรียนที่สถาบันคืบหน้าเร็วกว่าเรียนออนไลน์ที่บ้าน แต่ค่าเรียนแพงกว่า
@@ -706,6 +724,7 @@ func study() -> Dictionary:
 		salary = round(salary * (1.0 + float(cfg.study_raise)))
 		_log("🎓 เรียนจบคอร์ส! เงินเดือนขึ้นเป็น %d บาท — และรายจ่ายไม่ได้ขึ้นตาม" % int(salary), "good")
 	changed.emit()
+	acted.emit("study")
 	return {"ok": true}
 
 ## ออกกำลังกายที่ฟิตเนส — แพ็กเกจรายเดือนจ่ายครั้งเดียวใช้ได้ทั้งเดือน
@@ -726,6 +745,7 @@ func exercise(pack_id := "") -> Dictionary:
 	if not is_ai:
 		_log("🏋️ %s %s — %d ชม. → สุขภาพ +%s" % [pk.icon, pk.name, h, str(gain)], "good")
 	changed.emit()
+	acted.emit("gym")
 	return {"ok": true}
 
 ## ไปพักผ่อนที่โรงแรม/รีสอร์ต — ฟื้นสุขภาพเยอะและได้โล่กันเหตุการณ์ร้าย
@@ -743,6 +763,7 @@ func vacation(pack_id := "") -> Dictionary:
 	if not is_ai:
 		_log("%s %s — %d ชม. จ่าย %d บาท → สุขภาพ +%d" % [pk.icon, pk.name, h, int(pk.cost), int(pk.hp)], "good")
 	changed.emit()
+	acted.emit("resort")
 	return {"ok": true}
 
 func rest() -> Dictionary:
@@ -753,6 +774,7 @@ func rest() -> Dictionary:
 	health = clampf(health + 2.5, 0, 100)
 	rested_this_month = true
 	changed.emit()
+	acted.emit("rest")
 	return {"ok": true}
 
 # ========== ด่าน 2 ==========
@@ -792,6 +814,7 @@ func enter_phase2(d: Dictionary, do_retire: bool) -> void:
 	# เปลี่ยนด่านคือการเปลี่ยนสถานะที่ใหญ่ที่สุดรองจากชนะ — ถ้าไม่ยิง แผงเป้าหมายจะค้างที่ด่าน 1
 	# ทั้งที่ผู้เล่นเลือกความฝันไปแล้ว (บั๊กเดียวกับที่ `claim_dream()` เคยเป็น)
 	changed.emit()
+	acted.emit("phase2")
 
 ## ความคืบหน้าของความฝัน — ต้องผ่าน **ทั้งสองเกณฑ์** ถึงจะอ้างสิทธิ์ได้
 ## คืนสัดส่วนของทั้งคู่ + บอกว่าข้อไหนคือตัวถ่วง เพื่อให้ UI ชี้ได้ว่ายังขาดอะไร
@@ -816,6 +839,7 @@ func claim_dream() -> Dictionary:
 	# ต้องยิง changed ด้วย — นี่คือการเปลี่ยนสถานะที่สำคัญที่สุดของเกมทั้งเกม
 	# เดิมไม่ยิง ทำให้แผงเป้าหมายยังโชว์ "ด่าน 2" ค้างอยู่ทั้งที่ผู้เล่นชนะไปแล้ว
 	changed.emit()
+	acted.emit("dream")
 	return {"ok": true}
 
 # ========== สิ้นเดือน ==========

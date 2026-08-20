@@ -15,6 +15,7 @@ func _init() -> void:
 	_check_bank()
 	_check_synth()
 	_check_files()
+	_check_acted()
 	print("audio_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
 
@@ -112,6 +113,52 @@ func _check_files() -> void:
 		var abs := ProjectSettings.globalize_path(path)
 		_eq("แฮชที่จดของ \"%s\" ตรงกับไฟล์บนดิสก์จริง" % id,
 			String(marks.get(id, "")), FileAccess.get_sha256(abs))
+
+
+## `acted` ต้องยิงเมื่อทำสำเร็จ และ **ห้ามยิงเมื่อล้มเหลว**
+## ถ้ายิงตอนล้มเหลวด้วย ผู้เล่นจะได้ยินเสียง "กู้เงินสำเร็จ" ทั้งที่วงเงินไม่พอ
+func _check_acted() -> void:
+	WQData.load_all()
+	var m := WQMatch.new()
+	m.setup({"mode": "solo", "seed": 20260815,
+		"players": [{"name": "คุณ", "job_id": "teacher", "is_ai": false}]})
+	var p = m.players[0]
+
+	var heard: Array[String] = []
+	p.acted.connect(func(kind: String): heard.append(kind))
+
+	# --- สำเร็จ ---
+	p.place = "home"
+	p.rest()
+	_eq("rest สำเร็จแล้วยิง acted", heard, ["rest"] as Array[String])
+
+	heard.clear()
+	p.travel_to("office")
+	_eq("travel_to สำเร็จแล้วยิง acted", heard, ["travel"] as Array[String])
+
+	heard.clear()
+	p.set_sleep(0)          # อยู่ที่ออฟฟิศ ตั้งค่าการนอนไม่ได้ → ต้องเงียบ
+	_eq("set_sleep ผิดที่แล้วต้องไม่ยิง", heard, [] as Array[String])
+
+	# --- ล้มเหลว: เวลาหมด ---
+	heard.clear()
+	p.hours = 0
+	_eq("side_job เวลาไม่พอต้องคืน ok=false", bool(p.side_job("ot").get("ok", true)), false)
+	_eq("ล้มเหลวแล้วต้องไม่ยิง acted", heard, [] as Array[String])
+
+	# --- ล้มเหลว: เงินไม่พอ ---
+	heard.clear()
+	p.hours = p.get_hours_max()
+	p.cash = 0.0
+	p.place = "mall"
+	_eq("ซื้อพาหนะเงินไม่พอต้องคืน ok=false",
+		bool(p.buy_vehicle("luxury").get("ok", true)), false)
+	_eq("ซื้อไม่สำเร็จแล้วต้องไม่ยิง acted", heard, [] as Array[String])
+
+	# ทุก kind ที่ core ยิงได้ ต้องมีที่อยู่ในตาราง (ยกเว้น dream ที่ตั้งใจไม่ให้มีเสียง)
+	for kind in ["travel", "buy", "sell", "loan", "repay", "ot", "freelance",
+			"scout", "study", "gym", "resort", "rest", "lifestyle", "phase2"]:
+		_eq("kind \"%s\" มีที่อยู่ในตาราง" % kind, WQBank.FROM_ACTED.has(kind), true)
 
 
 func _eq(label: String, got, want) -> void:

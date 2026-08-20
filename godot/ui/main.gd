@@ -1,10 +1,10 @@
 extends Control
-## หน้าจอหลักชั่วคราว — มีวิดเจ็ตจริงแล้ว: 🏆 อันดับ · ⏳ งบเวลา · ❤️ สุขภาพ
-## · 📍 สถานที่/การเดินทาง · งบการเงิน · ตลาดดีล · 🏘️ ทรัพย์สิน · หนี้สิน · ร้านค้า
-## และงานอาร์ต 3D: ฉากเมือง (world/city) + แท่นโชว์ (world/showcase) + หน้าเลือกอาชีพ
+## หน้าจอหลัก — จัดสามคอลัมน์ตามผังบทที่ 12 ของ GDD แล้ว
+## ซ้าย = "ฉันอยู่ตรงไหน" (อันดับ เป้าหมาย สุขภาพ งบการเงิน)
+## กลาง = "ฉันทำอะไรได้" (เวลา ดีล เดินทาง ทรัพย์สิน หนี้ ร้านค้า)
+## ขวา = "เกิดอะไรขึ้นแล้ว" (แท่นโชว์ บันทึก บทเรียน)
 ##
-## **ยังไม่ได้จัดเป็นสามคอลัมน์ตามบทที่ 12 ของ GDD** — ตอนนี้ยังเป็นคอลัมน์กลางเลื่อนยาว
-## กับคอลัมน์ขวาที่เป็นฉาก 3D งานถัดไปคือแผงสถานที่/การเดินทาง แล้วค่อยจัดเลย์เอาต์จริง
+## เกมเริ่มที่ `ui/screens/setup_screen.gd` (ทอยเต๋า → เลือกอาชีพ) แล้วค่อยตั้งแมตช์ที่นี่
 
 const BG := WQPalette.BG_DEEP
 const SEED := 20260815
@@ -27,7 +27,7 @@ var showcase: WQShowcase
 var city: WQCity
 var log_label: RichTextLabel
 var lessons: WQLessons
-var setup_screen: WQJobSelect
+var setup_screen: WQSetupScreen
 var _scroll: ScrollContainer          ## คอลัมน์กลาง — ตัวที่ WQ_SHOT_SCROLL เลื่อนตอนถ่ายภาพ
 var _shot_path := ""
 var _shot_frames := 0
@@ -44,10 +44,13 @@ func _ready() -> void:
 	if forced != "":
 		_start_match(forced, 0, 0)
 	else:
-		setup_screen = WQJobSelect.new()
+		setup_screen = WQSetupScreen.new()
 		setup_screen.chosen.connect(_on_job_chosen)
 		add_child(setup_screen)
 		setup_screen.start(SEED)
+		# WQ_ROLL=<1-6> ข้ามภาพทอยเต๋าไปหน้าเลือกอาชีพเลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
+		var forced_roll := OS.get_environment("WQ_ROLL")
+		if forced_roll != "": setup_screen.skip_to_jobs(forced_roll.to_int())
 
 	# ถ่ายภาพหน้าจอแล้วปิดตัวเอง — ใช้ตรวจงาน UI จาก terminal ได้โดยไม่ต้องเปิดเกมเอง
 	_shot_path = OS.get_environment("WQ_SHOT")

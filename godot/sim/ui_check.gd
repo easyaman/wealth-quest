@@ -74,6 +74,7 @@ func _init() -> void:
 	_check_banner(m)
 	_check_hint(m)
 	await _check_goal_panel(m)
+	await _check_dice()
 
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -712,6 +713,46 @@ func _labels_with(node: Node, needle: String) -> int:
 	if node is Label and (node as Label).text.contains(needle): n += 1
 	for c in node.get_children(): n += _labels_with(c, needle)
 	return n
+
+
+## ลูกเต๋า — วิดเจ็ตนี้ต้องไม่มีตัวสุ่มของตัวเอง และต้องหยุดที่แต้มที่สั่งเสมอ
+func _check_dice() -> void:
+	var d := WQDice.new(64.0)
+	root.add_child(d)
+
+	# จำนวนจุดต้องเท่ากับแต้ม ไม่งั้นผู้เล่นอ่านหน้าเต๋าผิดตั้งแต่หน้าแรกของเกม
+	for n in range(1, 7):
+		_eq("หน้า %d มีจุดครบ %d จุด" % [n, n], (WQDice.PIPS[n] as Array).size(), n)
+
+	d.face = 4
+	_eq("ตั้งแต้มตรงๆ ได้", d.face, 4)
+	await process_frame
+	await process_frame
+	# บั๊กที่เคยเกิดจริง: Godot เปิด `_process` ให้เองตอนเข้าฉาก แล้ว `_settle()` ลากหน้ากลับไป 1
+	_eq("อยู่เฉยๆ หลายเฟรมแล้วแต้มต้องไม่เปลี่ยนเอง", d.face, 4)
+
+	var landed: Array = []
+	d.rolled.connect(func(n: int): landed.append(n))
+	d.roll_to(6)
+	_eq("ระหว่างกลิ้งต้องรู้ตัวว่ากำลังกลิ้ง", d.rolling, true)
+	d.roll_to(2)          # กดซ้ำระหว่างกลิ้งต้องไม่เปลี่ยนปลายทาง
+	d.finish_now()
+	_eq("หยุดที่แต้มที่สั่งครั้งแรก", d.face, 6)
+	_eq("ยิงสัญญาณครั้งเดียวต่อการทอยหนึ่งครั้ง", landed, [6])
+	await process_frame
+	_eq("หยุดแล้วต้องหยุดจริง ไม่กลิ้งต่อ", d.face, 6)
+
+	# เดินเวลาให้ภาพกลิ้งจบเอง (14 หน้า × 0.07 วิ ≈ 1 วิ) — ต้องหยุดที่แต้มที่สั่งเหมือนกัน
+	var d2 := WQDice.new(64.0)
+	root.add_child(d2)
+	d2.roll_to(5)
+	d2._process(0.05)
+	_eq("เวลายังไม่ถึง ยังกลิ้งอยู่", d2.rolling, true)
+	d2._process(1.2)
+	_eq("เวลาถึงแล้วหยุดเองที่แต้มที่สั่ง", [d2.rolling, d2.face], [false, 5])
+	d2.free()
+
+	d.free()
 
 
 func _button_of(node: Node) -> Button:

@@ -19,6 +19,7 @@ var offer: Dictionary = {}       ## ผลทอยจาก WQSetup.roll_start
 var picked_id := ""              ## อาชีพที่กำลังเลือกอยู่
 
 var _head: Label
+var _die: WQDice
 var _list: VBoxContainer
 var _showcase: WQShowcase
 var _confirm: Button
@@ -43,9 +44,19 @@ func _init() -> void:
 	col.add_theme_constant_override("separation", 14)
 	margin.add_child(col)
 
+	# เต๋าลูกเล็กค้างไว้ที่หัวข้อ — ผู้เล่นต้องเห็นตลอดว่า "ชุดอาชีพนี้มาจากแต้มนี้"
+	# ไม่ใช่รายการที่เกมยื่นให้เฉยๆ (GDD บทที่ 7: แต้ม = จำนวนทางเลือก ไม่ใช่คุณภาพ)
+	var head_row := HBoxContainer.new()
+	head_row.add_theme_constant_override("separation", 10)
+	col.add_child(head_row)
+
+	_die = WQDice.new(40.0)
+	head_row.add_child(_die)
+
 	_head = Label.new()
 	_head.add_theme_font_size_override("font_size", 20)
-	col.add_child(_head)
+	_head.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head_row.add_child(_head)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 20)
@@ -78,8 +89,16 @@ func _init() -> void:
 
 ## ทอยเต๋าแล้วสร้างรายการอาชีพ — forced_roll > 0 ใช้ตอนทดสอบ
 func start(seed_value: int, forced_roll := 0) -> void:
-	offer = WQSetup.roll_start(seed_value, forced_roll)
-	_head.text = "🎲 ทอยได้ %d — %s   ·   เลือกได้ %d อาชีพ   ·   โบนัสเวลา +%d ชม./เดือน" % [
+	show_offer(WQSetup.roll_start(seed_value, forced_roll))
+
+
+## รับผลทอยที่ทอยมาแล้วจากที่อื่น — `ui/screens/setup_screen.gd` ทอยก่อนเพื่อเอาแต้มไปเล่นภาพเต๋า
+## แล้วค่อยส่งชุดเดิมมาที่นี่ ห้ามทอยซ้ำตรงนี้ ไม่งั้นแต้มบนหน้าจอกับชุดอาชีพจะเป็นคนละครั้งกัน
+func show_offer(o: Dictionary) -> void:
+	offer = o
+	_die.face = int(offer.roll)
+	# ไม่ใส่อีโมจิ 🎲 ซ้ำในข้อความ — มีลูกเต๋าที่วาดจริงอยู่ข้างๆ แล้ว
+	_head.text = "ทอยได้ %d — %s   ·   เลือกได้ %d อาชีพ   ·   โบนัสเวลา +%d ชม./เดือน" % [
 		int(offer.roll), String(offer.label), (offer.jobs as Array).size(),
 		int(offer.bonus_hours)]
 	_build_list()

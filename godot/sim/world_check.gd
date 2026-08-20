@@ -39,6 +39,7 @@ func _init() -> void:
 	_check_showcase(sc, p, m)
 	_check_roll_start()
 	await _check_job_select()
+	await _check_setup_screen()
 	await _check_three_months(m, city, sc, p)
 	_check_core_knows_nothing_about_world()
 
@@ -422,6 +423,65 @@ func _check_core_knows_nothing_about_world() -> void:
 	_eq("sim/ ตัวอื่นไม่อ้างถึง world/", _files_referencing_world("res://sim"), [])
 	# และ ui/ ต้องเข้าถึง world/ ผ่านไฟล์ฉากเท่านั้น ไม่ preload สคริปต์ตรงๆ
 	_eq("มีสคริปต์ที่ทดสอบ world/ อยู่จริง", FileAccess.file_exists("res://sim/world_check.gd"), true)
+
+
+## หน้าจอ setup (GDD บทที่ 7) — ลำดับต้องเป็น ทอยเต๋า → เห็นผล → ค่อยเลือกอาชีพ
+## และ **แต้มบนลูกเต๋ากับชุดอาชีพต้องมาจากการทอยครั้งเดียวกัน** ห้ามทอยซ้ำระหว่างทาง
+func _check_setup_screen() -> void:
+	var screen := WQSetupScreen.new()
+	root.add_child(screen)
+	screen.start(20260815)
+	await process_frame
+
+	_eq("เปิดมายังไม่ทอย", screen.offer.is_empty(), true)
+	_eq("ยังไม่ทอย ยังไม่เห็นรายการอาชีพ", screen._job.visible, false)
+	_eq("ยังไม่ทอย ยังไม่มีปุ่มไปต่อ", screen._next_btn.visible, false)
+	_eq("ตารางแต้มครบหกแถวตาม data/config.json", screen._table.get_child_count(), 6)
+
+	# กดปุ่มจริง (ไม่ใช่เรียกเมธอดตรงๆ) — สายปุ่มขาดเมื่อไหร่จะรู้ตรงนี้
+	screen._roll_btn.pressed.emit()
+	_eq("กดปุ่มแล้วทอยจริง", screen.offer.is_empty(), false)
+	_eq("แต้มที่ได้อยู่ในช่วง 1–6", int(screen.offer.roll) >= 1 and int(screen.offer.roll) <= 6, true)
+	_eq("ทอยแล้วปิดปุ่มทอย", screen._roll_btn.disabled, true)
+
+	# เริ่มใหม่ต้องล้างของเดิมหมด ทั้งผลทอยและภาพลูกเต๋าที่ค้างกลิ้งอยู่
+	screen.start(20260815)
+	_eq("เริ่มใหม่แล้วล้างผลทอยเดิม", screen.offer.is_empty(), true)
+	_eq("เริ่มใหม่แล้วลูกเต๋าหยุดนิ่ง", screen._dice.rolling, false)
+
+	screen.roll(3)
+	_eq("ทอยแล้วได้แต้มที่สั่ง", int(screen.offer.roll), 3)
+	_eq("ระหว่างภาพลูกเต๋ากลิ้ง ยังไม่เฉลยรายการอาชีพ", screen._job.visible, false)
+
+	# ทอยซ้ำระหว่างที่ยังไม่ไปต่อ ต้องไม่เปลี่ยนผล — ไม่งั้นผู้เล่นกดรัวเพื่อเลือกแต้มที่ชอบได้
+	var jobs_before := str(screen.offer.jobs)
+	screen.roll(6)
+	_eq("กดทอยซ้ำแล้วผลไม่เปลี่ยน", int(screen.offer.roll), 3)
+	_eq("กดทอยซ้ำแล้วชุดอาชีพไม่เปลี่ยน", str(screen.offer.jobs), jobs_before)
+
+	screen._dice.finish_now()
+	_eq("ภาพลูกเต๋าหยุดที่แต้มที่ทอยได้", screen._dice.face, 3)
+	_has("เฉลยแต้มที่ได้เป็นข้อความด้วย", screen._result.text, "ได้แต้ม 3")
+	_eq("ทอยเสร็จแล้วมีปุ่มไปต่อ", screen._next_btn.visible, true)
+
+	screen.show_jobs()
+	await process_frame
+	_eq("ไปต่อแล้วเห็นรายการอาชีพ", screen._job.visible, true)
+	_eq("ยื่นอาชีพครบตามแต้มที่ทอยได้",
+		screen._job._buttons.size(), (screen.offer.jobs as Array).size())
+	_eq("เต๋าที่หัวข้อค้างแต้มเดิมไว้ให้ดู", screen._job._die.face, 3)
+
+	# หน้า setup ไม่ตั้งแมตช์เอง — ส่งต่อสัญญาณของหน้าเลือกอาชีพให้ ui/main.gd เท่านั้น
+	# lambda ของ GDScript จับตัวแปรแบบ "ก๊อปค่า" — เขียน `got = [...]` จะไปโดนแค่ก๊อปของมันเอง
+	# ต้องแก้ผ่านตัว Array เดิม (`assign`) ค่าถึงจะออกมาถึงข้างนอก
+	var got: Array = []
+	screen.chosen.connect(func(id: String, roll: int, bonus: int): got.assign([id, roll, bonus]))
+	screen._job.select(String(screen.offer.jobs[0].id))
+	screen._job._on_confirm()
+	_eq("ส่งต่อสัญญาณเลือกอาชีพครบทั้งสามค่า", got,
+		[String(screen.offer.jobs[0].id), 3, int(screen.offer.bonus_hours)])
+
+	screen.free()
 
 
 func _files_referencing_world(dir_path: String) -> Array:

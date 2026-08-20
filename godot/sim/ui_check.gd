@@ -949,6 +949,8 @@ func _check_dream_roll() -> void:
 	for c in w._result.get_children():
 		if c is WQStatBar: bars += 1
 	_eq("โชว์เกณฑ์ครบสองข้อ", bars, 2)
+	# ความฝันต้องมี "รูปของมัน" ไม่ใช่แค่ชื่อ — รูปอบจากโมเดลใน world/models/dreams (ข้อ 8)
+	_eq("การ์ดความฝันมีรูปที่อบจากโมเดลจริง", _textures_in(w._result) > 0, true)
 	_has("เกณฑ์ความมั่งคั่งตรงกับที่ core คำนวณ", _text_of(w._result),
 		WQFmt.m(float(terms.cost)))
 	_has("เกณฑ์รายได้ต่อเดือนตรงกับที่ core คำนวณ", _text_of(w._result),

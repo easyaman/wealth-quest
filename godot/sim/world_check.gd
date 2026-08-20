@@ -287,9 +287,9 @@ func _check_showcase(sc: WQShowcase, p, m: WQMatch) -> void:
 	_eq("แท่นโชว์จำกลุ่มและ id ของที่โชว์อยู่", [sc.kind, sc.id], ["assets", String(d.kind)])
 	_eq("ดีลต้องมีแถบครบ 4 อย่างตามข้อ 4.2 ของ ART-DIRECTION", sc._stats_box.get_child_count(), 4)
 
-	# ยังไม่มี .glb ต้องได้กล่องแทน ไม่ใช่ error หรือแท่นว่าง
-	_eq("ยังไม่มีโมเดลจริงของดีลกลุ่มนี้", sc.has_model("assets", String(d.kind)), false)
-	_eq("ไม่มีโมเดลแล้วใช้กล่องแทน", sc._model.name, "Placeholder")
+	# ทรัพย์สินทั้งห้าประเภทมีไฟล์ .glb แล้ว (ข้อ 8) — แท่นต้องเอาของจริงขึ้น ไม่ใช่กล่องแทน
+	_eq("ดีลกลุ่มนี้มีโมเดลแล้ว", sc.has_model("assets", String(d.kind)), true)
+	_eq("แท่นเอาโมเดลของกลุ่มนั้นขึ้นจริง", sc._model.name, String(d.kind))
 	_eq("บนแท่นมีของ + แท่นหมุน", sc._pivot.get_child_count(), 2)
 
 	# แถบต้องอ่านค่าจาก core ไม่ใช่คำนวณเองในฝั่ง UI
@@ -304,13 +304,25 @@ func _check_showcase(sc: WQShowcase, p, m: WQMatch) -> void:
 	_eq("เปลี่ยนของแล้วแถบเก่าไม่ค้าง", sc._stats_box.get_child_count(), 1)
 	_eq("เปลี่ยนของแล้วของเก่าไม่ค้างบนแท่น", sc._pivot.get_child_count(), 2)
 
-	# ทุก id ที่มีอยู่จริงใน data ต้องเรียกโชว์ได้โดยไม่ error แม้ยังไม่มีโมเดลสักชิ้น
+	# ของที่ไม่มีทั้งไฟล์และเมชต่อกล่อง ต้องได้กล่องแทน ไม่ใช่ error หรือแท่นว่าง
+	# (เหลือ id เดียวที่ทดสอบข้อนี้ได้แล้ว คือ id ที่ไม่มีอยู่จริง — ของในเกมมีของครบทุกชิ้นแล้ว)
+	sc.show_item("assets", "ไม่มีของชิ้นนี้", [])
+	_eq("ไม่มีโมเดลแล้วใช้กล่องแทน", sc._model.name, "Placeholder")
+
+	# ทุก id ที่มีอยู่จริงใน data ต้องเรียกโชว์ได้โดยไม่ error
 	for v in WQData.vehicles:
 		sc.show_item("vehicles", String(v.id), [])
 	for dev in WQData.devices:
 		sc.show_item("devices", String(dev.id), [])
 	for pl in WQData.places:
 		sc.show_item("places", String(pl.id), [])
+	# กลุ่มที่เพิ่มตอนข้อ 8 — แพ็กเกจกับความฝันไม่เคยถูกเรียกโชว์ในเทสต์มาก่อนเลย
+	for id in WQModelIds.for_kind("packs"):
+		sc.show_item("packs", String(id), [])
+		_eq("แพ็กเกจ %s มีโมเดลแล้ว" % id, sc._model.name, String(id))
+	for id in WQModelIds.for_kind("dreams"):
+		sc.show_item("dreams", String(id), [])
+		_eq("ความฝัน %s มีโมเดลแล้ว" % id, sc._model.name, String(id))
 	_eq("โชว์ id ทุกตัวใน data ได้โดยไม่พัง", sc._model != null, true)
 
 

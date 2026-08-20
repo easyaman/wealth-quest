@@ -196,6 +196,12 @@ func _show_dream() -> void:
 	var terms: Dictionary = p.dream_terms(picked)
 	_clear(_result)
 
+	# รูปความฝันอบมาจากโมเดล 3D ชิ้นเดียวกับที่อยู่ใน world/models/dreams (ข้อ 8)
+	# หน้านี้คือจุดเดียวในเกมที่ตอบว่า "เล่นไปทำไม" — ให้เห็นเป็นของ ไม่ใช่อ่านแต่ชื่อ
+	var art := WQIcon.make("dream_%d" % int(picked.roll), String(picked.icon), 132)
+	art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_result.add_child(art)
+
 	var title := Label.new()
 	title.text = "ได้แต้ม %d — %s %s" % [
 		int(picked.roll), String(picked.icon), String(picked.name)]

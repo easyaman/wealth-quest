@@ -26,15 +26,17 @@ static func has(kind: String, id: String) -> bool:
 		"vehicles": return VEHICLES.has(id)
 		"devices": return DEVICES.has(id)
 		"character": return id == "player"
-	# อาคารกับ prop อยู่คนละไฟล์เพราะยาวกว่าพาหนะทั้งหมดรวมกัน — แต่เข้าทางเดียวกันที่นี่
-	# ทุกคนที่อยากได้เมชต่อกล่องต้องถามผ่าน WQKitbash เท่านั้น จะได้ไม่มีใครหลุดรายการ
-	return WQKitbashPlaces.has(kind, id)
+	# อาคาร/prop และของบนแท่นโชว์อยู่คนละไฟล์เพราะยาวกว่าพาหนะทั้งหมดรวมกัน
+	# แต่เข้าทางเดียวกันที่นี่ — ทุกคนที่อยากได้เมชต่อกล่องต้องถามผ่าน WQKitbash เท่านั้น
+	# จะได้ไม่มีใครหลุดรายการ (ตัวอบ .glb · ตัวอบไอคอน · model_lint ถามที่เดียวกันหมด)
+	return WQKitbashPlaces.has(kind, id) or WQKitbashItems.has(kind, id)
 
 
 ## คืน MeshInstance3D พร้อมใช้ หรือ null ถ้ายังไม่ได้ต่อกล่องของชิ้นนี้ไว้
 static func build(kind: String, id: String) -> MeshInstance3D:
 	if not has(kind, id): return null
 	if WQKitbashPlaces.has(kind, id): return WQKitbashPlaces.build(kind, id)
+	if WQKitbashItems.has(kind, id): return WQKitbashItems.build(kind, id)
 	# character/player คือตัวละครเปล่าไม่ใส่ชุดอาชีพ — ชุดอาชีพเป็นเรื่องของหน้าเลือกอาชีพเท่านั้น
 	if kind == "character": return WQKitbashChar.build()
 	var st := WQMeshKit.begin()

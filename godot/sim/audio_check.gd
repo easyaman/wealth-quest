@@ -7,8 +7,14 @@ extends SceneTree
 ## ฟังจริงด้วย:  WQ_SFX=<id> godot --path .
 
 const SFX_DIR := "res://audio/sfx"
+const ALL_CHECKS: Array[String] = ["bank", "synth", "files", "acted"]
 
 var _fails := 0
+## เช็กไหนที่ "รันจนจบฟังก์ชันจริง" — ไม่ใช่แค่ไม่มีบรรทัดไหนล้มด้วย _eq()
+## มีเพราะ SCRIPT ERROR (เช่น เข้าถึงพร็อพเพอร์ตี้ที่ยังไม่มี) ทำให้ฟังก์ชันหยุดกลางคันแล้ว
+## คืนกลับไปที่ผู้เรียกเงียบๆ — _fails ไม่ขยับเลยเพราะไม่มี _eq() ตัวไหนได้รัน
+## ผลคือสูทเขียวทั้งที่เช็กพังตั้งแต่ก่อนถึงบรรทัดสุดท้าย
+var _completed := {}
 
 
 func _init() -> void:
@@ -16,6 +22,10 @@ func _init() -> void:
 	_check_synth()
 	_check_files()
 	_check_acted()
+	for name in ALL_CHECKS:
+		if not _completed.get(name, false):
+			_fails += 1
+			print("  ❌ เช็ก \"%s\" ไม่รันจบฟังก์ชัน — สคริปต์พังกลางทางก่อนถึงเครื่องหมายจบ" % name)
 	print("audio_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
 
@@ -38,6 +48,7 @@ func _check_bank() -> void:
 		_eq("คลื่นของ \"%s\" เป็นแบบที่ synth รู้จัก" % id,
 			["square", "triangle", "noise"].has(String(spec[0])), true)
 		_eq("\"%s\" ยาวไม่เกิน 2 วินาที" % id, float(spec[3]) <= 2.0, true)
+	_completed["bank"] = true
 
 
 func _check_synth() -> void:
@@ -68,6 +79,7 @@ func _check_synth() -> void:
 	_eq("สตรีมเป็น 16-bit", st.format, AudioStreamWAV.FORMAT_16_BITS)
 	_eq("สตรีมเป็น mono", st.stereo, false)
 	_eq("อัตราสุ่มตรงกับ synth", st.mix_rate, WQSynth.RATE)
+	_completed["synth"] = true
 
 
 ## ไฟล์เสียงต้องครบและต้องไม่มีไฟล์กำพร้า
@@ -113,6 +125,7 @@ func _check_files() -> void:
 		var abs := ProjectSettings.globalize_path(path)
 		_eq("แฮชที่จดของ \"%s\" ตรงกับไฟล์บนดิสก์จริง" % id,
 			String(marks.get(id, "")), FileAccess.get_sha256(abs))
+	_completed["files"] = true
 
 
 ## `acted` ต้องยิงเมื่อทำสำเร็จ และ **ห้ามยิงเมื่อล้มเหลว**
@@ -159,6 +172,7 @@ func _check_acted() -> void:
 	for kind in ["travel", "buy", "sell", "loan", "repay", "ot", "freelance",
 			"scout", "study", "gym", "resort", "rest", "lifestyle", "phase2"]:
 		_eq("kind \"%s\" มีที่อยู่ในตาราง" % kind, WQBank.FROM_ACTED.has(kind), true)
+	_completed["acted"] = true
 
 
 func _eq(label: String, got, want) -> void:

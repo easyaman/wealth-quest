@@ -16,12 +16,17 @@ var _main: Control
 
 
 func _init() -> void:
+	WQSave.dir = "user://saves_test"      # ห้ามแตะไฟล์เซฟจริงของผู้เล่น
+	for slot in WQSave.MANUAL_SLOTS + WQSave.AUTO_SLOTS:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(WQSave.path_for(slot)))
+
 	_main = load("res://ui/Main.tscn").instantiate()
 	root.add_child(_main)
 	await process_frame
 
 	await _check_setup_to_match()
 	await _check_match_to_phase2()
+	await _check_save_load()
 
 	print("flow_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -77,6 +82,48 @@ func _check_match_to_phase2() -> void:
 
 	_main._end_turn()
 	_eq("ตัดสินใจแล้วจบตาได้ตามปกติ", _main.m.month, month_before + 1)
+
+
+## บันทึก → เดินเกมต่อ → โหลดกลับ ต้องได้เกมเดิมเป๊ะ รวมถึงตัวสุ่ม
+func _check_save_load() -> void:
+	var month_at_save: int = _main.m.month
+	var rng_at_save: int = _main.m.rng.s
+
+	_main.hud.save_pressed.emit()
+	_eq("กด 💾 แล้วหน้าบันทึกต้องเปิด", _main.save_panel != null, true)
+	_slot_button(0).pressed.emit()
+	await process_frame
+	_eq("บันทึกแล้วหน้าบันทึกต้องปิดเอง", _main.save_panel == null, true)
+	_eq("ช่อง 1 ต้องมีไฟล์แล้ว", WQSave.slot_info("1").get("empty"), false)
+
+	# เดินเกมต่อ — สิ้นเดือนต้อง autosave ให้เองด้วย (GDD 14.3)
+	_main._end_turn()
+	_eq("เดือนเดินหน้าแล้ว", _main.m.month, month_at_save + 1)
+	_eq("สิ้นเดือนต้อง autosave ให้เอง", WQSave.slot_info("auto1").get("empty"), false)
+
+	_main.hud.load_pressed.emit()
+	_eq("กด 📂 แล้วหน้าโหลดต้องเปิด", _main.save_panel != null, true)
+	_slot_button(0).pressed.emit()
+	await process_frame
+	_eq("โหลดแล้วหน้าโหลดต้องปิดเอง", _main.save_panel == null, true)
+	_eq("ย้อนกลับไปเดือนที่บันทึกไว้", _main.m.month, month_at_save)
+	# กฎเหล็กข้อ 4: state ตัวสุ่มต้องกลับมาด้วย ไม่งั้นผู้เล่นเซฟ-โหลดรีดผลที่ชอบได้
+	_eq("state ของตัวสุ่มกลับมาเหมือนตอนบันทึก", _main.m.rng.s, rng_at_save)
+
+	# หลังโหลด สัญญาณต้องไม่ต่อซ้ำ — กดเดินทางทีเดียวต้องเดินทางรอบเดียว
+	var p = _main.m.get_current()
+	p.place = "home"
+	p.travel_used = 0
+	var cost: int = p.travel_cost("bank")
+	_main.travel_panel.travel_requested.emit("bank")
+	_eq("กดเดินทางทีเดียว เสียเวลาเดินทางรอบเดียว", p.travel_used, cost)
+	_eq("ไปถึงที่ที่กด", String(p.place), "bank")
+
+
+## ปุ่มของแถวที่ i ในหน้าบันทึก/โหลด (แถว 0–2 = ช่องที่ผู้เล่นกดเอง)
+func _slot_button(i: int) -> Button:
+	var row: Control = _main.save_panel._rows.get_child(i)
+	return row.get_child(row.get_child_count() - 1)
 
 
 func _eq(label: String, got, want) -> void:

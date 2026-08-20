@@ -29,6 +29,7 @@ var log_label: RichTextLabel
 var lessons: WQLessons
 var setup_screen: WQSetupScreen
 var dream_screen: WQDreamRoll     ## หน้าทอยความฝันด่าน 2 — มีอยู่แปลว่ากำลังรอผู้เล่นตัดสินใจ
+var save_panel: WQSavePanel       ## หน้าบันทึก/โหลด — มีอยู่แปลว่ากำลังเปิดค้างอยู่
 var _scroll: ScrollContainer          ## คอลัมน์กลาง — ตัวที่ WQ_SHOT_SCROLL เลื่อนตอนถ่ายภาพ
 var _shot_path := ""
 var _shot_frames := 0
@@ -47,11 +48,16 @@ func _ready() -> void:
 	else:
 		setup_screen = WQSetupScreen.new()
 		setup_screen.chosen.connect(_on_job_chosen)
+		setup_screen.load_requested.connect(func(): _open_save_panel("load"))
 		add_child(setup_screen)
 		setup_screen.start(SEED)
 		# WQ_ROLL=<1-6> ข้ามภาพทอยเต๋าไปหน้าเลือกอาชีพเลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
 		var forced_roll := OS.get_environment("WQ_ROLL")
 		if forced_roll != "": setup_screen.skip_to_jobs(forced_roll.to_int())
+
+	# WQ_PANEL=save|load เปิดหน้าบันทึก/โหลดค้างไว้เลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
+	var panel := OS.get_environment("WQ_PANEL")
+	if panel != "": _open_save_panel(panel)
 
 	# ถ่ายภาพหน้าจอแล้วปิดตัวเอง — ใช้ตรวจงาน UI จาก terminal ได้โดยไม่ต้องเปิดเกมเอง
 	_shot_path = OS.get_environment("WQ_SHOT")
@@ -79,24 +85,14 @@ func _on_job_chosen(job_id: String, roll: int, bonus_hours: int) -> void:
 
 
 func _start_match(job_id: String, roll: int, bonus_hours: int) -> void:
-	m = WQMatch.new()
-	m.setup({"mode": "solo", "seed": SEED, "players": [
+	var fresh := WQMatch.new()
+	fresh.setup({"mode": "solo", "seed": SEED, "players": [
 		{"name": "คุณ", "job_id": job_id, "is_ai": false,
 			"roll": roll, "bonus_hours": bonus_hours},
 		{"name": "บอท A", "job_id": "programmer", "is_ai": true},
 		{"name": "บอท B", "job_id": "pilot", "is_ai": true},
 	]})
-	m.month_ended.connect(func(_mo): _refresh())
-	city.bind(m)
-	# คลิกอาคารในฉาก 3D ไม่เรียก travel_to() เอง — ยิงสัญญาณกลับมาให้ ui/ ตัดสินใจ
-	# (ART-DIRECTION 4.1 · world/ อ่านสถานะได้ แต่ห้ามแก้)
-	city.place_clicked.connect(_on_place_clicked)
-	deal_market.deal_hovered.connect(_on_deal_hovered)
-	shop.picked.connect(_on_shop_picked)
-	# แผงเดินทางกับฉากเมือง 3D เข้าทางเดียวกันเป๊ะ — ทั้งคู่แค่ "บอก" ว่าอยากไปไหน
-	travel_panel.travel_requested.connect(_on_place_clicked)
-	if not hud.end_turn_pressed.is_connected(_end_turn):
-		hud.end_turn_pressed.connect(_end_turn)
+	_adopt_match(fresh)
 
 	# WQ_DREAM=1 ดันผู้เล่นไปที่จังหวะ "ออกจากสนามแข่งหนูได้แล้ว" ทันที
 	# เพื่อดูหน้าทอยความฝัน (GDD บทที่ 9) โดยไม่ต้องเล่นจริง 20–50 เดือนก่อน
@@ -104,7 +100,24 @@ func _start_match(job_id: String, roll: int, bonus_hours: int) -> void:
 		var me = m.get_current()
 		me.finished = m.month
 		me.pending_dream = true
+		_refresh()
 
+
+## รับแมตช์มาใช้เป็นเกมปัจจุบัน — ใช้ทั้งตอนเริ่มเกมใหม่และตอน **โหลดไฟล์เซฟ**
+## ต้องถอดสัญญาณของแมตช์เก่าออกก่อนเสมอ ไม่งั้นโหลดเกมแล้วเกมเก่ายังส่งสัญญาณมาอัปเดตหน้าจอ
+## (สัญญาณของ "วิดเจ็ต" ต่อไว้ครั้งเดียวใน `_build_layout` เพราะมันไม่ได้ผูกกับแมตช์)
+func _adopt_match(new_match: WQMatch) -> void:
+	if m != null and m.month_ended.is_connected(_on_month_ended):
+		m.month_ended.disconnect(_on_month_ended)
+	m = new_match
+	m.month_ended.connect(_on_month_ended)
+	city.bind(m)
+	_refresh()
+
+
+func _on_month_ended(_mo: int) -> void:
+	# autosave ทุกสิ้นเดือน (GDD 14.3) — วนสามช่อง ผู้เล่นเขียนทับช่องพวกนี้เองไม่ได้
+	WQSave.write_auto(m, _ui_state())
 	_refresh()
 
 
@@ -214,6 +227,19 @@ func _build_layout() -> void:
 	lessons = WQLessons.new()
 	right.add_child(lessons)
 
+	# สัญญาณของวิดเจ็ตต่อครั้งเดียวตอนสร้างหน้าจอ — ไม่ผูกกับแมตช์ใดแมตช์หนึ่ง
+	# (เดิมต่อใน `_start_match` ซึ่งพอโหลดเกมทีก็จะต่อซ้ำอีกชั้น แล้วกดเดินทางทีเดียวเดินสองรอบ)
+	#
+	# คลิกอาคารในฉาก 3D ไม่เรียก travel_to() เอง — ยิงสัญญาณกลับมาให้ ui/ ตัดสินใจ
+	# (ART-DIRECTION 4.1 · world/ อ่านสถานะได้ แต่ห้ามแก้) แผงเดินทางเข้าทางเดียวกันเป๊ะ
+	city.place_clicked.connect(_on_place_clicked)
+	travel_panel.travel_requested.connect(_on_place_clicked)
+	deal_market.deal_hovered.connect(_on_deal_hovered)
+	shop.picked.connect(_on_shop_picked)
+	hud.end_turn_pressed.connect(_end_turn)
+	hud.save_pressed.connect(func(): _open_save_panel("save"))
+	hud.load_pressed.connect(func(): _open_save_panel("load"))
+
 
 ## หนึ่งคอลัมน์ = ScrollContainer ของตัวเอง — ทุกคอลัมน์ยาวไม่เท่ากันและยาวเกินจอได้ทั้งสามอัน
 ## ถ้าใช้สกรอลล์เดียวร่วมกัน เลื่อนดูดีลทีเดียวแล้วสุขภาพกับบันทึกจะเลื่อนหายไปด้วย
@@ -295,8 +321,60 @@ func _on_place_clicked(place_id: String) -> void:
 	_refresh()
 
 
+# ========== บันทึก / โหลด ==========
+## สถานะฝั่ง UI ที่ต้องกลับมาเหมือนเดิมตอนโหลด — ฝากไว้ในไฟล์เซฟผ่านช่อง `ui`
+func _ui_state() -> Dictionary:
+	return {}
+
+
+func _open_save_panel(mode: String) -> void:
+	if save_panel != null: return
+	save_panel = WQSavePanel.new()
+	save_panel.save_requested.connect(_on_save_slot)
+	save_panel.load_requested.connect(_on_load_slot)
+	save_panel.closed.connect(_close_save_panel)
+	add_child(save_panel)
+	save_panel.open(mode, m != null)
+
+
+func _close_save_panel() -> void:
+	_close_screen(save_panel)
+	save_panel = null
+
+
+func _on_save_slot(slot: String) -> void:
+	if m == null: return
+	var err := WQSave.write_slot(m, slot, _ui_state())
+	_close_save_panel()
+	if err == OK:
+		m.log_line("💾 บันทึกลงช่อง %s แล้ว" % slot, "good", null)
+	else:
+		m.log_line("⚠️ บันทึกไม่สำเร็จ (รหัส %d)" % err, "bad", null)
+	_refresh()
+
+
+## โหลดแล้วต้องล้างหน้าจอที่ค้างอยู่ทั้งหมด — ผู้เล่นอาจกดโหลดจากหน้า setup
+## หรือกดตอนที่หน้าทอยความฝันเปิดค้างอยู่ ถ้าไม่ล้าง หน้าจอเก่าจะลอยทับเกมใหม่
+func _on_load_slot(slot: String) -> void:
+	var loaded := WQSave.read_slot(slot)
+	_close_save_panel()
+	if loaded == null:
+		if m != null: m.log_line("⚠️ โหลดช่อง %s ไม่ได้" % slot, "bad", null)
+		return
+	if setup_screen != null:
+		_close_screen(setup_screen)
+		setup_screen = null
+	if dream_screen != null:
+		_close_screen(dream_screen)
+		dream_screen = null
+	_adopt_match(loaded)
+	m.log_line("📂 โหลดจากช่อง %s แล้ว" % slot, "good", null)
+	_refresh()
+
+
 func _end_turn() -> void:
-	if m == null or dream_screen != null: return    # กำลังรอเลือกความฝัน ห้ามเดินเดือนต่อ
+	# กำลังรอเลือกความฝัน หรือกำลังเปิดหน้าบันทึก/โหลดอยู่ ห้ามเดินเดือนต่อ
+	if m == null or dream_screen != null or save_panel != null: return
 	m.end_turn()
 	_refresh()
 
@@ -325,7 +403,8 @@ func _on_dream_chosen(dream: Dictionary, retire: bool) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if m == null or dream_screen != null: return   # ยังไม่มีเกมให้จบตา หรือกำลังรอเลือกความฝัน
+	# ยังไม่มีเกมให้จบตา หรือมีหน้าจออื่นเปิดค้างอยู่
+	if m == null or dream_screen != null or save_panel != null: return
 	if e is InputEventKey and e.pressed and e.keycode == KEY_SPACE:
 		_end_turn()
 

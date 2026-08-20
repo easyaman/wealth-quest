@@ -17,6 +17,7 @@ extends Control
 ## เลือกเสร็จแล้วยิง `chosen` ให้ `ui/main.gd` เป็นคนตั้งแมตช์ เหมือนเดิม
 
 signal chosen(job_id: String, roll: int, bonus_hours: int)
+signal load_requested
 
 const DIM := Color("8fa6bd")
 const GOLD := Color("f2b233")
@@ -29,6 +30,7 @@ var _dice: WQDice
 var _roll_btn: Button
 var _result: Label
 var _next_btn: Button
+var _load_btn: Button
 var _job: WQJobSelect
 var _seed := 0
 
@@ -112,6 +114,14 @@ func _build_intro() -> Control:
 	_next_btn.visible = false
 	_next_btn.pressed.connect(show_jobs)
 	col.add_child(_next_btn)
+
+	# โผล่เฉพาะตอนที่มีไฟล์เซฟจริงเท่านั้น — ปุ่มที่กดแล้วเจอรายการว่างเปล่าคือปุ่มที่ไม่ควรมี
+	_load_btn = Button.new()
+	_load_btn.text = "📂 โหลดเกมที่บันทึกไว้"
+	_load_btn.custom_minimum_size = Vector2(220, 36)
+	_load_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_load_btn.pressed.connect(func(): load_requested.emit())
+	col.add_child(_load_btn)
 	return margin
 
 
@@ -161,6 +171,7 @@ func start(seed_value: int) -> void:
 	_next_btn.visible = false
 	_roll_btn.disabled = false
 	_dice.reset(1)
+	_load_btn.visible = WQSave.has_any()
 	_intro.visible = true
 	_job.visible = false
 

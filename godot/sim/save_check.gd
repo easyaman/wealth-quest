@@ -7,6 +7,7 @@ var _fails := 0
 
 func _init() -> void:
 	WQData.load_all()
+	WQSave.dir = "user://saves_test"      # ห้ามแตะไฟล์เซฟจริงของผู้เล่น
 	var m := WQMatch.new()
 	m.setup({"mode": "solo", "seed": 4242, "players": [
 		{"name": "คุณ", "job_id": "teacher", "is_ai": false},
@@ -43,8 +44,49 @@ func _init() -> void:
 	# ตัวสุ่มต้องเดินต่อจากจุดเดิม ไม่งั้นผู้เล่นเซฟ-โหลดซ้ำเพื่อรีดผลที่ชอบได้
 	_eq("ค่าสุ่มถัดไปหลังโหลด", m2.rng.next(), m.rng.next())
 
+	_check_slots(m)
+
 	print("save_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
+
+## ช่องเซฟจริงบนดิสก์ — หัวไฟล์ต้องอ่านได้โดยไม่ต้องประกอบแมตช์ และ autosave ต้องวนช่อง
+func _check_slots(m: WQMatch) -> void:
+	for slot in WQSave.MANUAL_SLOTS + WQSave.AUTO_SLOTS:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(WQSave.path_for(slot)))
+
+	_eq("ยังไม่มีเซฟสักช่อง", WQSave.has_any(), false)
+	_eq("ช่องว่างต้องบอกว่าว่าง", WQSave.slot_info("1").get("empty"), true)
+
+	WQSave.write_slot(m, "1", {"tut": 4})
+	var info := WQSave.slot_info("1")
+	_eq("เขียนแล้วช่องต้องไม่ว่าง", info.get("empty"), false)
+	_eq("หัวไฟล์บอกเดือนที่เซฟ", int(info.get("month")), m.month)
+	_eq("หัวไฟล์บอกชื่อผู้เล่นคนจริง", String(info.get("name")), String(m.players[0].pname))
+	_eq("หัวไฟล์บอกความมั่งคั่งสุทธิ", int(info.get("net_worth")),
+		roundi(m.players[0].get_net_worth()))
+	_eq("หัวไฟล์บอกว่าเวอร์ชันตรง", info.get("version_ok"), true)
+	_eq("มีเซฟแล้ว has_any ต้องเป็นจริง", WQSave.has_any(), true)
+	_eq("ของฝั่ง UI กลับมาครบ", int(WQSave.read_extra("1").get("tut", -1)), 4)
+
+	var loaded := WQSave.read_slot("1")
+	_eq("โหลดช่องที่เขียนไว้ได้", loaded != null and loaded.month == m.month, true)
+	_eq("โหลดช่องที่ไม่มีไฟล์ต้องได้ null ไม่ใช่ crash", WQSave.read_slot("2"), null)
+
+	# autosave ต้องไล่ลงช่องว่างให้ครบก่อน แล้วค่อยวนทับช่องที่เก่าที่สุด
+	# เขียนรวดเดียวในวินาทีเดียวแบบนี้แหละที่เคยทำให้วงยุบเหลือช่องเดียว (ตอนเรียงด้วยนาฬิกา)
+	for _i in WQSave.AUTO_SLOTS.size():
+		WQSave.write_auto(m)
+	var filled := 0
+	for slot in WQSave.AUTO_SLOTS:
+		if not WQSave.slot_info(slot).get("empty", true): filled += 1
+	_eq("autosave กระจายครบทั้งสามช่อง", filled, WQSave.AUTO_SLOTS.size())
+
+	WQSave.write_auto(m)          # ครั้งที่สี่ต้องวนกลับไปทับช่องแรกซึ่งเก่าที่สุด
+	var seqs: Array = []
+	for slot in WQSave.AUTO_SLOTS:
+		seqs.append(int(WQSave.slot_info(slot).get("seq", -1)))
+	_eq("autosave ครั้งที่สี่ทับช่องที่เก่าที่สุด", seqs, [3, 1, 2])
+
 
 func _eq(label: String, got, want) -> void:
 	if typeof(got) == TYPE_FLOAT or typeof(want) == TYPE_FLOAT:

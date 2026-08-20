@@ -3,10 +3,28 @@ extends RefCounted
 ## บันทึก/โหลด — เก็บ state ของตัวสุ่มด้วยเสมอ ไม่งั้นผู้เล่นจะ save-scum ได้
 ## ไฟล์เซฟอยู่ที่ user://saves/ (ต่อ Steam Cloud ได้ตรงๆ)
 
-const VERSION := 5   # 5 = เพิ่มระบบแผนที่/การเดินทาง (place, vehicle, devices, gym_pack, shield)
-const DIR := "user://saves"
+const VERSION := 6   # 6 = เพิ่มหัวไฟล์ (meta) สำหรับหน้าบันทึก/โหลด + ช่อง ui สำหรับสถานะการสอน
+## โฟลเดอร์ไฟล์เซฟ — เป็น `static var` ไม่ใช่ const เพราะ **เทสต์ต้องเขียนคนละที่กับของผู้เล่น**
+## (ถ้าเทสต์เขียนทับ `user://saves` วันไหนที่รันเทสต์บนเครื่องที่มีเกมเซฟจริงอยู่ ของผู้เล่นหายทันที)
+static var dir := "user://saves"
 
-static func to_dict(m: WQMatch) -> Dictionary:
+## ช่องเซฟที่มีทั้งหมด — สามช่องแรกผู้เล่นกดเอง สามช่องหลังเกมเขียนให้เองทุกสิ้นเดือน
+## (GDD 14.3 แนะนำ autosave วนเก็บ 3 ช่อง — เก็บช่องเดียวแปลว่าเดือนที่พลาดทับของเดิมไปแล้ว)
+const MANUAL_SLOTS: Array[String] = ["1", "2", "3"]
+const AUTO_SLOTS: Array[String] = ["auto1", "auto2", "auto3"]
+
+
+static func path_for(slot: String) -> String:
+	return "%s/slot%s.json" % [dir, slot]
+
+
+static func is_auto(slot: String) -> bool:
+	return AUTO_SLOTS.has(slot)
+
+
+## `extra` คือของฝั่ง UI ที่ต้องกลับมาเหมือนเดิมตอนโหลด (ตอนนี้มีสถานะการสอน)
+## core ไม่แตะข้างในเลย เก็บและคืนเป็นก้อนเดียว — กฎข้อ 1 ของโปรเจกต์ยังอยู่ครบ
+static func to_dict(m: WQMatch, extra: Dictionary = {}) -> Dictionary:
 	var ps: Array = []
 	for p in m.players:
 		ps.append({
@@ -29,13 +47,57 @@ static func to_dict(m: WQMatch) -> Dictionary:
 	var ds: Array = []
 	for d in m.active_disasters:
 		ds.append({"id": d.def.id, "left": d.left})
-	return {"v": VERSION, "mode": m.mode, "month": m.month, "rng": m.rng.s,
+	return {"v": VERSION, "meta": meta_of(m), "ui": extra,
+		"mode": m.mode, "month": m.month, "rng": m.rng.s,
 		"market_index": m.market_index, "market_trend": m.market_trend,
 		"deal_id_seq": m.deal_id_seq, "deals": m.deals, "logs": m.logs,
 		"state": m.state, "start_index": m.start_index, "turn": m.turn,
 		"disaster_cooldown": m.disaster_cooldown, "active_disasters": ds,
 		"disaster_history": m.disaster_history, "champions": m.champions,
 		"players": ps}
+
+## หัวไฟล์ที่หน้าบันทึก/โหลดเอาไปโชว์ — ต้องอ่านได้โดย **ไม่ต้องสร้าง WQMatch ขึ้นมาทั้งตัว**
+## ไม่งั้นแค่เปิดหน้ารายการเซฟก็ต้องประกอบเกมหกเกมพร้อมกัน
+static func meta_of(m: WQMatch) -> Dictionary:
+	var who = null
+	for p in m.players:
+		if not p.is_ai:
+			who = p
+			break
+	if who == null and not m.players.is_empty(): who = m.players[0]
+	return {
+		"saved_at": int(Time.get_unix_time_from_system()),
+		"month": m.month, "mode": m.mode,
+		"name": String(who.pname) if who != null else "",
+		"job": String(who.job.get("name", "")) if who != null else "",
+		"job_icon": String(who.job.get("icon", "")) if who != null else "",
+		"job_id": String(who.job.get("id", "")) if who != null else "",
+		"net_worth": roundi(who.get_net_worth()) if who != null else 0,
+		"phase": int(who.phase) if who != null else 1,
+	}
+
+
+## ข้อมูลของช่องหนึ่งสำหรับหน้ารายการเซฟ — ไม่มีไฟล์ก็คืน `{"empty": true}`
+## ไฟล์คนละเวอร์ชันต้องบอกให้ชัดว่าโหลดไม่ได้ ไม่ใช่ทำเป็นว่าช่องนั้นว่าง
+static func slot_info(slot: String) -> Dictionary:
+	var path := path_for(slot)
+	if not FileAccess.file_exists(path): return {"empty": true, "slot": slot}
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null: return {"empty": true, "slot": slot}
+	var data = JSON.parse_string(f.get_as_text())
+	if typeof(data) != TYPE_DICTIONARY: return {"empty": true, "slot": slot, "broken": true}
+	var info: Dictionary = (data as Dictionary).get("meta", {}).duplicate()
+	info["empty"] = false
+	info["slot"] = slot
+	info["version_ok"] = int((data as Dictionary).get("v", 0)) == VERSION
+	return info
+
+
+static func has_any() -> bool:
+	for slot in MANUAL_SLOTS + AUTO_SLOTS:
+		if FileAccess.file_exists(path_for(slot)): return true
+	return false
+
 
 static func from_dict(data: Dictionary) -> WQMatch:
 	assert(int(data.get("v", 0)) == VERSION, "ไฟล์เซฟคนละเวอร์ชัน")
@@ -75,15 +137,54 @@ static func from_dict(data: Dictionary) -> WQMatch:
 		m.players.append(p)
 	return m
 
-static func write_slot(m: WQMatch, slot: int) -> Error:
-	DirAccess.make_dir_recursive_absolute(DIR)
-	var f := FileAccess.open("%s/slot%d.json" % [DIR, slot], FileAccess.WRITE)
+static func write_slot(m: WQMatch, slot: String, extra: Dictionary = {}) -> Error:
+	return _write(slot, to_dict(m, extra))
+
+
+static func _write(slot: String, data: Dictionary) -> Error:
+	DirAccess.make_dir_recursive_absolute(dir)
+	var f := FileAccess.open(path_for(slot), FileAccess.WRITE)
 	if f == null: return FileAccess.get_open_error()
-	f.store_string(JSON.stringify(to_dict(m)))
+	f.store_string(JSON.stringify(data))
 	return OK
 
-static func read_slot(slot: int) -> WQMatch:
-	var path := "%s/slot%d.json" % [DIR, slot]
+
+static func read_slot(slot: String) -> WQMatch:
+	var path := path_for(slot)
 	if not FileAccess.file_exists(path): return null
 	var f := FileAccess.open(path, FileAccess.READ)
-	return from_dict(JSON.parse_string(f.get_as_text()))
+	var data = JSON.parse_string(f.get_as_text())
+	if typeof(data) != TYPE_DICTIONARY: return null
+	return from_dict(data)
+
+
+## ของฝั่ง UI ที่ฝากไว้ในไฟล์ (สถานะการสอน) — อ่านแยกจากตัวแมตช์เพราะคนละเจ้าของ
+static func read_extra(slot: String) -> Dictionary:
+	var path := path_for(slot)
+	if not FileAccess.file_exists(path): return {}
+	var f := FileAccess.open(path, FileAccess.READ)
+	var data = JSON.parse_string(f.get_as_text())
+	if typeof(data) != TYPE_DICTIONARY: return {}
+	return (data as Dictionary).get("ui", {})
+
+
+## autosave — วนทับ **ช่องที่เก่าที่สุด** เสมอ (ช่องว่างถือว่าเก่าที่สุด)
+##
+## เรียงลำดับด้วยตัวนับ `seq` ที่อ่านจากไฟล์จริง ไม่ใช่เวลานาฬิกา เพราะ `saved_at` ละเอียดแค่วินาที
+## ผู้เล่นที่กด Space รัวๆ จบสามเดือนในวินาทีเดียวจะได้ autosave ที่เวลาเท่ากันหมด แล้ววง
+## สามช่องจะยุบเหลือช่องเดียวทันทีตอนที่ต้องการมันที่สุด · และไม่เก็บตัวนับไว้นอกไฟล์
+## เพราะวันที่ผู้เล่นลบไฟล์เองหรือย้ายเครื่อง ตัวนับกับไฟล์จะไม่ตรงกัน
+static func write_auto(m: WQMatch, extra: Dictionary = {}) -> Error:
+	var oldest: String = AUTO_SLOTS[0]
+	var lowest := 1 << 62
+	var next := 0
+	for slot in AUTO_SLOTS:
+		var info := slot_info(slot)
+		var seq: int = -1 if info.get("empty", true) else int(info.get("seq", 0))
+		next = maxi(next, seq + 1)
+		if seq < lowest:
+			lowest = seq
+			oldest = slot
+	var data := to_dict(m, extra)
+	(data.meta as Dictionary)["seq"] = next
+	return _write(oldest, data)

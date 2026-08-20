@@ -6,10 +6,11 @@ extends PanelContainer
 ## เดือน · เงินสด · ความมั่งคั่งสุทธิ · เวลาที่เหลือ · สุขภาพ
 ## รายละเอียดของแต่ละอันอยู่ในแผงของมันเองด้านล่าง ที่นี่เอาแค่ตัวเลขเดียวต่ออย่าง
 ##
-## ปุ่ม [บันทึก][โหลด] ในเลย์เอาต์ของ GDD ยังไม่ได้ทำ — `core/save.gd` พร้อมแล้วแต่ยังไม่ต่อ UI
-## **ไม่ใส่ปุ่มที่กดแล้วไม่เกิดอะไร** ดีกว่าใส่ไว้ให้ดูครบแล้วผู้เล่นกดแล้วงง
+## ปุ่ม [💾][📂] ต่อกับ `ui/screens/save_panel.gd` แล้ว — HUD ไม่เขียนไฟล์เอง แค่ยิงสัญญาณ
 
 signal end_turn_pressed
+signal save_pressed
+signal load_pressed
 
 const DIM := Color("8fa6bd")
 const WARN := Color("ff8080")
@@ -44,6 +45,20 @@ func _init() -> void:
 	_net = _stat(row, 14)
 	_time = _stat(row, 14)
 	_health = _stat(row, 14)
+
+	# ปุ่มบันทึก/โหลดอยู่ก่อนปุ่มจบตา — จบตาคือปุ่มที่กดบ่อยที่สุดและกดผิดแล้วย้อนไม่ได้
+	# จึงต้องอยู่ริมสุดตัวเดียว ไม่มีอะไรมาอยู่ถัดจากมันให้กดพลาด
+	var save_btn := Button.new()
+	save_btn.text = "💾"
+	save_btn.tooltip_text = "บันทึกเกม"
+	save_btn.pressed.connect(func(): save_pressed.emit())
+	row.add_child(save_btn)
+
+	var load_btn := Button.new()
+	load_btn.text = "📂"
+	load_btn.tooltip_text = "โหลดเกม"
+	load_btn.pressed.connect(func(): load_pressed.emit())
+	row.add_child(load_btn)
 
 	_end = Button.new()
 	_end.text = "จบตา (Space)"

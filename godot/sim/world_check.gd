@@ -33,7 +33,12 @@ func _init() -> void:
 	_check_city_layout(city)
 	_check_click_is_read_only(city, p)
 	_check_avatar(city, p)
+	_check_disasters(city, m, p)
+	_check_vfx(city, m, p)
+	_check_avatar_states(city, p)
 	_check_showcase(sc, p, m)
+	_check_roll_start()
+	await _check_job_select()
 	await _check_three_months(m, city, sc, p)
 	_check_core_knows_nothing_about_world()
 
@@ -62,12 +67,40 @@ func _check_city_layout(city: WQCity) -> void:
 	_eq("กล้อง size = 22 ตาม ART-DIRECTION 2.3", city._cam.size, 22.0)
 	_eq("กล้องมุม isometric (-30, 45, 0)", city._cam.rotation_degrees.round(), Vector3(-30, 45, 0))
 
+	# อาคารสองหลังที่อยู่ติดกันห้ามกินเนื้อที่ทับกัน — ผังเมืองมาจาก x ใน places.json
+	# ซึ่งบางคู่ห่างกันแค่ 3 หน่วย ถ้าต่อตึกกว้างเกินช่องของตัวเอง เสากับหลังคาจะทะลุกัน
+	# (เกิดจริงตอน Sprint C ต่ออาคารรอบแรก — ธนาคารทะลุฟิตเนสไป 1.95 หน่วย)
+	_eq("อาคารไม่มีหลังไหนกินเนื้อที่ทับกัน", _overlaps(city), [])
+
 	# ทุกอาคารต้องมีจุดยืนของตัวเอง ไม่งั้นตัวละครจะไปยืนซ้อนกันกลางถนน
 	var seen := {}
 	for id in city._places:
 		var sp: Vector3 = (city._places[id] as WQPlaceNode).stand_point
 		seen[sp.snapped(Vector3(0.01, 0.01, 0.01))] = true
 	_eq("จุดยืนของแต่ละอาคารไม่ซ้ำกัน", seen.size(), city._places.size())
+
+
+## ช่วงแกน X ที่อาคารแต่ละหลังกินจริง (รวม prop ที่เป็นลูกของมัน) เรียงจากซ้ายไปขวา
+## แล้วดูว่าหลังที่อยู่ติดกันล้ำเข้าหากันไหม — เผื่อระยะ 0.1 หน่วยไว้กันเลขทศนิยมปัดเศษ
+const BUILDING_GAP := 0.1
+
+func _overlaps(city: WQCity) -> Array:
+	var spans: Array = []
+	for id in city._places:
+		var node: WQPlaceNode = city._places[id]
+		# วัดจาก bounds ของ "ตัวอาคาร" เท่านั้น ไม่ใช่ AABB ของทั้งโหนด
+		# เพราะโหนดมีวงไฟไฮไลต์ที่กว้างกว่าตัวอาคาร 1.6 หน่วยติดอยู่ด้วย
+		# วงไฟของสองหลังที่อยู่ติดกันซ้อนกันได้ไม่เป็นไร — มันเป็นแสงบนพื้น ไม่ใช่ก้อนตึก
+		spans.append({"id": String(id),
+			"x0": node.position.x + node.bounds.position.x,
+			"x1": node.position.x + node.bounds.end.x})
+	spans.sort_custom(func(a, b): return a.x0 < b.x0)
+	var out: Array = []
+	for i in spans.size() - 1:
+		var over: float = spans[i].x1 - spans[i + 1].x0 - BUILDING_GAP
+		if over > 0.0:
+			out.append("%s ทับ %s %.2f หน่วย" % [spans[i].id, spans[i + 1].id, over])
+	return out
 
 
 ## กฎเหล็กข้อสำคัญที่สุดของ world/ — คลิกแล้วต้องแค่ "บอก" ไม่ใช่ "ทำ"
@@ -101,6 +134,148 @@ func _check_avatar(city: WQCity, p) -> void:
 	_eq("สั่งเดินทางซ้ำระหว่างเดินต้องวาร์ปถึงทันที",
 		city._avatar.position, city._stand_point_of("mall"))
 	p.travel_to("home")
+
+
+## ภัยพิบัติต้องเปลี่ยน "สิ่งที่มองเห็น" จริง ไม่ใช่แค่ขึ้นข้อความในบันทึก
+## ยิงผ่านสัญญาณจริงของ match ทุกครั้ง — ไม่มีการเรียกเมธอดของ world/ ตรงๆ
+func _check_disasters(city: WQCity, m: WQMatch, p) -> void:
+	var layer: WQDisasterLayer = city._disasters
+
+	# ทุก id ใน data ต้องมีสภาพในฉาก ไม่งั้นภัยพิบัติบางลูกจะเกิดแบบไม่มีอะไรเปลี่ยนบนจอเลย
+	var missing: Array = []
+	for d in WQData.disasters:
+		if not WQDisasterLayer.KNOWN.has(String(d.id)): missing.append(String(d.id))
+	_eq("ภัยพิบัติทุก id ใน data/disasters.json มีสภาพในฉาก", missing, [])
+
+	var fog_before: float = city._env.fog_density
+	var health_before: float = p.health
+	var cash_before: float = p.cash
+
+	var shakes: Array = []
+	layer.shake_requested.connect(func(sec): shakes.append(sec))
+
+	# น้ำท่วม — แผ่นน้ำต้องโผล่ขึ้นมา
+	_start(m, "flood")
+	_eq("น้ำท่วมแล้วชั้นภัยพิบัติรู้", layer.has("flood"), true)
+	_eq("น้ำท่วมแล้วมีแผ่นน้ำในฉาก", layer._water.visible, true)
+
+	# โรคระบาด — ตัวละครใส่หน้ากาก
+	_start(m, "plague")
+	_eq("โรคระบาดแล้วตัวละครใส่หน้ากาก", city._avatar.is_masked(), true)
+
+	# เศรษฐกิจตก — หมอกเทาทึบขึ้น + ป้ายลดราคาโผล่หน้าร้าน
+	_start(m, "crisis")
+	_eq("เศรษฐกิจตกแล้วหมอกทึบขึ้น", city._env.fog_density > fog_before, true)
+	_eq("เศรษฐกิจตกแล้วมีป้ายลดราคา", layer._sale_signs.visible, true)
+	_eq("ป้ายลดราคามีครบทุกร้าน", layer._sale_signs.get_child_count(), WQData.places.size())
+
+	_start(m, "rate")
+	_eq("ดอกเบี้ยพุ่งแล้วมีป้ายเหนือธนาคาร", layer._rate_board.visible, true)
+	_start(m, "inflation")
+	_eq("ค่าครองชีพพุ่งแล้วมีลูกศรราคา", layer._price_arrows.visible, true)
+	_start(m, "fire")
+	_eq("ไฟไหม้แล้วมีควันลอยขึ้น", layer._smoke.emitting, true)
+	_start(m, "quake")
+	_eq("แผ่นดินไหวแล้วมีรอยแตกบนถนน", layer._cracks.visible, true)
+	_eq("แผ่นดินไหวแล้วสั่งเขย่ากล้องหนึ่งครั้ง", shakes.size(), 1)
+
+	# กฎเหล็ก: ชั้นภัยพิบัติอ่านอย่างเดียว — ที่หัก hp กับเงินคือ core/match.gd เท่านั้น
+	_eq("ชั้นภัยพิบัติไม่หักสุขภาพผู้เล่นเอง", p.health, health_before)
+	_eq("ชั้นภัยพิบัติไม่หักเงินผู้เล่นเอง", p.cash, cash_before)
+
+	# จบทุกลูกแล้วฉากต้องกลับเป็นเหมือนเดิม ไม่ใช่ค้างสภาพภัยพิบัติไว้ตลอดเกม
+	m.active_disasters.clear()
+	m.month_ended.emit(m.month)
+	_eq("ภัยพิบัติจบแล้วชั้นภัยพิบัติว่าง", layer.active, [])
+	_eq("ภัยพิบัติจบแล้วหมอกกลับเป็นเดิม", city._env.fog_density, fog_before)
+	_eq("ภัยพิบัติจบแล้วป้ายลดราคาหายไป", layer._sale_signs.visible, false)
+	_eq("ภัยพิบัติจบแล้วตัวละครถอดหน้ากาก", city._avatar.is_masked(), false)
+
+
+## เอฟเฟกต์ทั้งสี่ต้องยิงจาก "สัญญาณ" เท่านั้น — ทดสอบด้วยการทำให้เกมเกิดเหตุจริง
+## ไม่ใช่เรียก play() ตรงๆ เพราะแบบนั้นทดสอบแค่ว่าอนุภาคสร้างได้ ไม่ได้ทดสอบว่ามันผูกถูกที่
+func _check_vfx(city: WQCity, m: WQMatch, p) -> void:
+	var vfx: WQVfx = city._vfx
+	_eq("มีเอฟเฟกต์ครบสี่ตัว", vfx._emitters.keys().size(), 4)
+	for kind in WQVfx.KINDS:
+		_eq("เอฟเฟกต์ %s ยิงครั้งเดียวจบ ไม่พ่นค้าง" % kind,
+			(vfx._emitters[kind] as GPUParticles3D).one_shot, true)
+
+	vfx.played.clear()
+
+	# ภัยพิบัติ — ยิงจาก disaster_started ของ match
+	m.disaster_started.emit(WQData.disasters[0])
+	_eq("ภัยพิบัติเกิดแล้วมีเอฟเฟกต์", vfx.played.has("disaster"), true)
+
+	# ปิดดีล — ยิงจาก deal_closed ของผู้เล่นคนที่ฉากกำลังตามอยู่
+	vfx.played.clear()
+	p.deal_closed.emit({"kind": "micro", "name": "ทดสอบ"})
+	_eq("ปิดดีลแล้วมีเอฟเฟกต์", vfx.played.has("deal_closed"), true)
+
+	# ชนะ — ยิงเฉพาะตอนที่คนที่จบคือคนที่ฉากกำลังตามอยู่ ไม่ใช่ตอนบอทจบ
+	vfx.played.clear()
+	m.player_finished.emit(m.players[1])
+	_eq("บอทจบเกมแล้วไม่ยิงเอฟเฟกต์ชนะให้ผู้เล่น", vfx.played.has("win"), false)
+	m.player_finished.emit(p)
+	_eq("ผู้เล่นทำความฝันสำเร็จแล้วมีเอฟเฟกต์ชนะ", vfx.played.has("win"), true)
+
+	# เงินเดือนออก — เดือนที่ติดลบต้องไม่ยิง ไม่งั้นจะสอนผู้เล่นผิดว่าเดือนนี้ผ่านไปด้วยดี
+	vfx.played.clear()
+	var keep: float = p.fixed_expenses
+	p.fixed_expenses = 99999999.0
+	m.month_ended.emit(m.month)
+	_eq("เดือนที่รายจ่ายท่วมรายรับ ไม่มีเอฟเฟกต์เงินเข้า", vfx.played.has("payday"), false)
+	p.fixed_expenses = keep
+	m.month_ended.emit(m.month)
+	_eq("เดือนที่เหลือเก็บเป็นบวก มีเอฟเฟกต์เงินเข้า", vfx.played.has("payday"), true)
+
+
+## เริ่มภัยพิบัติผ่านทางเดียวกับที่ core ใช้จริง: ใส่ลงใน active_disasters แล้วยิงสัญญาณ
+func _start(m: WQMatch, id: String) -> void:
+	var def: Dictionary = {}
+	for d in WQData.disasters:
+		if String(d.id) == id: def = d
+	m.active_disasters.append({"def": def, "left": int(def.dur)})
+	m.disaster_started.emit(def)
+
+
+## ท่าทั้งหกต้องถูกเลือกจากสถานะของ core เท่านั้น — ไม่มีใครสั่งท่าจากภายนอกได้
+func _check_avatar_states(city: WQCity, p) -> void:
+	var av: WQAvatar = city._avatar
+	var health_before: float = p.health
+	var place_before: String = p.place
+
+	p.health = 80.0
+	p.travel_to("home")
+	av._hit_left = 0.0
+	av._pick_state()
+	_eq("ยืนเฉยๆ ที่บ้าน = ท่า idle", av.state, "idle")
+
+	p.travel_to("office")
+	av._hit_left = 0.0
+	av._pick_state()
+	_eq("อยู่ที่ทำงาน = ท่า work", av.state, "work")
+
+	p.health = 30.0
+	av._hit_left = 0.0
+	av._pick_state()
+	_eq("สุขภาพต่ำกว่า 40 = ท่า tired", av.state, "tired")
+
+	# สุขภาพลดลงต้องเข้าท่า hit เอง โดยไม่มีใครสั่ง — ตัวละครดูจาก changed ของ core ล้วนๆ
+	p.health = 20.0
+	p.changed.emit()
+	_eq("สุขภาพเพิ่งลดลง = ท่า hit", av.state, "hit")
+
+	p.dream_done = 12
+	av._hit_left = 0.0
+	av._pick_state()
+	_eq("ทำความฝันสำเร็จ = ท่า celebrate", av.state, "celebrate")
+
+	p.dream_done = 0
+	p.health = health_before
+	p.travel_to(place_before)
+	av._hit_left = 0.0
+	av._pick_state()
 
 
 func _check_showcase(sc: WQShowcase, p, m: WQMatch) -> void:
@@ -147,6 +322,92 @@ func _check_three_months(m: WQMatch, city: WQCity, sc: WQShowcase, p) -> void:
 	_eq("ฉากเมืองยังผูกกับผู้เล่นอยู่", city._player, p)
 	_eq("แท่นหมุนหมุนไปจริงหลังผ่านหลายเฟรม", sc._spin > 0.0, true)
 	_eq("อาคารไม่งอกเพิ่มระหว่างเดินเกม", city._places.size(), WQData.places.size())
+
+
+## ทอยเต๋าเริ่มเกมต้องตรงกับตาราง roll_table ใน data/config.json ทุกแต้ม
+## เทียบกับ "ตารางใน data" ไม่ใช่ตัวเลขที่พิมพ์ไว้ในเทสต์ — ไม่งั้นวันที่ปรับสมดุลตาราง
+## เทสต์จะยังผ่านทั้งที่เกมไม่ได้ทำตามตารางแล้ว
+func _check_roll_start() -> void:
+	for roll in range(1, 7):
+		var t: Dictionary = WQData.cfg.roll_table[str(roll)]
+		var res := WQSetup.roll_start(20260815, roll)
+		_eq("แต้ม %d ให้อาชีพครบตามตาราง" % roll, (res.jobs as Array).size(), int(t.count))
+		_eq("แต้ม %d ให้โบนัสเวลาตามตาราง" % roll, res.bonus_hours, int(t.bonusHours))
+
+		# ทุกอาชีพที่ยื่นให้ต้องอยู่ใน tier ที่แต้มนี้ปลดล็อก ห้ามมีอาชีพหลุด tier มา
+		var bad: Array = []
+		for j in res.jobs:
+			if not t.tiers.has(float(j.tier)) and not t.tiers.has(int(j.tier)):
+				bad.append(String(j.id))
+		_eq("แต้ม %d ไม่มีอาชีพหลุด tier" % roll, bad, [])
+
+		# GDD บทที่ 7: แต้ม ≥ 4 การันตีอย่างน้อยหนึ่งอาชีพจาก tier สูงสุดที่ปลดล็อก
+		if roll >= 4:
+			var top := 0
+			for tier in t.tiers: top = maxi(top, int(tier))
+			var has_top := false
+			for j in res.jobs:
+				if int(j.tier) == top: has_top = true
+			_eq("แต้ม %d การันตีอาชีพ tier สูงสุด" % roll, has_top, true)
+
+		# เรียงจาก tier ต่ำไปสูง แล้วเงินเดือนน้อยไปมาก — ผู้เล่นต้องอ่านรายการได้เป็นลำดับ
+		var sorted := true
+		for i in (res.jobs as Array).size() - 1:
+			var a: Dictionary = res.jobs[i]
+			var b: Dictionary = res.jobs[i + 1]
+			if int(a.tier) > int(b.tier): sorted = false
+			elif int(a.tier) == int(b.tier) and float(a.salary) > float(b.salary): sorted = false
+		_eq("แต้ม %d เรียงตาม tier แล้วเงินเดือน" % roll, sorted, true)
+
+	# เมล็ดเดิมต้องได้ผลเดิมเป๊ะ ไม่งั้นโหลดเซฟแล้วชุดอาชีพจะเปลี่ยน
+	var a1 := WQSetup.roll_start(4242)
+	var a2 := WQSetup.roll_start(4242)
+	_eq("เมล็ดเดิมได้แต้มเดิม", a1.roll, a2.roll)
+	_eq("เมล็ดเดิมได้ชุดอาชีพเดิม", str(a1.jobs), str(a2.jobs))
+
+
+## หน้าเลือกอาชีพ — ตัวเลขบนจอต้องมาจาก core และหน้าจอนี้ต้องไม่สร้างเกมเอง
+func _check_job_select() -> void:
+	var screen := WQJobSelect.new()
+	root.add_child(screen)
+	screen.start(20260815, 5)
+	await process_frame
+
+	_eq("ยื่นอาชีพให้เลือกครบตามแต้มที่ทอยได้",
+		screen._buttons.size(), (screen.offer.jobs as Array).size())
+	_eq("เปิดหน้ามาแล้วเลือกใบแรกไว้ให้ก่อน ไม่ปล่อยแท่นว่าง",
+		screen.picked_id, String(screen.offer.jobs[0].id))
+
+	var last := String(screen.offer.jobs[(screen.offer.jobs as Array).size() - 1].id)
+	screen.select(last)
+	_eq("เลือกอาชีพแล้วแท่นโชว์เปลี่ยนตาม", [screen._showcase.kind, screen._showcase.id],
+		["character", last])
+	_eq("มีแถบครบสามอันตาม Sprint C ข้อ 5", screen._showcase._stats_box.get_child_count(), 3)
+
+	# ตัวเลขบนแถบต้องเท่ากับที่ core ตอบ ไม่ใช่คำนวณซ้ำในฝั่ง UI
+	var pv := WQSetup.job_preview(last, int(screen.offer.bonus_hours))
+	var free_bar: WQStatBar = screen._showcase._stats_box.get_child(0)
+	_has("แถบเวลาว่างตรงกับ core", free_bar.value_text, "%d" % int(pv.free_hours))
+	var pay_bar: WQStatBar = screen._showcase._stats_box.get_child(1)
+	_has("แถบเงินเดือนตรงกับ core", pay_bar.value_text, WQFmt.m(float(pv.salary)))
+	var commute_bar: WQStatBar = screen._showcase._stats_box.get_child(2)
+	_has("แถบเดินทางตรงกับ core", commute_bar.value_text, "%d" % int(pv.commute))
+
+	# ทุกอาชีพในชุดต้องมีชุดอาชีพของตัวเอง ไม่งั้นจะมีอาชีพที่โชว์เป็นตัวละครเปล่า
+	var no_outfit: Array = []
+	for j in WQData.jobs:
+		if not WQKitbashChar.has_outfit(String(j.id)): no_outfit.append(String(j.id))
+	_eq("ทุกอาชีพใน data/jobs.json มีชุดอาชีพ", no_outfit, [])
+
+	# กดยืนยันแล้วต้องแค่ "บอก" ว่าเลือกอะไร ไม่ใช่ตั้งแมตช์เอง
+	var got: Array = []
+	screen.chosen.connect(func(id, roll, bonus): got.append([id, roll, bonus]))
+	screen._on_confirm()
+	_eq("กดยืนยันแล้วยิงสัญญาณบอกอาชีพที่เลือก",
+		got, [[last, int(screen.offer.roll), int(screen.offer.bonus_hours)]])
+
+	root.remove_child(screen)
+	screen.free()
 
 
 ## headless sim ต้องรันได้โดยไม่โหลด 3D เลย ถ้า core/ ไปอ้าง world/ เมื่อไหร่กฎนี้พัง

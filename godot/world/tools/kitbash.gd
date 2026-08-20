@@ -25,22 +25,23 @@ static func has(kind: String, id: String) -> bool:
 	match kind:
 		"vehicles": return VEHICLES.has(id)
 		"devices": return DEVICES.has(id)
-	return false
+		"character": return id == "player"
+	# อาคารกับ prop อยู่คนละไฟล์เพราะยาวกว่าพาหนะทั้งหมดรวมกัน — แต่เข้าทางเดียวกันที่นี่
+	# ทุกคนที่อยากได้เมชต่อกล่องต้องถามผ่าน WQKitbash เท่านั้น จะได้ไม่มีใครหลุดรายการ
+	return WQKitbashPlaces.has(kind, id)
 
 
 ## คืน MeshInstance3D พร้อมใช้ หรือ null ถ้ายังไม่ได้ต่อกล่องของชิ้นนี้ไว้
 static func build(kind: String, id: String) -> MeshInstance3D:
 	if not has(kind, id): return null
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	if WQKitbashPlaces.has(kind, id): return WQKitbashPlaces.build(kind, id)
+	# character/player คือตัวละครเปล่าไม่ใส่ชุดอาชีพ — ชุดอาชีพเป็นเรื่องของหน้าเลือกอาชีพเท่านั้น
+	if kind == "character": return WQKitbashChar.build()
+	var st := WQMeshKit.begin()
 	match kind:
 		"vehicles": _vehicle(st, id)
 		"devices": _device(st, id)
-	var mi := MeshInstance3D.new()
-	mi.name = id
-	mi.mesh = st.commit()
-	mi.material_override = load(FLAT_MAT)
-	return mi
+	return WQMeshKit.finish(st, id)
 
 
 # ========== พาหนะ ==========
@@ -158,60 +159,22 @@ static func _laptop(st: SurfaceTool) -> void:
 
 
 # ========== ตัวต่อพื้นฐาน ==========
-# ทุกหน้าได้ normal ของตัวเอง (flat shading) และ UV ทุกจุดชี้ไปกลางช่องสีบนแผ่น palette
-
-static func _uv(slot: StringName) -> Vector2:
-	return Vector2(WQPalette.slot_u(slot), 0.5)
-
+## ตัวต่อจริงอยู่ใน world/tools/meshkit.gd — ที่นี่เหลือแต่ชื่อเดิมไว้ให้โค้ดพาหนะเรียกเหมือนเดิม
+## (Sprint C ย้ายออกไปเพราะอาคารกับ prop ในฉากเมืองต้องใช้ตัวต่อชุดเดียวกันเป๊ะ)
 
 static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, slot: StringName) -> void:
-	var n := (b - a).cross(c - a).normalized()
-	var uv := _uv(slot)
-	for v in [a, b, c]:
-		st.set_normal(n)
-		st.set_uv(uv)
-		st.add_vertex(v)
+	WQMeshKit.tri(st, a, b, c, slot)
 
 
 static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3,
 		slot: StringName) -> void:
-	_tri(st, a, b, c, slot)
-	_tri(st, a, c, d, slot)
+	WQMeshKit.quad(st, a, b, c, d, slot)
 
 
 static func _box(st: SurfaceTool, center: Vector3, size: Vector3, slot: StringName) -> void:
-	var h := size * 0.5
-	var p := []
-	for i in 8:
-		p.append(center + Vector3(
-			h.x if (i & 1) else -h.x,
-			h.y if (i & 2) else -h.y,
-			h.z if (i & 4) else -h.z))
-	_quad(st, p[4], p[5], p[7], p[6], slot)   # +Z
-	_quad(st, p[1], p[0], p[2], p[3], slot)   # −Z
-	_quad(st, p[5], p[1], p[3], p[7], slot)   # +X
-	_quad(st, p[0], p[4], p[6], p[2], slot)   # −X
-	_quad(st, p[2], p[6], p[7], p[3], slot)   # +Y
-	_quad(st, p[0], p[1], p[5], p[4], slot)   # −Y
+	WQMeshKit.box(st, center, size, slot)
 
 
-## ทรงกระบอกที่แกนวางตาม X (ล้อรถ) — segments น้อยๆ ให้เห็นเหลี่ยม
 static func _cylinder_x(st: SurfaceTool, center: Vector3, r: float, half_w: float,
 		segments: int, slot: StringName) -> void:
-	var ring: Array[Vector2] = []
-	for i in segments:
-		# เลื่อนเฟสครึ่งช่อง เพื่อให้มีจุดยอดอยู่ที่มุม −90° พอดี (ล่างสุดของวง)
-		# ถ้าไม่เลื่อน วงสิบเหลี่ยมจะไม่มีจุดไหนแตะจุดต่ำสุดจริง ล้อจะสูงกว่าที่ควรราว 5% ของรัศมี
-		# แล้วรถทั้งคันจะลอยเหนือพื้นถนน — model_lint จับได้ตอนตรวจว่าฐานอยู่ที่ y=0 ไหม
-		var a := TAU * (float(i) + 0.5) / float(segments)
-		ring.append(Vector2(cos(a) * r, sin(a) * r))
-	for i in segments:
-		var p0: Vector2 = ring[i]
-		var p1: Vector2 = ring[(i + 1) % segments]
-		var a0 := center + Vector3(-half_w, p0.y, p0.x)
-		var b0 := center + Vector3(half_w, p0.y, p0.x)
-		var a1 := center + Vector3(-half_w, p1.y, p1.x)
-		var b1 := center + Vector3(half_w, p1.y, p1.x)
-		_quad(st, a0, b0, b1, a1, slot)
-		_tri(st, center + Vector3(half_w, 0, 0), b0, b1, slot)
-		_tri(st, center + Vector3(-half_w, 0, 0), a1, a0, slot)
+	WQMeshKit.cylinder_x(st, center, r, half_w, segments, slot)

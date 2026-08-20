@@ -4,6 +4,10 @@ extends RefCounted
 ## กฎเหล็ก: ไฟล์นี้ห้าม reference อะไรใน ui/ หรือ world/ เด็ดขาด
 
 signal changed
+## ยิงตอนปิดดีลสำเร็จเท่านั้น — มีไว้ให้ world/ กับ ui/ เล่นเอฟเฟกต์ได้โดยไม่ต้องเดาจาก changed
+## (changed ยิงทุกครั้งที่อะไรก็ตามเปลี่ยน แยกไม่ออกว่าครั้งนี้คือ "ซื้อของสำเร็จ")
+## สัญญาณนี้ไม่แตะตัวสุ่มและไม่เปลี่ยนตัวเลขใดๆ ผลการจำลองจึงยังตรงกับ engine.js เหมือนเดิม
+signal deal_closed(deal: Dictionary)
 
 ## อ้างกลับไปหาแมตช์แบบ **อ่อน** — `WQMatch.players` ถือผู้เล่นไว้แบบแข็งอยู่แล้ว
 ## ถ้าฝั่งนี้ถือแบบแข็งด้วยจะกลายเป็นวงอ้างอิง RefCounted แล้วทั้งแมตช์จะไม่ถูกคืนหน่วยความจำเลย
@@ -407,6 +411,7 @@ func close_deal(deal_id: int) -> Dictionary:
 	match_ref.deals.remove_at(i)
 	_log("ซื้อ %s %s (%d ชม.) → %+d บาท/เดือน" % [d.icon, d.name, h,
 		int(income - debt * float(WQData.cfg.mortgage))], "buy")
+	deal_closed.emit(d)
 	changed.emit()
 	return {"ok": true}
 

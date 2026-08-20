@@ -11,8 +11,9 @@ extends RefCounted
 ##   · แพ็กเกจ  → `gym_<id>` / `resort_<id>` (สองกลุ่มนี้ id ซ้ำกันได้ เช่น daily/day)
 ##   · ความฝัน  → `dream_<roll>` (dreams.json ใช้เลขทอยเต๋าเป็นตัวระบุ ไม่มีฟิลด์ id)
 ##   · ดีล      → ใช้ *ประเภท* ของดีล เพราะ id ของดีลเป็นเลขรันไทม์ ไม่คงที่ข้ามเกม
+##   · prop     → ของประดับฉากล้วนๆ ไม่มีใน data เลย (Sprint C) รายชื่ออยู่ที่ WQKitbashPlaces.PROPS
 
-const KINDS := ["places", "vehicles", "devices", "packs", "assets", "dreams", "character"]
+const KINDS := ["places", "props", "vehicles", "devices", "packs", "assets", "dreams", "character"]
 
 ## งบสามเหลี่ยมต่อกลุ่ม [ต่ำสุดที่ตั้งใจ, เพดานห้ามเกิน] — ART-DIRECTION ข้อ 2.1
 ## อยู่ที่นี่เพราะทั้ง model_lint และ models_readme ต้องใช้ตัวเลขชุดเดียวกัน
@@ -22,6 +23,7 @@ const BUDGET := {
 	"devices": [50, 300], "packs": [50, 300],
 	"vehicles": [300, 900],
 	"places": [400, 1500],
+	"props": [50, 300],
 	"character": [800, 1500],
 	"assets": [100, 600],
 	"dreams": [400, 1500],
@@ -40,6 +42,9 @@ static func all() -> Array:
 static func for_kind(kind: String) -> Array:
 	match kind:
 		"places": return WQData.places.map(func(p): return String(p.id))
+		# prop ประดับฉาก (ต้นไม้ เสาไฟ ม้านั่ง) ไม่มี id ใน data เพราะไม่มีผลต่อกฎเกมเลย
+		# รายชื่ออยู่ที่ WQKitbashPlaces.PROPS ที่เดียว — ที่นี่แค่ยืมมาให้ตัวตรวจ/ตัวสร้าง README เห็น
+		"props": return WQKitbashPlaces.PROPS.duplicate()
 		"vehicles": return WQData.vehicles.map(func(v): return String(v.id))
 		"devices": return WQData.devices.map(func(d): return String(d.id))
 		"packs":

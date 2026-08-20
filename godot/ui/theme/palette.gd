@@ -28,6 +28,12 @@ const NEUTRAL_5 := Color("23211d")
 const ACCENT_WOOD := Color("7a3b2e")    ## ของ "แพง/พรีเมียม"
 const ACCENT_STEEL := Color("3b4a5c")   ## ของ "ใช้งาน/เครื่องจักร"
 
+## เพิ่มตอน Sprint C — ฉากเมืองต้องมีต้นไม้และน้ำท่วม แต่เขียว/ฟ้าที่มีอยู่ถูกจองความหมายไว้แล้ว
+## (WIN = ผลตอบแทนบวก · TIME = แถบเวลา) ถ้าเอาสองสีนั้นไปทาต้นไม้กับน้ำ ผู้เล่นจะอ่านฉากผิด
+## จึงเป็นสีหม่นกว่าคู่ของมันชัดเจน — ต้องยังดูเป็นใบไม้/น้ำได้ แต่ไม่แย่งความหมาย
+const FOLIAGE := Color("4e7a52")        ## ใบไม้ พุ่มไม้ (หม่นกว่า WIN)
+const WATER := Color("2f6d8f")          ## น้ำท่วม สระว่ายน้ำ (หม่นกว่า TIME)
+
 ## ลำดับในแผ่น palette.png — ห้ามสลับลำดับหลังจากมี .glb ที่ map UV ไว้แล้ว
 ## เพราะ UV ของเมชชี้ไปที่ "ช่องที่เท่าไหร่" ไม่ใช่ชี้ที่ "สีอะไร"
 const SLOTS: Array[StringName] = [
@@ -35,6 +41,7 @@ const SLOTS: Array[StringName] = [
 	&"money", &"money_dark", &"time", &"health", &"danger", &"win",
 	&"neutral_1", &"neutral_2", &"neutral_3", &"neutral_4", &"neutral_5",
 	&"accent_wood", &"accent_steel",
+	&"foliage", &"water",
 ]
 
 const SLOT_COUNT := 32                  ## เผื่อช่องว่างไว้เติมสีใหม่โดยไม่ขยับ UV เดิม
@@ -60,6 +67,8 @@ static func by_name(slot: StringName) -> Color:
 		&"neutral_5": return NEUTRAL_5
 		&"accent_wood": return ACCENT_WOOD
 		&"accent_steel": return ACCENT_STEEL
+		&"foliage": return FOLIAGE
+		&"water": return WATER
 	push_error("WQPalette: ไม่รู้จักช่องสี '%s'" % slot)
 	return Color.MAGENTA
 

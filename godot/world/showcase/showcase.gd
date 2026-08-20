@@ -144,6 +144,25 @@ func show_item(item_kind: String, item_id: String, stats: Array, title := "") ->
 	_set_stats(stats)
 
 
+## โชว์เมชที่คนเรียกปั้นมาเองแล้ว แทนที่จะให้แท่นโชว์ไปหาโมเดลจาก kind/id
+##
+## มีไว้เพื่อกรณีเดียว: หน้าเลือกอาชีพ ซึ่งต้องโชว์ "ตัวละครในชุดอาชีพ" 16 แบบ
+## ที่ประกอบขึ้นตอนรันไทม์จาก WQKitbashChar — ไม่ใช่ไฟล์โมเดล 16 ไฟล์ในเช็กลิสต์
+## ทางอื่นทั้งหมดต้องใช้ show_item() ตามเดิม เพื่อให้ของบนแท่นกับไอคอนใน UI เป็นชิ้นเดียวกันเสมอ
+func show_built(item_kind: String, item_id: String, node: Node3D, stats: Array,
+		title := "") -> void:
+	kind = item_kind
+	id = item_id
+	_title.text = title
+	_title.visible = title != ""
+	var bg: Array = KIND_BG.get(item_kind, [Color("1b2d5b"), Color("3d5ba9")])
+	_bg_top = bg[0]
+	_bg_bot = bg[1]
+	queue_redraw()
+	_install_model(node)
+	_set_stats(stats)
+
+
 static func model_path(item_kind: String, item_id: String) -> String:
 	return "%s/%s/%s.glb" % [MODEL_DIR, item_kind, item_id]
 
@@ -154,15 +173,19 @@ static func has_model(item_kind: String, item_id: String) -> bool:
 
 
 func _set_model(item_kind: String, item_id: String) -> void:
+	_install_model(model_for(item_kind, item_id))
+
+
+## ล้างของเก่าออกจากแท่นแล้ววางของใหม่ + จัดกล้องให้พอดี
+## ใช้ remove_child() + free() ไม่ใช่ queue_free() — เหตุผลเดียวกับวิดเจ็ตอื่นในโปรเจกต์นี้
+## (โหนดที่รอลบยังนับเป็นลูกอยู่ ถ้าเปลี่ยนของสองครั้งในเฟรมเดียวของจะซ้อนกันบนแท่น)
+func _install_model(node: Node3D) -> void:
 	for c in _pivot.get_children():
 		_pivot.remove_child(c)
 		c.free()
-	_model = null
-
-	_model = model_for(item_kind, item_id)
+	_model = node
 	_pivot.add_child(_model)
 	_pivot.add_child(_pedestal())
-
 	_frame_camera(aabb_of(_model))
 
 

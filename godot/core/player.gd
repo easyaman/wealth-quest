@@ -751,6 +751,9 @@ func claim_dream() -> Dictionary:
 	phase = 3
 	dream_done = match_ref.month
 	match_ref.add_champion(self)
+	# ต้องยิง changed ด้วย — นี่คือการเปลี่ยนสถานะที่สำคัญที่สุดของเกมทั้งเกม
+	# เดิมไม่ยิง ทำให้แผงเป้าหมายยังโชว์ "ด่าน 2" ค้างอยู่ทั้งที่ผู้เล่นชนะไปแล้ว
+	changed.emit()
 	return {"ok": true}
 
 # ========== สิ้นเดือน ==========

@@ -70,6 +70,10 @@ func _init() -> void:
 	_check_standings(m)
 	await _check_travel_panel(m)
 	await _check_asset_list(m)
+	_check_hud(m)
+	_check_banner(m)
+	_check_hint(m)
+	await _check_goal_panel(m)
 
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -517,6 +521,124 @@ func _check_asset_list(m: WQMatch) -> void:
 	w.free()
 	p.assets.clear()
 	p.place = "home"
+
+
+## แถบ HUD — ห้าตัวเลขที่ต้องเห็นตลอดเวลา ต้องตรงกับ core ทุกช่อง
+func _check_hud(m: WQMatch) -> void:
+	var p = m.players[0]
+	var w := WQHud.new()
+	w.bind(p, m)
+	_has("บอกเดือนปัจจุบัน", w._month.text, str(m.month))
+	_has("บอกชื่อและอาชีพ", w._who.text, String(p.job.name))
+	_has("เงินสดตรงกับ core", w._cash.text, WQFmt.m(p.cash))
+	_has("ความมั่งคั่งสุทธิตรงกับ core", w._net.text, WQFmt.m(p.get_net_worth()))
+	_has("เวลาที่เหลือตรงกับ core", w._time.text, "%d / %d" % [p.hours, p.get_hours_max()])
+	_has("สุขภาพบอกชื่อช่วงด้วย", w._health.text, String(p.health_band().name))
+
+	# ปุ่มจบตาต้องแค่ยิงสัญญาณ ไม่ใช่จบตาเอง — คนตัดสินใจคือ ui/main.gd
+	var fired: Array = []
+	w.end_turn_pressed.connect(func(): fired.append(true))
+	var before: int = m.month
+	w._end.pressed.emit()
+	_eq("กดจบตาแล้วยิงสัญญาณ", fired.size(), 1)
+	_eq("HUD ไม่จบตาเอง", m.month, before)
+	w.free()
+
+
+## แบนเนอร์ — ต้องซ่อนตัวเองเมื่อไม่มีอะไรประกาศ และโชว์ทั้งชัยชนะและภัยพิบัติที่ยังมีผล
+func _check_banner(m: WQMatch) -> void:
+	var mm := WQMatch.new()
+	mm.setup({"mode": "solo", "seed": 20260815,
+		"players": [{"name": "คุณ", "job_id": "teacher", "is_ai": false}]})
+	var w := WQBanner.new()
+	w.bind(mm)
+	_eq("ไม่มีอะไรประกาศแล้วซ่อนทั้งแถบ", w.visible, false)
+
+	var def: Dictionary = WQData.disasters[0]
+	mm.active_disasters.append({"def": def, "left": int(def.dur)})
+	mm.disaster_started.emit(def)
+	_eq("มีภัยพิบัติแล้วแบนเนอร์โผล่", w.visible, true)
+	_has("บอกชื่อภัยพิบัติ", _all_text(w._rows), String(def.name))
+	_has("บอกว่าเหลืออีกกี่เดือน", _all_text(w._rows), "เหลืออีก %d เดือน" % int(def.dur))
+
+	# GDD 9.3: ต้องประกาศ "อันดับที่" ด้วย ไม่ใช่แค่บอกว่ามีคนชนะ
+	var p = mm.players[0]
+	p.dream = WQData.dreams[0].duplicate(true)
+	p.dream_done = 42
+	mm.add_champion(p)
+	_has("ประกาศชัยชนะพร้อมอันดับ", _all_text(w._rows), "อันดับ 1")
+	_has("บอกเดือนที่ทำสำเร็จ", _all_text(w._rows), "42")
+
+	mm.active_disasters.clear()
+	mm.champions.clear()
+	w.refresh()
+	_eq("ภัยพิบัติจบและไม่มีแชมป์แล้วซ่อนอีกครั้ง", w.visible, false)
+	w.free()
+
+
+## 💡 คำใบ้ — ต้องเปลี่ยนตามสถานการณ์ และพูดข้อที่สำคัญที่สุดข้อเดียว (กฎ 12.2.6)
+func _check_hint(m: WQMatch) -> void:
+	var p = m.players[0]
+	p.assets.clear()
+	p.health = 75.0
+	p.hours = p.get_hours_max()
+	var w := WQHint.new()
+	w.bind(p)
+	_has("ยังไม่มีทรัพย์สิน = ชวนไปดูตลาดดีล", w._label.text, "ตลาดดีล")
+
+	# สุขภาพวิกฤตต้องชนะคำใบ้เรื่องทรัพย์สิน เพราะเสียหายหนักกว่าถ้าไม่ทำตอนนี้
+	p.health = 20.0
+	p.changed.emit()
+	_has("สุขภาพวิกฤตขึ้นก่อนเรื่องอื่น", w._label.text, "วิกฤต")
+
+	# เวลาหมดต้องบอกให้จบตา ไม่ใช่ปล่อยให้ผู้เล่นนั่งงงว่าทำไมกดอะไรไม่ได้
+	p.health = 75.0
+	p.hours = 0
+	p.changed.emit()
+	_has("เวลาหมดแล้วบอกให้จบตา", w._label.text, "จบตา")
+
+	p.hours = p.get_hours_max()
+	p.changed.emit()
+	w.free()
+
+
+## 🎯 เป้าหมายด่าน — เกณฑ์ชนะต่างกันคนละด่าน ต้องบอกให้ตรงด่านที่อยู่จริง
+func _check_goal_panel(m: WQMatch) -> void:
+	var mm := WQMatch.new()
+	mm.setup({"mode": "solo", "seed": 20260815,
+		"players": [{"name": "คุณ", "job_id": "teacher", "is_ai": false}]})
+	var p = mm.players[0]
+	var w := WQGoalPanel.new()
+	w.bind(p)
+	_has("ด่าน 1 พูดเรื่องออกจากสนามแข่งหนู", w._title.text, "สนามแข่งหนู")
+	_eq("ด่าน 1 ยังไม่มีปุ่มอ้างสิทธิ์ความฝัน", w._claim.visible, false)
+
+	p.enter_phase2(WQData.dreams[0], false)
+	p.changed.emit()
+	await process_frame
+	_has("เข้าด่าน 2 แล้วหัวข้อเปลี่ยนเป็นชื่อความฝัน", w._title.text,
+		String(p.dream.name))
+	# GDD 9.2: ต้องครบทั้งสองเงื่อนไข จึงต้องมีสองแถบ ไม่ใช่แถบเดียว
+	var bars := 0
+	for c in w._body.get_children():
+		if c is WQStatBar: bars += 1
+	_eq("ด่าน 2 มีสองเกณฑ์ = สองแถบ", bars, 2)
+	_eq("ยังไม่ครบเกณฑ์ ปุ่มยังไม่โผล่", w._claim.visible, false)
+
+	# ครบทั้งสองเกณฑ์แล้วปุ่มต้องโผล่ และกดแล้วต้องจบด่านจริง
+	p.cash = float(p.dream.cost) * 2.0
+	p.assets.append({"id": 999, "kind": "fund", "icon": "📈", "name": "ทดสอบ",
+		"value": 1.0, "cost": 1.0, "debt": 0.0,
+		"income": float(p.dream.passiveReq) * 2.0, "vol": 0.0, "drift": 1.0,
+		"offer": null, "sick": 0, "burned": 0})
+	p.changed.emit()
+	await process_frame
+	_eq("ครบทั้งสองเกณฑ์แล้วปุ่มโผล่", w._claim.visible, true)
+	w._claim.pressed.emit()
+	await process_frame
+	_eq("กดแล้วทำความฝันสำเร็จจริง", p.phase, 3)
+	_has("จบแล้วหัวข้อเปลี่ยนเป็นสำเร็จ", w._title.text, "สำเร็จ")
+	w.free()
 
 
 func _sell_button(w: WQAssetList, asset_name: String) -> Button:

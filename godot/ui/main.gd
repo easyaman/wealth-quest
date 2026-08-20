@@ -10,20 +10,25 @@ const BG := WQPalette.BG_DEEP
 const SEED := 20260815
 
 var m: WQMatch
+var hud: WQHud
+var banner: WQBanner
+var hint: WQHint
+var standings: WQStandings
+var goal_panel: WQGoalPanel
+var health_bar: WQHealthBar
+var statement: WQStatement
 var time_budget: WQTimeBudget
 var deal_market: WQDealMarket
-var statement: WQStatement
+var travel_panel: WQTravelPanel
+var asset_list: WQAssetList
 var debt_list: WQDebtList
 var shop: WQShop
 var showcase: WQShowcase
 var city: WQCity
-var health_bar: WQHealthBar
-var standings: WQStandings
-var travel_panel: WQTravelPanel
-var asset_list: WQAssetList
 var log_label: RichTextLabel
-var _scroll: ScrollContainer
+var lessons: WQLessons
 var setup_screen: WQJobSelect
+var _scroll: ScrollContainer          ## คอลัมน์กลาง — ตัวที่ WQ_SHOT_SCROLL เลื่อนตอนถ่ายภาพ
 var _shot_path := ""
 var _shot_frames := 0
 
@@ -77,6 +82,8 @@ func _start_match(job_id: String, roll: int, bonus_hours: int) -> void:
 	shop.picked.connect(_on_shop_picked)
 	# แผงเดินทางกับฉากเมือง 3D เข้าทางเดียวกันเป๊ะ — ทั้งคู่แค่ "บอก" ว่าอยากไปไหน
 	travel_panel.travel_requested.connect(_on_place_clicked)
+	if not hud.end_turn_pressed.is_connected(_end_turn):
+		hud.end_turn_pressed.connect(_end_turn)
 	_refresh()
 
 
@@ -88,6 +95,16 @@ func _apply_thai_font() -> void:
 	theme = t
 
 
+## เลย์เอาต์ตามบทที่ 12 ของ GDD:
+##   HUD (เต็มความกว้าง) → ฉากเมือง → แบนเนอร์ประกาศ → คำใบ้ตามบริบท → สามคอลัมน์
+##
+## ทำไมสามคอลัมน์ถึงสำคัญ: ก่อนหน้านี้ทุกวิดเจ็ตกองอยู่ในคอลัมน์เดียวที่เลื่อนยาวมาก
+## ผู้เล่นต้องเลื่อนขึ้นลงไปมาเพื่อเทียบ "เวลาที่เหลือ" กับ "ดีลที่อยากซื้อ" ซึ่งเป็นการตัดสินใจ
+## คู่เดียวที่เกมนี้ถามซ้ำทุกเดือน — ของที่ต้องเทียบกันต้องอยู่ในสายตาพร้อมกัน
+##
+## ซ้าย = "ฉันอยู่ตรงไหน" (อันดับ เป้าหมาย สุขภาพ งบการเงิน) — อ่านอย่างเดียว
+## กลาง = "ฉันทำอะไรได้" (เวลา ดีล เดินทาง ทรัพย์สิน หนี้ ร้านค้า) — ทุกอย่างที่กดได้
+## ขวา = "เกิดอะไรขึ้นแล้ว" (แท่นโชว์ บันทึก บทเรียน)
 func _build_layout() -> void:
 	var bg := ColorRect.new()
 	bg.color = BG
@@ -97,71 +114,103 @@ func _build_layout() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 16)
+		margin.add_theme_constant_override("margin_" + side, 12)
 	add_child(margin)
 
+	var page := VBoxContainer.new()
+	page.add_theme_constant_override("separation", 8)
+	margin.add_child(page)
+
+	hud = WQHud.new()
+	page.add_child(hud)
+
+	# ฉากเมืองเป็นแถบขวางตามผัง — มันคืออินเทอร์เฟซหลักของระบบเดินทาง (GDD 3A.6 ข้อ 1)
+	# ไม่ใช่ของประดับที่ยัดไว้มุมจอ
+	#
+	# แต่ **ห้ามปล่อยให้กว้างเต็มจอ** — กล้องเป็น orthographic size 22 ซึ่งล็อกความสูงที่
+	# 22 หน่วยตาม ART-DIRECTION 2.3 ความกว้างที่เห็นจึงผันตามอัตราส่วนภาพล้วนๆ
+	# เต็มจอ 16:9 ในแถบสูง 300 = เห็นกว้างราว 140 หน่วย ขณะที่ถนนทั้งเส้นยาวแค่ 50
+	# ผลคือเมืองลอยอยู่กลางพื้นว่างเปล่าสองข้าง — บีบให้เหลือราว 3:1 แล้วถนนเต็มเฟรมพอดี
+	var city_row := CenterContainer.new()
+	page.add_child(city_row)
+	city = load("res://world/city/City.tscn").instantiate()
+	city.custom_minimum_size = Vector2(1000, 300)
+	city_row.add_child(city)
+
+	banner = WQBanner.new()
+	page.add_child(banner)
+
+	hint = WQHint.new()
+	page.add_child(hint)
+
 	var cols := HBoxContainer.new()
-	cols.add_theme_constant_override("separation", 16)
-	margin.add_child(cols)
+	cols.add_theme_constant_override("separation", 12)
+	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	page.add_child(cols)
 
-	# ตลาดดีลยาวเกินจอได้ง่ายๆ (9-11 ใบ) ถ้าไม่มีสกรอลล์ การ์ดแถวล่างจะกดไม่ได้เลย
-	_scroll = ScrollContainer.new()
-	_scroll.custom_minimum_size = Vector2(780, 0)
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	cols.add_child(_scroll)
-
-	var center := VBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_theme_constant_override("separation", 12)
-	_scroll.add_child(center)
-
+	var left := _column(cols, 330)
 	standings = WQStandings.new()
-	center.add_child(standings)
+	left.add_child(standings)
+	goal_panel = WQGoalPanel.new()
+	left.add_child(goal_panel)
+	health_bar = WQHealthBar.new()
+	left.add_child(health_bar)
+	statement = WQStatement.new()
+	left.add_child(statement)
 
+	# ตลาดดีลมีได้ถึง 11 ใบ คอลัมน์กลางจึงยาวที่สุดและต้องกว้างพอให้การ์ดสามใบเรียงกันได้
+	var center := _column(cols, 700, true)
 	time_budget = WQTimeBudget.new()
 	center.add_child(time_budget)
-
-	health_bar = WQHealthBar.new()
-	center.add_child(health_bar)
-
-	travel_panel = WQTravelPanel.new()
-	center.add_child(travel_panel)
-
-	statement = WQStatement.new()
-	center.add_child(statement)
-
 	deal_market = WQDealMarket.new()
 	center.add_child(deal_market)
-
-	# ทรัพย์สินอยู่ถัดจากตลาดดีลตามเลย์เอาต์บทที่ 12 — ซื้อจากตลาดแล้วมากองตรงนี้
+	travel_panel = WQTravelPanel.new()
+	center.add_child(travel_panel)
 	asset_list = WQAssetList.new()
 	center.add_child(asset_list)
-
 	debt_list = WQDebtList.new()
 	center.add_child(debt_list)
-
 	shop = WQShop.new()
 	center.add_child(shop)
 
-	# คอลัมน์ขวา: ฉากเมือง 3D อยู่บน แท่นโชว์อยู่กลาง บันทึกอยู่ล่าง
-	var right := VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.add_theme_constant_override("separation", 12)
-	cols.add_child(right)
-
-	city = load("res://world/city/City.tscn").instantiate()
-	city.custom_minimum_size = Vector2(0, 300)
-	right.add_child(city)
-
+	var right := _column(cols, 360)
 	showcase = load("res://world/showcase/Showcase.tscn").instantiate()
-	showcase.custom_minimum_size = Vector2(0, 330)
+	showcase.custom_minimum_size = Vector2(0, 300)
 	right.add_child(showcase)
 
+	var log_box := PanelContainer.new()
+	var log_margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		log_margin.add_theme_constant_override("margin_" + side, 12)
+	log_box.add_child(log_margin)
 	log_label = RichTextLabel.new()
 	log_label.bbcode_enabled = true
-	log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	log_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_child(log_label)
+	log_label.fit_content = true
+	log_label.custom_minimum_size = Vector2(0, 260)
+	log_margin.add_child(log_label)
+	right.add_child(log_box)
+
+	lessons = WQLessons.new()
+	right.add_child(lessons)
+
+
+## หนึ่งคอลัมน์ = ScrollContainer ของตัวเอง — ทุกคอลัมน์ยาวไม่เท่ากันและยาวเกินจอได้ทั้งสามอัน
+## ถ้าใช้สกรอลล์เดียวร่วมกัน เลื่อนดูดีลทีเดียวแล้วสุขภาพกับบันทึกจะเลื่อนหายไปด้วย
+func _column(parent: HBoxContainer, width: float, is_center := false) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(width, 0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	if is_center:
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_scroll = scroll
+	parent.add_child(scroll)
+
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 10)
+	scroll.add_child(col)
+	return col
 
 
 func _refresh() -> void:
@@ -178,6 +227,10 @@ func _refresh() -> void:
 	standings.bind(p, m)
 	travel_panel.bind(p)
 	asset_list.bind(p)
+	hud.bind(p, m)
+	banner.bind(m)
+	hint.bind(p)
+	goal_panel.bind(p)
 
 	# แท่นโชว์ตั้งต้นที่ดีลใบแรกในตลาด เพื่อไม่ให้แท่นว่างเปล่าตอนเปิดเกม
 	if showcase.id == "" and not m.deals.is_empty(): _on_deal_hovered(m.deals[0])
@@ -219,11 +272,16 @@ func _on_place_clicked(place_id: String) -> void:
 	_refresh()
 
 
+func _end_turn() -> void:
+	if m == null: return
+	m.end_turn()
+	_refresh()
+
+
 func _unhandled_input(e: InputEvent) -> void:
 	if m == null: return          # ยังอยู่หน้าเลือกอาชีพ ยังไม่มีเกมให้จบตา
 	if e is InputEventKey and e.pressed and e.keycode == KEY_SPACE:
-		m.end_turn()   # กด Space = จบตา (ชั่วคราว)
-		_refresh()
+		_end_turn()
 
 
 ## รอให้วาดจบสองสามเฟรมก่อน (เลย์เอาต์ของ Container นิ่งหลังเฟรมแรก) แล้วค่อยบันทึกภาพ

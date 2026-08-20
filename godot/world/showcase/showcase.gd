@@ -197,10 +197,25 @@ static func model_for(item_kind: String, item_id: String) -> Node3D:
 	if ResourceLoader.exists(path):
 		var packed := load(path)
 		if packed is PackedScene:
-			return (packed as PackedScene).instantiate()
+			var node := (packed as PackedScene).instantiate()
+			_wear_palette(node)
+			return node
 	var kit := WQKitbash.build(item_kind, item_id)
 	if kit != null: return kit
 	return placeholder_for(item_kind)
+
+
+## สวมแผ่น palette ให้โมเดลที่โหลดจาก .glb
+##
+## ไฟล์ `.glb` เก็บแค่ UV ที่ชี้ไป "ช่องที่เท่าไหร่" บนแผ่น ไม่ได้เก็บแผ่นสีไว้ในตัว
+## (ถ้าเก็บ ตัวนำเข้าของ Godot จะแกะรูปออกมาเป็นไฟล์งอกข้างๆ โมเดลทุกชิ้น
+##  แล้ว palette จะถูกก๊อปไปหลายสิบชุดจนแก้สีที่เดียวไม่ได้อีก)
+## ที่นี่จึงเป็นจุดเดียวที่ทุกโมเดลได้แผ่นสีจริง — เปลี่ยน `ui/theme/palette.gd`
+## แล้วอบ `palette.png` ใหม่ ทั้งเกมก็เปลี่ยนสีตามทันทีเหมือนเดิม
+static func _wear_palette(node: Node3D) -> void:
+	var flat := load(FLAT_MAT)
+	for mi in all_meshes(node):
+		(mi as MeshInstance3D).material_override = flat
 
 
 ## กล่องแทนโมเดลจริง — สูงต่างกันตามกลุ่มของ เพื่อให้เห็นว่าเปลี่ยนของแล้วจริงๆ

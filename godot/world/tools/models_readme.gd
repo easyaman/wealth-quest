@@ -10,7 +10,7 @@ const OUT := "res://world/models/README.md"
 const KIND_TITLE := {
 	"places": "สถานที่ / อาคาร", "vehicles": "พาหนะ", "devices": "อุปกรณ์",
 	"packs": "แพ็กเกจฟิตเนส / รีสอร์ต", "assets": "ทรัพย์สิน (ตามประเภทของดีล)",
-	"dreams": "ความฝัน", "character": "ตัวละคร",
+	"dreams": "ความฝัน", "character": "ตัวละคร", "props": "prop ประดับฉาก",
 }
 const KIND_SOURCE := {
 	"places": "`data/places.json` → `places[].id`",
@@ -19,7 +19,8 @@ const KIND_SOURCE := {
 	"packs": "`data/places.json` → `gym_packs[].id` / `resort_packs[].id` (เติมหน้า `gym_` / `resort_`)",
 	"assets": "`data/deals.json` → `kind` ของทุก template (ดีลไม่มี id คงที่)",
 	"dreams": "`data/dreams.json` → `dream_<roll>` (ไม่มีฟิลด์ id)",
-	"character": "ริกเดียวใช้ทุกอาชีพ — ชุดอาชีพสลับด้วยการเปลี่ยนสี ไม่ใช่คนละโมเดล",
+	"character": "ริกเดียวใช้ทุกอาชีพ — ชุดอาชีพประกอบตอนรันด้วย `WQKitbashChar` (หมวก · เสื้อ · ของที่ถือ)",
+	"props": "ไม่มีใน `data/*.json` เลย — เป็นของประดับฉากล้วน รายชื่ออยู่ที่ `WQKitbashPlaces.PROPS`",
 }
 
 
@@ -28,6 +29,7 @@ func _init() -> void:
 	var lines: Array[String] = []
 	var done := 0
 	var total := 0
+	var baked_or_more := 0     ## มีของให้เห็นในเกมแล้วกี่ชิ้น (นับทั้งที่ปั้นแล้ว อบไว้ และต่อกล่อง)
 
 	lines.append("# world/models — สเปกและเช็กลิสต์โมเดล")
 	lines.append("")
@@ -43,10 +45,11 @@ func _init() -> void:
 	lines.append("| ที่อยู่ไฟล์ | `world/models/<กลุ่ม>/<id>.glb` | โค้ดโหลดจาก id ตรงๆ ไม่มีตารางแปลงชื่อ |")
 	lines.append("| ชื่อไฟล์ | **= id ใน `data/*.json` เป๊ะ** | ผิดตัวเดียว = ของหายจากแท่นโชว์แบบเงียบๆ |")
 	lines.append("| origin | อยู่ที่ **ฐาน** (y = 0) | วางลงฉากเมืองแล้วต้องไม่ลอยและไม่จมพื้น |")
-	lines.append("| หน่วย | 1 unit = 1 เมตร · หันหน้า −Z | กล้อง orthographic size 22 ตั้งไว้บนสมมติฐานนี้ |")
+	lines.append("| หน่วย | 1 unit = 1 เมตร · **หันหน้า +Z** | +Z คือฝั่งถนน · ของที่มีอยู่ (รถ อาคาร) หันแบบนี้หมด |")
 	lines.append("| shading | **flat** (Shade Flat, ปิด Auto Smooth) | สไตล์ทั้งเกมคือเห็นเหลี่ยมเห็นหน้า |")
 	lines.append("| วัสดุ | **ชิ้นละ 1 วัสดุ ชื่อ `flat`** | หลายวัสดุ = หลาย draw call และหลุดสไตล์ palette แผ่นเดียว |")
 	lines.append("| สี | map UV ไปที่ช่องบน `world/materials/palette.png` | เปลี่ยนสีทั้งเกมได้จาก `ui/theme/palette.gd` ไฟล์เดียว |")
+	lines.append("| texture ในไฟล์ | **อย่าฝังแผ่น palette ลงไฟล์** | Godot จะแกะออกมาเป็น `<id>_palette.png` กองข้างโมเดล และ palette จะถูกก๊อปหลายสิบชุด · เกมสวม `flat.tres` ให้ตอนโหลดอยู่แล้ว |")
 	lines.append("| bevel | ไม่มี ยกเว้นขอบใหญ่ที่จงใจ (1 ชั้น) | ขอบมนเยอะทำให้ทรงอ่านไม่ออกตอนย่อเป็นไอคอน |")
 	lines.append("")
 	lines.append("### งบสามเหลี่ยม")
@@ -68,8 +71,16 @@ func _init() -> void:
 	lines.append("")
 	lines.append("## เช็กลิสต์")
 	lines.append("")
-	lines.append("`.glb` = มีโมเดลจริงแล้ว · `kitbash` = เมชต่อกล่องจากโค้ดใน `world/tools/kitbash.gd`")
-	lines.append("(ของชั่วคราว ยังต้องปั้นจริง) · ว่าง = ยังไม่มีอะไรเลย ใช้กล่องเปล่า")
+	lines.append("| สถานะ | หมายความว่า |")
+	lines.append("|---|---|")
+	lines.append("| ✅ ปั้นแล้ว | มีไฟล์ `.glb` ที่คนปั้นมาจริง — **งานอาร์ตของชิ้นนี้จบแล้ว** |")
+	lines.append("| 🟠 อบจากโค้ด | มีไฟล์ `.glb` จริงบนดิสก์ แต่อบมาจากเมชต่อกล่องด้วย `world/tools/glb_export.gd` |")
+	lines.append("| 🟡 ชั่วคราว | ยังไม่มีไฟล์ — ต่อกล่องขึ้นมาตอนรัน |")
+	lines.append("| ⬜ ยังไม่ทำ | ไม่มีอะไรเลย ใช้กล่องเปล่า |")
+	lines.append("")
+	lines.append("**🟠 ยังไม่ใช่งานปั้น** — มันคือทรงเดียวกับที่โค้ดสร้าง แค่ย้ายมาเป็นไฟล์จริงเพื่อให้ท่อส่งงาน")
+	lines.append("เดินได้ครบวง (อบ → นำเข้า → ตรวจ → เห็นในเกม) คนปั้นเอาไฟล์ของตัวเองมาวางทับได้ทีละชิ้น")
+	lines.append("โดยไม่ต้องรอให้ครบ — **ตัวอบจะไม่แตะไฟล์ที่ไม่มีตราประทับของมันเด็ดขาด**")
 	lines.append("")
 
 	for kind in WQModelIds.KINDS:
@@ -80,12 +91,16 @@ func _init() -> void:
 		for id in ids:
 			var src := WQModelIds.source_of(kind, id)
 			if src == ".glb": have += 1
+			if src != "": baked_or_more += 1
 			total += 1
+			var mark := "⬜ ยังไม่ทำ"
+			if src == ".glb": mark = "✅ ปั้นแล้ว"
+			elif src == ".glb (อบ)": mark = "🟠 อบจากโค้ด"
+			elif src != "": mark = "🟡 ชั่วคราว"
 			rows.append("| `%s` | %s | %s |" % [id,
-				"`%s`" % src if src != "" else "—",
-				"✅" if src == ".glb" else ("🟡 ชั่วคราว" if src != "" else "⬜ ยังไม่ทำ")])
+				"`%s`" % src if src != "" else "—", mark])
 		done += have
-		lines.append("### %s — %d/%d ชิ้น" % [KIND_TITLE.get(kind, kind), have, ids.size()])
+		lines.append("### %s — ปั้นแล้ว %d/%d ชิ้น" % [KIND_TITLE.get(kind, kind), have, ids.size()])
 		lines.append("")
 		lines.append("ที่มาของรายชื่อ: %s" % KIND_SOURCE.get(kind, "—"))
 		lines.append("")
@@ -96,7 +111,8 @@ func _init() -> void:
 
 	lines.append("---")
 	lines.append("")
-	lines.append("**รวม %d/%d ชิ้นที่มี `.glb` จริงแล้ว**" % [done, total])
+	lines.append("**งานปั้นจริง %d/%d ชิ้น** · มีของให้เห็นในเกมแล้ว %d/%d ชิ้น" % [
+		done, total, baked_or_more, total])
 
 	var err := FileAccess.open(OUT, FileAccess.WRITE)
 	if err == null:
@@ -105,8 +121,8 @@ func _init() -> void:
 		return
 	err.store_string("\n".join(lines) + "\n")
 	err.close()
-	print("models_readme: %s — %d กลุ่ม %d ชิ้น (.glb จริง %d)" % [
-		OUT, WQModelIds.KINDS.size(), total, done])
+	print("models_readme: %s — %d กลุ่ม %d ชิ้น (ปั้นจริง %d · มีของแล้ว %d)" % [
+		OUT, WQModelIds.KINDS.size(), total, done, baked_or_more])
 	quit(0)
 
 

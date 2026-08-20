@@ -62,8 +62,37 @@ static func for_kind(kind: String) -> Array:
 	return []
 
 
-## ตอนนี้ของชิ้นนี้มาจากไหน: ".glb" (ของจริง) · "kitbash" (ต่อกล่องจากโค้ด) · "" (ยังไม่มี)
+## ตราประทับที่ `world/tools/glb_export.gd` เขียนลงช่อง `copyright` ของ glTF
+## ใช้แยกว่าไฟล์ `.glb` ชิ้นนั้น "อบจากเมชต่อกล่อง" หรือ "คนปั้นมาจริง"
+## อยู่ที่นี่ที่เดียว เพราะทั้งตัวอบ ตัวตรวจ และตัวสร้าง README ต้องอ่านตราเดียวกัน
+const BAKED_MARK := "wealth-quest: baked from code (WQKitbash)"
+
+
+## ตอนนี้ของชิ้นนี้มาจากไหน:
+##   ".glb"        คนปั้นมาจริง
+##   ".glb (อบ)"   ไฟล์จริงแต่อบมาจากเมชต่อกล่อง — **ยังไม่ใช่งานปั้น** งานอาร์ตยังไม่จบ
+##   "kitbash"     เมชต่อกล่องที่สร้างตอนรัน ยังไม่มีไฟล์
+##   ""            ยังไม่มีอะไรเลย ใช้กล่องเปล่า
 static func source_of(kind: String, id: String) -> String:
-	if WQShowcase.has_model(kind, id): return ".glb"
+	if WQShowcase.has_model(kind, id):
+		return ".glb (อบ)" if is_baked(kind, id) else ".glb"
 	if WQKitbash.has(kind, id): return "kitbash"
 	return ""
+
+
+## ไฟล์ .glb ชิ้นนี้อบมาจากโค้ดหรือเปล่า — อ่านตราประทับในไฟล์ ไม่ใช่เดาจากชื่อ
+static func is_baked(kind: String, id: String) -> bool:
+	var path := WQShowcase.model_path(kind, id)
+	if not ResourceLoader.exists(path): return false
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(ProjectSettings.globalize_path(path), state) != OK: return false
+	return state.copyright == BAKED_MARK
+
+
+## มีไฟล์ .glb ที่คนปั้นมาจริงแล้วกี่ชิ้น (ไม่นับของที่อบจากโค้ด)
+static func sculpted_count() -> int:
+	var n := 0
+	for it in all():
+		if source_of(String(it.kind), String(it.id)) == ".glb": n += 1
+	return n

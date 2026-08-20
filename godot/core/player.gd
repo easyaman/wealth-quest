@@ -720,16 +720,42 @@ func rest() -> Dictionary:
 	return {"ok": true}
 
 # ========== ด่าน 2 ==========
+## ทอยเต๋าสุ่มความฝัน (GDD 9.1 ข้อ 2) — พอร์ตจาก `rollDream()` ใน ../engine.js
+##
+## **ต้องใช้ตัวสุ่มของแมตช์เท่านั้น** เพราะ state ของมันอยู่ในไฟล์เซฟ
+## ถ้าใช้ `randi()` ของ Godot ผู้เล่นจะเซฟก่อนทอย โหลดใหม่ แล้วทอยจนกว่าจะได้ความฝันที่ชอบ
+## (ความฝันแต่ละอันขอเงินก้อน/รายได้ต่อเดือนต่างกันมาก — เลือกได้เท่ากับข้ามด่าน 2 ไปครึ่งด่าน)
+## คืนเลข 1–6 ตรงกับช่อง `roll` ใน data/dreams.json
+func roll_dream() -> int:
+	return 1 + match_ref.rng.range_i(WQData.dreams.size())
+
+
+## ความฝันหนึ่งอันแปลงเป็นเกณฑ์จริงของผู้เล่นคนนี้ (GDD 9.2 — ต้นทุนคิดเป็นกี่เท่าของ
+## รายจ่ายต่อเดือน "ของคนนั้น" ความฝันของภารโรงกับของนักบินจึงสเกลต่างกันตามชีวิตจริง)
+##
+## อยู่ที่นี่เพราะ **หน้าจอทอยความฝันต้องโชว์เกณฑ์ก่อนผู้เล่นตัดสินใจ** ถ้าปล่อยให้ UI
+## คำนวณสูตรเอง วันที่สูตรเปลี่ยน ตัวเลขที่โชว์ตอนเลือกกับเกณฑ์ที่ใช้จริงจะเป็นคนละอัน
+func dream_terms(d: Dictionary) -> Dictionary:
+	var exp := get_total_expenses()
+	return {
+		"cost": round(exp * float(d.costMul) / 10000.0) * 10000.0,
+		"passive_req": round(exp * float(d.passiveMul) / 100.0) * 100.0,
+	}
+
+
 func enter_phase2(d: Dictionary, do_retire: bool) -> void:
 	phase = 2
 	pending_dream = false
-	var exp := get_total_expenses()
+	var terms := dream_terms(d)
 	dream = d.duplicate(true)
-	dream["cost"] = round(exp * float(d.costMul) / 10000.0) * 10000.0
-	dream["passiveReq"] = round(exp * float(d.passiveMul) / 100.0) * 100.0
+	dream["cost"] = terms.cost
+	dream["passiveReq"] = terms.passive_req
 	retired = do_retire
 	hours = get_hours_max()
 	match_ref.log_line("%s ตั้งเป้าหมายใหม่: %s %s" % [pname, d.icon, d.name], "win", null)
+	# เปลี่ยนด่านคือการเปลี่ยนสถานะที่ใหญ่ที่สุดรองจากชนะ — ถ้าไม่ยิง แผงเป้าหมายจะค้างที่ด่าน 1
+	# ทั้งที่ผู้เล่นเลือกความฝันไปแล้ว (บั๊กเดียวกับที่ `claim_dream()` เคยเป็น)
+	changed.emit()
 
 ## ความคืบหน้าของความฝัน — ต้องผ่าน **ทั้งสองเกณฑ์** ถึงจะอ้างสิทธิ์ได้
 ## คืนสัดส่วนของทั้งคู่ + บอกว่าข้อไหนคือตัวถ่วง เพื่อให้ UI ชี้ได้ว่ายังขาดอะไร

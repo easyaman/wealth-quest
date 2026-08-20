@@ -28,6 +28,7 @@ var city: WQCity
 var log_label: RichTextLabel
 var lessons: WQLessons
 var setup_screen: WQSetupScreen
+var dream_screen: WQDreamRoll     ## หน้าทอยความฝันด่าน 2 — มีอยู่แปลว่ากำลังรอผู้เล่นตัดสินใจ
 var _scroll: ScrollContainer          ## คอลัมน์กลาง — ตัวที่ WQ_SHOT_SCROLL เลื่อนตอนถ่ายภาพ
 var _shot_path := ""
 var _shot_frames := 0
@@ -60,11 +61,20 @@ func _ready() -> void:
 	if scroll_to != "": _scroll.set_deferred("scroll_vertical", scroll_to.to_int())
 
 
+## **ห้าม `free()` หน้าจอทิ้งตรงนี้** — เรามาถึงที่นี่จากปุ่มที่กำลังส่งสัญญาณ `pressed` อยู่
+## ตัวมันเองยังถูกล็อกอยู่ Godot จึงปฏิเสธ ("Object is locked and can't be freed")
+## แล้ว **ทั้งฟังก์ชันนี้จะหลุดกลางคัน** — เกมไม่เริ่มสักที ทั้งที่กดปุ่มแล้ว
+## (กฎเดียวกับที่วิดเจ็ตใช้ `call_deferred` ตอนสร้างปุ่มใหม่ทั้งแผง)
+func _close_screen(screen: Control) -> void:
+	if screen == null: return
+	screen.visible = false
+	remove_child(screen)
+	screen.call_deferred("free")
+
+
 func _on_job_chosen(job_id: String, roll: int, bonus_hours: int) -> void:
-	if setup_screen != null:
-		remove_child(setup_screen)
-		setup_screen.free()
-		setup_screen = null
+	_close_screen(setup_screen)
+	setup_screen = null
 	_start_match(job_id, roll, bonus_hours)
 
 
@@ -87,6 +97,14 @@ func _start_match(job_id: String, roll: int, bonus_hours: int) -> void:
 	travel_panel.travel_requested.connect(_on_place_clicked)
 	if not hud.end_turn_pressed.is_connected(_end_turn):
 		hud.end_turn_pressed.connect(_end_turn)
+
+	# WQ_DREAM=1 ดันผู้เล่นไปที่จังหวะ "ออกจากสนามแข่งหนูได้แล้ว" ทันที
+	# เพื่อดูหน้าทอยความฝัน (GDD บทที่ 9) โดยไม่ต้องเล่นจริง 20–50 เดือนก่อน
+	if OS.get_environment("WQ_DREAM") != "":
+		var me = m.get_current()
+		me.finished = m.month
+		me.pending_dream = true
+
 	_refresh()
 
 
@@ -238,6 +256,8 @@ func _refresh() -> void:
 	# แท่นโชว์ตั้งต้นที่ดีลใบแรกในตลาด เพื่อไม่ให้แท่นว่างเปล่าตอนเปิดเกม
 	if showcase.id == "" and not m.deals.is_empty(): _on_deal_hovered(m.deals[0])
 
+	_check_pending_dream()
+
 	var s := "[b]เดือนที่ %d[/b]  |  %s %s\n" % [m.month, p.job.icon, p.pname]
 	s += "เงินสด %s  ·  สุทธิ %s  ·  📍 %s  ·  ❤️ %d\n" % [
 		WQFmt.m(p.cash), WQFmt.m(p.get_net_worth()), WQData.place(p.place).name, int(p.health)]
@@ -276,13 +296,36 @@ func _on_place_clicked(place_id: String) -> void:
 
 
 func _end_turn() -> void:
-	if m == null: return
+	if m == null or dream_screen != null: return    # กำลังรอเลือกความฝัน ห้ามเดินเดือนต่อ
 	m.end_turn()
 	_refresh()
 
 
+## ผู้เล่นออกจากสนามแข่งหนูได้แล้ว (`pending_dream` ตั้งตอนสิ้นเดือนใน `settle()`)
+## ต้องเด้งหน้าทอยความฝันทันที ไม่ใช่ปล่อยให้เล่นต่อโดยไม่รู้ว่าตัวเองผ่านด่าน 1 ไปแล้ว
+func _check_pending_dream() -> void:
+	if m == null or dream_screen != null: return
+	var p = m.get_current()
+	if p == null or p.is_ai or not p.pending_dream: return
+	dream_screen = WQDreamRoll.new()
+	dream_screen.chosen.connect(_on_dream_chosen)
+	add_child(dream_screen)
+	dream_screen.start(p)
+	# WQ_DREAM=<1-6> ทอยให้เลยเพื่อถ่ายภาพหน้าจอตอนที่การ์ดความฝันโผล่แล้ว
+	var forced := OS.get_environment("WQ_DREAM").to_int()
+	if forced > 0: dream_screen.skip_to(forced)
+
+
+func _on_dream_chosen(dream: Dictionary, retire: bool) -> void:
+	var p = m.get_current()
+	_close_screen(dream_screen)
+	dream_screen = null
+	if p != null: p.enter_phase2(dream, retire)
+	_refresh()
+
+
 func _unhandled_input(e: InputEvent) -> void:
-	if m == null: return          # ยังอยู่หน้าเลือกอาชีพ ยังไม่มีเกมให้จบตา
+	if m == null or dream_screen != null: return   # ยังไม่มีเกมให้จบตา หรือกำลังรอเลือกความฝัน
 	if e is InputEventKey and e.pressed and e.keycode == KEY_SPACE:
 		_end_turn()
 

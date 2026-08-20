@@ -75,6 +75,7 @@ func _init() -> void:
 	_check_hint(m)
 	await _check_goal_panel(m)
 	await _check_dice()
+	await _check_dream_roll()
 
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -614,8 +615,8 @@ func _check_goal_panel(m: WQMatch) -> void:
 	_has("ด่าน 1 พูดเรื่องออกจากสนามแข่งหนู", w._title.text, "สนามแข่งหนู")
 	_eq("ด่าน 1 ยังไม่มีปุ่มอ้างสิทธิ์ความฝัน", w._claim.visible, false)
 
+	# ไม่ยิง `changed` เอง — `enter_phase2()` ต้องยิงให้เอง (เคยไม่ยิง แผงเลยค้างที่ด่าน 1)
 	p.enter_phase2(WQData.dreams[0], false)
-	p.changed.emit()
 	await process_frame
 	_has("เข้าด่าน 2 แล้วหัวข้อเปลี่ยนเป็นชื่อความฝัน", w._title.text,
 		String(p.dream.name))
@@ -715,6 +716,79 @@ func _labels_with(node: Node, needle: String) -> int:
 	return n
 
 
+## หน้าทอยความฝันเข้าด่าน 2 (GDD บทที่ 9) — ตรวจสามเรื่องที่พังแล้วเสียเกม:
+## ลำดับ (ทอย → เห็นเกณฑ์ → ค่อยเลือก) · สิทธิ์ทอยใหม่มีครั้งเดียว · เกณฑ์ที่โชว์ = เกณฑ์ที่ใช้จริง
+func _check_dream_roll() -> void:
+	var mm := WQMatch.new()
+	mm.setup({"mode": "solo", "seed": 20260815,
+		"players": [{"name": "คุณ", "job_id": "teacher", "is_ai": false}]})
+	var p = mm.players[0]
+	p.finished = 21
+	p.pending_dream = true
+
+	# แต้มต้องกินตัวสุ่มของแมตช์ ไม่งั้นเซฟก่อนทอยแล้วโหลดใหม่จนได้ความฝันที่ชอบได้
+	var before: int = mm.rng.s
+	var n: int = p.roll_dream()
+	_eq("แต้มความฝันอยู่ในช่วง 1–%d" % WQData.dreams.size(),
+		n >= 1 and n <= WQData.dreams.size(), true)
+	_ne("ทอยความฝันแล้วตัวสุ่มของแมตช์ต้องเดินหน้า", mm.rng.s, before)
+
+	var w := WQDreamRoll.new()
+	root.add_child(w)
+	w.start(p)
+	_has("บอกว่าใช้เวลากี่เดือนถึงออกจากสนามแข่งหนู", w._sub.text, "21 เดือน")
+	_eq("ยังไม่ทอย ยังไม่มีความฝัน", w.picked.is_empty(), true)
+	_eq("ยังไม่ทอย ยังเลือกลาออก/ทำงานต่อไม่ได้", w._choice.visible, false)
+
+	w.roll(4)
+	_eq("ระหว่างกลิ้ง ยังไม่ให้ตัดสินใจ", w._choice.visible, false)
+	w._dice.finish_now()
+	_eq("ได้ความฝันตรงกับแต้มที่ทอยได้", int(w.picked.roll), 4)
+	_eq("ลูกเต๋าหยุดที่แต้มเดียวกับความฝันที่ได้", w._dice.face, 4)
+	_eq("ทอยเสร็จแล้วเลือกได้", w._choice.visible, true)
+	_eq("ยังไม่ได้ใช้สิทธิ์ทอยใหม่ ปุ่มต้องอยู่", w._reroll_btn.visible, true)
+	_has("การ์ดความฝันบอกชื่อความฝัน", _text_of(w._result), String(w.picked.name))
+
+	# GDD 9.2 ต้องครบทั้งสองเกณฑ์ จึงต้องมีสองแถบ และตัวเลขต้องมาจาก core
+	var bars := 0
+	var terms: Dictionary = p.dream_terms(w.picked)
+	for c in w._result.get_children():
+		if c is WQStatBar: bars += 1
+	_eq("โชว์เกณฑ์ครบสองข้อ", bars, 2)
+	_has("เกณฑ์ความมั่งคั่งตรงกับที่ core คำนวณ", _text_of(w._result),
+		WQFmt.m(float(terms.cost)))
+	_has("เกณฑ์รายได้ต่อเดือนตรงกับที่ core คำนวณ", _text_of(w._result),
+		WQFmt.n(float(terms.passive_req)))
+	_has("ปุ่มลาออกบอกเวลาที่ได้คืนเป็นตัวเลขจริง", w._retire_btn.text,
+		"+%d ชม." % (p.get_work_hours() + p.get_commute_hours()))
+
+	# ทอยใหม่ได้ครั้งเดียว แล้วต้องรับผลครั้งที่สอง
+	w.reroll(2)
+	w._dice.finish_now()
+	_eq("ทอยใหม่แล้วได้ความฝันใหม่", int(w.picked.roll), 2)
+	_eq("ใช้สิทธิ์ทอยใหม่ไปแล้ว ปุ่มต้องหาย", w._reroll_btn.visible, false)
+	w.reroll(6)
+	_eq("ทอยใหม่ครั้งที่สองต้องไม่มีผล", int(w.picked.roll), 2)
+
+	# หน้าจอไม่เปลี่ยนสถานะเอง — ส่งต่อให้ ui/main.gd เป็นคนเรียก enter_phase2()
+	var got: Array = []
+	w.chosen.connect(func(d: Dictionary, retire: bool): got.assign([String(d.name), retire]))
+	w._retire_btn.pressed.emit()
+	_eq("กดลาออกแล้วส่งความฝันกับการตัดสินใจออกไป",
+		got, [String(w.picked.name), true])
+	_eq("หน้าจอต้องไม่ดันผู้เล่นเข้าด่าน 2 เอง", p.phase, 1)
+
+	# เกณฑ์ที่โชว์ตอนเลือก ต้องเป็นเกณฑ์เดียวกับที่ใช้วัดผลจริงทั้งเกม
+	var picked_terms: Dictionary = p.dream_terms(w.picked)
+	p.enter_phase2(w.picked, true)
+	_eq("เกณฑ์ความมั่งคั่งที่ใช้จริงตรงกับที่โชว์", float(p.dream.cost), float(picked_terms.cost))
+	_eq("เกณฑ์รายได้ที่ใช้จริงตรงกับที่โชว์",
+		float(p.dream.passiveReq), float(picked_terms.passive_req))
+	_eq("เข้าด่าน 2 แล้วธง pending_dream ต้องถูกล้าง", p.pending_dream, false)
+
+	w.free()
+
+
 ## ลูกเต๋า — วิดเจ็ตนี้ต้องไม่มีตัวสุ่มของตัวเอง และต้องหยุดที่แต้มที่สั่งเสมอ
 func _check_dice() -> void:
 	var d := WQDice.new(64.0)
@@ -753,6 +827,17 @@ func _check_dice() -> void:
 	d2.free()
 
 	d.free()
+
+
+## รวมข้อความของ Label/RichTextLabel ทุกตัวใต้โหนดหนึ่งมาเป็นก้อนเดียว
+func _text_of(node: Node) -> String:
+	var out := ""
+	if node is Label: out += (node as Label).text + "\n"
+	elif node is RichTextLabel: out += (node as RichTextLabel).text + "\n"
+	elif node is WQStatBar:
+		out += (node as WQStatBar).label_text + " " + (node as WQStatBar).value_text + "\n"
+	for c in node.get_children(): out += _text_of(c)
+	return out
 
 
 func _button_of(node: Node) -> Button:

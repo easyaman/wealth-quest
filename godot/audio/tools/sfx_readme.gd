@@ -49,6 +49,30 @@ func _init() -> void:
 	lines.append("")
 	lines.append("**คนทำเสียงจริงแล้ว %d/%d ตัว**" % [human, WQBank.ids().size()])
 	lines.append("")
+	lines.append("## เพลงพื้นหลัง")
+	lines.append("")
+	lines.append("| id | ดังตอนไหน | bpm | ยาว (วิ) | ที่มา |")
+	lines.append("|---|---|---|---|---|")
+	var mmarks := {}
+	var mf := FileAccess.open("res://audio/music/baked.json", FileAccess.READ)
+	if mf != null:
+		var mparsed = JSON.parse_string(mf.get_as_text())
+		if mparsed is Dictionary: mmarks = mparsed
+		mf.close()
+	const WHEN := {
+		"phase1": "ด่าน 1 หรือยังไม่เริ่มแมตช์",
+		"phase2": "ด่าน 2",
+		"crisis": "สุขภาพต่ำกว่า 40 หรือมีภัยพิบัติค้างอยู่",
+	}
+	for id in WQMusic.ids():
+		var mabs := ProjectSettings.globalize_path("res://audio/music/%s.wav" % id)
+		var msrc := "❓ ยังไม่มีไฟล์"
+		if FileAccess.file_exists(mabs):
+			msrc = "🤖 อบจากโค้ด" if FileAccess.get_sha256(mabs) == String(mmarks.get(id, "")) \
+				else "🙌 คนทำ"
+		lines.append("| `%s` | %s | %d | %.1f | %s |" % [id, String(WHEN.get(id, "—")),
+			int(WQMusic.TRACKS[id]["bpm"]), WQMusic.length_sec(id), msrc])
+	lines.append("")
 	lines.append("## สเปกสำหรับคนทำเสียง")
 	lines.append("")
 	lines.append("- mono · 22050 Hz ขึ้นไป · 16-bit PCM `.wav`")

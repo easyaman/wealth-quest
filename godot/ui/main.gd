@@ -81,6 +81,14 @@ func _ready() -> void:
 		await get_tree().create_timer(2.0).timeout
 		get_tree().quit()
 
+	# ฟังเพลงทีละเพลง: WQ_MUSIC=crisis godot --path .   (ปิดเองใน 20 วินาที)
+	# มีเพราะ music_check ตรวจได้แค่ว่ามีเสียงและโครงถูก ไม่ได้ตรวจว่าฟังแล้วรู้เรื่อง
+	var track := OS.get_environment("WQ_MUSIC")
+	if track != "":
+		WQAudio.play_music(track)
+		await get_tree().create_timer(20.0).timeout
+		get_tree().quit()
+
 
 ## **ห้าม `free()` หน้าจอทิ้งตรงนี้** — เรามาถึงที่นี่จากปุ่มที่กำลังส่งสัญญาณ `pressed` อยู่
 ## ตัวมันเองยังถูกล็อกอยู่ Godot จึงปฏิเสธ ("Object is locked and can't be freed")

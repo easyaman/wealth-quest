@@ -377,6 +377,10 @@ godot --script res://world/tools/icon_bake.gd                  # อบไอค
 | `audio/tools/sfx_readme.gd` | สร้าง `audio/README.md` (**ห้ามแก้ด้วยมือ**) |
 | `ui/widgets/audio_panel.gd` | `WQAudioPanel` — สไลเดอร์ Master/SFX + ปิดเสียง เก็บที่ `user://settings.cfg` |
 | `sim/audio_check.gd` | เทสต์ headless ของทั้งระบบเสียง |
+| `audio/music.gd` | `WQMusic` — ตารางโน้ตสามเพลง + ตัวเรียบเรียงเป็น PCM (เพลงเดียวกันต้องได้ไบต์เดิม) |
+| `audio/tools/music_bake.gd` | อบเพลงเป็น `.wav` + ตราประทับ sha256 เหมือน sfx |
+| `audio/tools/wav_probe.gd` | `WQWavProbe` — อ่าน PCM จากไฟล์ `.wav` ดิบ (ห้ามอ่านผ่าน `load()` มันเป็น QOA) |
+| `sim/music_check.gd` | เทสต์ headless ของระบบเพลง |
 
 **บทเรียนรอบนี้ — เทสต์ที่เขียวเพราะเหตุผลผิดคือเทสต์ที่ไม่มีอยู่จริง:**
 ตอนพิสูจน์ด้วยการทำลายโค้ดทีละจุด เจอเทสต์เขียวปลอมสามข้อ: สองข้อเขียวเพราะ `COOLDOWN`
@@ -428,6 +432,11 @@ godot --script res://world/tools/icon_bake.gd                  # อบไอค
   เพราะ `--headless` เริ่มมาด้วย `bus_count = 1` การสร้างเองทำให้ทุกโหมดเหมือนกันและเทสต์ได้
 - **`AudioStreamWAV.save_to_wav()` ไม่มีช่องใส่ metadata** ต่างจาก glTF ที่มี `copyright`
   ตราประทับ "อบจากโค้ด" จึงอยู่ใน `audio/sfx/baked.json` เป็น sha256 ต่อไฟล์แทน
+- **จุดลูปของเพลงตั้งจากโค้ดตอนโหลด ไม่ใช่ติดมากับไฟล์** — Godot นำเข้า `.wav` แล้วได้
+  `loop_mode = 0` เสมอ ต้อง `duplicate()` แล้วตั้ง `LOOP_FORWARD` เอง (duplicate ก่อนเสมอ
+  ไม่งั้นไปแก้ตัวที่ทั้งโปรเจกต์แคชร่วมกัน)
+- **หางโน้ตท้ายเพลงถูกวนกลับไปบวกที่ต้นเพลง** ใน `WQMusic._stamp()` ไม่ใช่ตัดทิ้ง
+  ถ้าตัดทิ้งจะได้ยิน "ป๊อก" ทุกครั้งที่เพลงครบรอบ
 - **`WQAudio` เป็น `class_name` + API `static` ส่วน autoload ชื่อ `WQAudioBoot`** ไม่ใช่ autoload
   ชื่อ `WQAudio` ตรงๆ เพราะโหมด `--script` ที่สูททุกตัวใน `sim/` ใช้ **ไม่ลงทะเบียนชื่อ autoload
   เป็นตัวระบุส่วนกลาง** — โค้ดใน `ui/` ที่เขียน `WQAudio.ui()` จะคอมไพล์ไม่ผ่านทั้งชุดทันที

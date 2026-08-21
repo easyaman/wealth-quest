@@ -7,7 +7,7 @@ extends SceneTree
 ## ไม่ได้ตรวจว่าเพราะไหม — อันนั้นต้องเปิดฟังเอง: WQ_MUSIC=phase1 godot --path .
 
 const MUSIC_DIR := "res://audio/music"
-const ALL_CHECKS: Array[String] = ["tracks", "files"]
+const ALL_CHECKS: Array[String] = ["tracks", "files", "lane"]
 
 var _fails := 0
 ## เช็กไหนที่รันจนจบฟังก์ชันจริง — กันสูทเขียวปลอมตอน SCRIPT ERROR หลุดกลางฟังก์ชัน
@@ -18,6 +18,10 @@ var _completed := {}
 func _init() -> void:
 	_check_tracks()
 	_check_files()
+	## รอหนึ่งเฟรมก่อนแตะ WQAudio — autoload WQAudioBoot เข้า tree หลัง _init() คืนค่า
+	## กลับไปหนึ่งเฟรม เหมือนกันกับ audio_check.gd (กติกาเดียวกัน เหตุผลเดียวกัน)
+	await process_frame
+	await _check_lane()
 	for name in ALL_CHECKS:
 		if not _completed.get(name, false):
 			_fails += 1
@@ -139,6 +143,79 @@ func _check_files() -> void:
 
 	_eq("ไม่มีไฟล์เพลงกำพร้า", on_disk.keys(), [])
 	_completed["files"] = true
+
+
+## เพลงต้องเปลี่ยนด้วยการเฟดไขว้ ไม่ใช่ตัดทันที และเพลงเดิมต้องไม่เริ่มใหม่
+## `changed` ยิงหลายสิบครั้งต่อเดือน ถ้าไม่จำว่าเพลงไหนดังอยู่ เพลงจะเริ่มใหม่ตลอดเวลา
+func _check_lane() -> void:
+	WQAudio.settings_path = "user://settings_music_test.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(WQAudio.settings_path))
+	WQAudio.set_muted(false)
+	WQAudio.set_level("Music", 1.0)
+
+	_eq("มีบัส Music", AudioServer.get_bus_index("Music") >= 0, true)
+	_eq("มีตัวเล่นเพลงสองตัว", WQAudio._music.size(), 2)
+	_eq("ตัวเล่นเพลงอยู่บนบัส Music", WQAudio._music[0].bus, "Music")
+
+	WQAudio.stop_music()
+	_eq("เริ่มมายังไม่มีเพลง", WQAudio.music_now, "")
+
+	WQAudio.play_music("phase1")
+	_eq("สั่งเล่นแล้วจำว่าเพลงไหนดังอยู่", WQAudio.music_now, "phase1")
+
+	## เพลงเดิมสั่งซ้ำต้องไม่ทำอะไรเลย — นับที่ music_switches ไม่ใช่ที่ตัวเล่นที่เป็นตัวหลัก
+	## เพราะ headless เข้า _silent แล้วคืนก่อนจะสลับตัวเล่นอยู่แล้ว เทสต์ที่ดูตัวเล่นจึงเขียวเสมอ
+	## ไม่ว่าโค้ดจะกันการสั่งซ้ำจริงหรือไม่ (เขียวปลอมแบบเดียวกับที่ audio_check เคยโดนมาแล้ว)
+	var n := WQAudio.music_switches
+	WQAudio.play_music("phase1")
+	_eq("สั่งเพลงเดิมซ้ำต้องไม่นับเป็นการเปลี่ยนเพลง", WQAudio.music_switches, n)
+
+	# id ที่ไม่มีในตารางต้องไม่เปลี่ยนอะไร
+	WQAudio.play_music("ไม่มีเพลงนี้")
+	_eq("สั่งเพลงที่ไม่มีต้องไม่เปลี่ยนเพลงที่ดังอยู่", WQAudio.music_now, "phase1")
+
+	WQAudio.stop_music()
+	_eq("สั่งหยุดแล้วไม่มีเพลง", WQAudio.music_now, "")
+
+	# ปิดเสียงทั้งหมดต้องครอบเพลงด้วย ไม่ใช่เงียบแค่เสียงสั้น
+	WQAudio.set_muted(true)
+	_eq("ปิดเสียงแล้วบัส Music ถูกปิดด้วย",
+		AudioServer.is_bus_mute(AudioServer.get_bus_index("Music")), true)
+	WQAudio.set_muted(false)
+	_eq("เปิดเสียงกลับแล้วบัส Music กลับมาดัง",
+		AudioServer.is_bus_mute(AudioServer.get_bus_index("Music")), false)
+
+	# สตรีมของเพลงต้องตั้งลูปไว้ — ไฟล์ที่ import มาได้ loop_mode = 0 เสมอ
+	var st := WQAudio._music_stream("phase1") as AudioStreamWAV
+	_eq("สตรีมเพลงตั้งลูปไว้", st.loop_mode, AudioStreamWAV.LOOP_FORWARD)
+	_eq("จุดจบลูปไม่ใช่ศูนย์", st.loop_end > 0, true)
+
+	# ระดับเสียงเพลงต้องลงบัสจริงและถูกจำลงไฟล์ตั้งค่า
+	WQAudio.set_level("Music", 0.4)
+	_eq("ระดับเสียงเพลงลงบัสจริง",
+		snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Music")), 0.01),
+		snappedf(linear_to_db(0.4), 0.01))
+	var cfg := ConfigFile.new()
+	_eq("เขียนไฟล์ตั้งค่าแล้ว", cfg.load(WQAudio.settings_path), OK)
+	_eq("จำระดับเสียงเพลง", float(cfg.get_value("audio", "music", -1.0)), 0.4)
+	WQAudio._levels["Music"] = 1.0
+	WQAudio._load_settings()
+	_eq("โหลดระดับเสียงเพลงกลับมาได้", WQAudio.get_level("Music"), 0.4)
+	WQAudio.set_level("Music", 1.0)
+
+	# แผงปรับเสียงต้องมีสไลเดอร์เพลง และขยับแล้วมีผลจริง
+	var panel := WQAudioPanel.new()
+	root.add_child(panel)
+	await process_frame
+	_eq("สไลเดอร์เพลงตั้งค่าตามที่จำไว้", panel._music.value, 1.0)
+	panel._music.value = 0.5
+	await process_frame
+	_eq("ขยับสไลเดอร์เพลงแล้วระดับเสียงเปลี่ยนจริง", WQAudio.get_level("Music"), 0.5)
+	WQAudio.set_level("Music", 1.0)
+	root.remove_child(panel)
+	panel.free()
+
+	_completed["lane"] = true
 
 
 func _eq(label: String, got, want) -> void:

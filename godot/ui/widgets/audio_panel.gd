@@ -15,6 +15,7 @@ signal closed
 
 var _master: HSlider
 var _sfx: HSlider
+var _music: HSlider
 var _mute: CheckBox
 var _close: Button
 
@@ -60,6 +61,8 @@ func _init() -> void:
 	_master.value_changed.connect(func(v: float): WQAudio.set_level("Master", v))
 	_sfx = _slider(col, "เอฟเฟกต์", WQAudio.get_level("SFX"))
 	_sfx.value_changed.connect(func(v: float): WQAudio.set_level("SFX", v))
+	_music = _slider(col, "เพลง", WQAudio.get_level("Music"))
+	_music.value_changed.connect(func(v: float): WQAudio.set_level("Music", v))
 
 	_mute = CheckBox.new()
 	_mute.text = "ปิดเสียงทั้งหมด"

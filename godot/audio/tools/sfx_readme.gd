@@ -51,27 +51,27 @@ func _init() -> void:
 	lines.append("")
 	lines.append("## เพลงพื้นหลัง")
 	lines.append("")
-	lines.append("| id | ดังตอนไหน | bpm | ยาว (วิ) | ที่มา |")
-	lines.append("|---|---|---|---|---|")
-	var mmarks := {}
-	var mf := FileAccess.open("res://audio/music/baked.json", FileAccess.READ)
-	if mf != null:
-		var mparsed = JSON.parse_string(mf.get_as_text())
-		if mparsed is Dictionary: mmarks = mparsed
-		mf.close()
-	const WHEN := {
-		"phase1": "ด่าน 1 หรือยังไม่เริ่มแมตช์",
-		"phase2": "ด่าน 2",
-		"crisis": "สุขภาพต่ำกว่า 40 หรือมีภัยพิบัติค้างอยู่",
-	}
+	lines.append("เพลงไม่ได้สร้างจากโค้ด — **มันคือช่องว่างที่รอไฟล์จากคนทำเพลง**")
+	lines.append("วางไฟล์ลง `audio/music/` ตั้งชื่อตามช่อง แล้ว `godot --headless --path . --import`")
+	lines.append("เกมจะเล่นให้เองทันทีโดยไม่ต้องแก้โค้ด · ช่องที่ยังว่างจะยืมไฟล์ของช่องอื่นไปก่อน")
+	lines.append("(ส่งมาไฟล์เดียวก็ได้ยินทั้งเกม) · ไม่มีไฟล์เลย = เกมเงียบ ไม่มี error")
+	lines.append("")
+	lines.append("| ช่อง | ดังตอนไหน | ไฟล์ |")
+	lines.append("|---|---|---|")
+	var have := 0
 	for id in WQMusic.ids():
-		var mabs := ProjectSettings.globalize_path("res://audio/music/%s.wav" % id)
-		var msrc := "❓ ยังไม่มีไฟล์"
-		if FileAccess.file_exists(mabs):
-			msrc = "🤖 อบจากโค้ด" if FileAccess.get_sha256(mabs) == String(mmarks.get(id, "")) \
-				else "🙌 คนทำ"
-		lines.append("| `%s` | %s | %d | %.1f | %s |" % [id, String(WHEN.get(id, "—")),
-			int(WQMusic.TRACKS[id]["bpm"]), WQMusic.length_sec(id), msrc])
+		var own := WQMusic.own_path(String(id))
+		if own != "": have += 1
+		var borrowed := WQMusic.path_for(String(id))
+		var cell := "⬜ ยังว่าง"
+		if own != "":
+			cell = "🙌 `%s`" % own.get_file()
+		elif borrowed != "":
+			cell = "↩︎ ยืม `%s` ไปก่อน" % borrowed.get_file()
+		lines.append("| `%s` | %s | %s |" % [id, String(WQMusic.SLOTS[id]), cell])
+
+	lines.append("")
+	lines.append("**มีเพลงจริงแล้ว %d/%d ช่อง**" % [have, WQMusic.ids().size()])
 	## สองสเปกนี้เคยรวมเป็นหัวข้อเดียว วางไว้ใต้ตารางเพลงพอดี อ่านแล้วเข้าใจผิดว่า
 	## "เพลงต้องยาวไม่เกิน 2 วินาที" — แยกให้ชัดว่าสเปกไหนคุมของอะไร (F8)
 	lines.append("")
@@ -84,11 +84,14 @@ func _init() -> void:
 	lines.append("")
 	lines.append("## สเปกสำหรับคนทำเพลง")
 	lines.append("")
-	lines.append("- ลูปได้ไม่มีรอยต่อ — ต้นเพลงต่อท้ายเพลงต้องไร้รอยสะดุด เพราะเพลงเล่นวนตลอดด่าน")
-	lines.append("- ความยาวเท่าของเดิมที่แทนที่เป๊ะ (ดูช่อง \"ยาว (วิ)\" ในตารางเพลงข้างบน)")
-	lines.append("- mono · 22050 Hz ขึ้นไป · 16-bit PCM `.wav`")
-	lines.append("- ชื่อไฟล์ = id ในตารางเพลงข้างบนเป๊ะ")
-	lines.append("- ทำให้ดังพอๆ กับไฟล์ที่อบไว้ ระบบไม่มี normalize ให้")
+	lines.append("- นามสกุลที่ใช้ได้: `%s` — **Godot นำเข้า `.mp4` ไม่ได้**" % " · ".join(WQMusic.EXTS))
+	lines.append("  แปลงก่อนด้วย `ffmpeg -i เพลง.mp4 -vn -c:a libvorbis เพลง.ogg`")
+	lines.append("- ชื่อไฟล์ = ชื่อช่องในตารางข้างบนเป๊ะ (เช่น `phase1.ogg`)")
+	lines.append("- **ลูปได้ไม่มีรอยต่อ** — ต้นเพลงต่อท้ายเพลงต้องไร้รอยสะดุด เพราะเพลงเล่นวนตลอดด่าน")
+	lines.append("  (ระบบตั้งจุดลูปให้เองที่หัวและท้ายไฟล์ ไม่มีการตัดเงียบให้)")
+	lines.append("- ความยาวเท่าไหร่ก็ได้ แต่ยิ่งยาวยิ่งไม่น่าเบื่อ — เพลงหนึ่งดังอยู่ได้หลายสิบเดือนในเกม")
+	lines.append("- ทำให้ดังพอๆ กันทุกช่อง ระบบไม่มี normalize ให้ · ผู้เล่นปรับระดับเพลงแยกจากเสียงเอฟเฟกต์ได้")
+	lines.append("")
 
 	var out := FileAccess.open(OUT, FileAccess.WRITE)
 	out.store_string("\n".join(lines) + "\n")

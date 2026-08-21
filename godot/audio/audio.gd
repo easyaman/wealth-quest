@@ -216,17 +216,22 @@ static func preview(id: String) -> void:
 ## วันหนึ่งจะมีหน้าจอที่ลืมสั่งเปลี่ยนกลับ แล้วเพลงวิกฤตจะดังค้างทั้งเกมโดยไม่มีใครรู้ว่าใครสั่ง
 static func play_music(id: String) -> void:
 	if id == music_now: return
-	if not WQMusic.TRACKS.has(id):
-		push_warning("WQAudio.play_music(\"%s\") — ไม่มีเพลงนี้ในตาราง" % id)
+	if not WQMusic.SLOTS.has(id):
+		push_warning("WQAudio.play_music(\"%s\") — ไม่มีช่องเพลงชื่อนี้" % id)
 		return
 	music_now = id
 	music_switches += 1
 	if _silent or _music.size() < 2: return
 
+	var st := _music_stream(id)
+	## ยังไม่มีไฟล์เพลงสักไฟล์ในโปรเจกต์ — `music_now` ถูกจำไว้แล้วข้างบน (นโยบายยังทำงานปกติ
+	## และเทสต์ยังอ่านได้) แต่ไม่มีอะไรให้เล่น เกมจึงเงียบเฉยๆ ไม่ใช่ error
+	if st == null: return
+
 	var from := _music[_music_at]
 	_music_at = (_music_at + 1) % _music.size()
 	var to := _music[_music_at]
-	to.stream = _music_stream(id)
+	to.stream = st
 	to.volume_db = linear_to_db(0.0001)
 	to.play()
 
@@ -266,25 +271,32 @@ static func stop_music() -> void:
 		p.stop()
 
 
-## ไฟล์เพลงที่ import มาได้ `loop_mode = 0` เสมอ (ตรวจแล้วกับ Godot 4.7.1) จุดลูปจึงต้อง
-## ตั้งจากโค้ด และต้อง `duplicate()` ก่อน ไม่งั้นไปแก้ตัวที่ทั้งโปรเจกต์แคชร่วมกันอยู่
-## ถ้าไฟล์หาย ตกกลับไปเรียบเรียงสดให้เกมยังมีเพลง (เพิ่ง clone แล้วยังไม่ได้ --import)
+## สตรีมของช่องนี้ · คืน `null` ถ้ายังไม่มีไฟล์เพลงในโปรเจกต์เลย
+##
+## **ต้องตั้งลูปเองเสมอ ไม่ว่าไฟล์นามสกุลอะไร** — ไฟล์ที่ Godot นำเข้ามาไม่ได้ลูปให้
+## (ตรวจแล้วกับ `.wav`: `loop_mode = 0`) และต้อง `duplicate()` ก่อนแก้ ไม่งั้นไปแก้ตัวที่
+## ทั้งโปรเจกต์แคชร่วมกันอยู่ · `.ogg`/`.mp3` ใช้พร็อพเพอร์ตี้ `loop` ส่วน `.wav` ใช้ `loop_mode`
+## กับช่วง `loop_begin`/`loop_end` ที่นับเป็นเฟรม
 static func _music_stream(id: String) -> AudioStream:
 	if _music_cache.has(id): return _music_cache[id]
-	var path := "%s/%s.wav" % [MUSIC_DIR, id]
-	var st: AudioStream
-	if ResourceLoader.exists(path):
-		var w: AudioStreamWAV = (load(path) as AudioStreamWAV).duplicate()
+	var path := WQMusic.path_for(id)
+	if path == "":
+		_music_cache[id] = null
+		return null
+
+	var st: AudioStream = load(path)
+	if st is AudioStreamWAV:
+		var w: AudioStreamWAV = (st as AudioStreamWAV).duplicate()
 		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		w.loop_begin = 0
 		w.loop_end = int(round(w.get_length() * float(w.mix_rate)))
 		st = w
+	elif st is AudioStreamOggVorbis or st is AudioStreamMP3:
+		st = st.duplicate()
+		st.loop = true
 	else:
-		## ตัวอบเขียนไว้เองว่าเรนเดอร์เพลงหนึ่งเพลงใช้เวลาหลายวินาที — เรียบเรียงสดบนเธรดหลัก
-		## ตรงนี้จึงทำให้เกมค้างหลายวินาทีโดยไม่มีอะไรบอก ถ้าไม่ใส่คำเตือนไว้ (F15)
-		push_warning("WQAudio._music_stream(\"%s\") — ไม่มีไฟล์ที่อบไว้ กำลังเรียบเรียงสด " % id +
-			"(เกมจะค้างสักครู่) รัน: godot --headless --path . --import")
-		st = WQMusic.stream(id)
+		push_warning("WQAudio._music_stream(\"%s\") — ไฟล์ %s เป็นชนิดที่ตั้งลูปเองไม่เป็น " % [id, path] +
+			"เพลงจะเล่นจบแล้วเงียบ")
 	_music_cache[id] = st
 	return st
 

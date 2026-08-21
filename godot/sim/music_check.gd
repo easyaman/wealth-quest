@@ -3,11 +3,13 @@ extends SceneTree
 ##   godot --headless --path . --script res://sim/music_check.gd
 ##
 ## แยกจาก audio_check เพราะนั่นยาว 795 บรรทัดแล้ว และ sim/ แยกสูทตามระบบอยู่แล้ว
-## ที่นี่ตรวจได้แค่ "โครงถูกไหม · มีเสียงออกไหม · เลือกเพลงถูกตัวไหม"
+## ที่นี่ตรวจได้แค่ "ช่องครบไหม · ไฟล์ที่วางไว้ใช้ได้ไหม · เลือกเพลงถูกช่องไหม"
 ## ไม่ได้ตรวจว่าเพราะไหม — อันนั้นต้องเปิดฟังเอง: WQ_MUSIC=phase1 godot --path .
+##
+## **ตอนนี้โปรเจกต์ยังไม่มีไฟล์เพลงสักไฟล์** (เจ้าของฟังเพลงที่โค้ดแต่งเองแล้วสั่งทิ้ง รอไฟล์จริง)
+## สูทนี้จึงต้องเขียวทั้งตอนที่ยังไม่มีไฟล์ และตอนที่วางไฟล์แล้ว — ทั้งสองสถานะถูกต้องพอๆ กัน
 
-const MUSIC_DIR := "res://audio/music"
-const ALL_CHECKS: Array[String] = ["tracks", "files", "lane", "policy"]
+const ALL_CHECKS: Array[String] = ["slots", "files", "lane", "policy"]
 
 var _fails := 0
 ## เช็กไหนที่รันจนจบฟังก์ชันจริง — กันสูทเขียวปลอมตอน SCRIPT ERROR หลุดกลางฟังก์ชัน
@@ -16,7 +18,7 @@ var _completed := {}
 
 
 func _init() -> void:
-	_check_tracks()
+	_check_slots()
 	_check_files()
 	## รอหนึ่งเฟรมก่อนแตะ WQAudio — autoload WQAudioBoot เข้า tree หลัง _init() คืนค่า
 	## กลับไปหนึ่งเฟรม เหมือนกันกับ audio_check.gd (กติกาเดียวกัน เหตุผลเดียวกัน)
@@ -31,138 +33,68 @@ func _init() -> void:
 	quit(1 if _fails > 0 else 0)
 
 
-## ตารางโน้ตของทุกเพลงต้องมีโครงตรงกันทุกช่อง ไม่งั้นทำนองกับเบสจะเหลื่อมกันทั้งเพลง
-## โดยไม่มี error ให้เห็น — เป็นความผิดพลาดที่เกิดง่ายที่สุดเวลาแก้ทำนอง (ลืมเติม ".")
-func _check_tracks() -> void:
-	_eq("มีเพลงอย่างน้อยหนึ่งเพลง", WQMusic.ids().size() >= 1, true)
-
-	_eq("A4 = 440 Hz", snappedf(WQMusic.note_hz("A4"), 0.01), 440.0)
-	_eq("C4 = 261.63 Hz", snappedf(WQMusic.note_hz("C4"), 0.01), 261.63)
-	_eq("A#3 = Bb3", snappedf(WQMusic.note_hz("A#3"), 0.01), snappedf(WQMusic.note_hz("Bb3"), 0.01))
-	_eq("โน้ตสูงขึ้นหนึ่งอ็อกเทฟ = ความถี่สองเท่า",
-		snappedf(WQMusic.note_hz("A5") / WQMusic.note_hz("A4"), 0.001), 2.0)
+## ช่องเพลงต้องครบและต้องชี้ไปที่ที่ถูก — ถ้าช่องหายไปเงียบๆ นโยบายจะสั่งเพลงที่ไม่มีอยู่จริง
+## แล้ว WQAudio จะเตือนแล้วเงียบ ซึ่งอ่านจากในเกมไม่ออกเลยว่าเพราะอะไร
+func _check_slots() -> void:
+	_eq("มีช่องเพลงครบสามช่อง", WQMusic.ids(), ["crisis", "phase1", "phase2"])
 
 	for id in WQMusic.ids():
-		var t: Dictionary = WQMusic.TRACKS[id]
-		var lead_bars := WQMusic.bars(String(t["lead"]))
-		for ch in ["lead", "bass", "drum"]:
-			_eq("\"%s\" ช่อง %s มีจำนวนห้องเท่ากับทำนอง" % [id, ch],
-				WQMusic.bars(String(t[ch])).size(), lead_bars.size())
-			_eq("\"%s\" ช่อง %s มีจำนวนช่องต่อห้องตรงกับทำนองทุกห้อง" % [id, ch],
-				WQMusic.bars(String(t[ch])), lead_bars)
-		for b in lead_bars:
-			_eq("\"%s\" ทุกห้องยาวเท่ากับ beats_per_bar" % id, b, int(t["beats_per_bar"]))
+		_eq("ช่อง \"%s\" บอกว่าดังตอนไหน" % id,
+			String(WQMusic.SLOTS[id]).strip_edges().is_empty(), false)
 
-		# โทเคนที่พิมพ์ผิดต้องไม่เงียบหาย — ไม่งั้นโน้ตนั้นหายไปจากเพลงโดยไม่มีใครรู้
-		for ch in ["lead", "bass"]:
-			for tok in WQMusic.cells(String(t[ch])):
-				if tok == "." or tok == "-": continue
-				_eq("\"%s\" โน้ต \"%s\" ในช่อง %s อ่านออก" % [id, tok, ch],
-					WQMusic.note_hz(tok) > 0.0, true)
-		for tok in WQMusic.cells(String(t["drum"])):
-			_eq("\"%s\" โทเคนกลอง \"%s\" อ่านออก" % [id, tok],
-				tok == "." or tok == "-" or WQMusic.DRUM.has(tok), true)
+	## ทุกช่องที่นโยบายเลือกได้ต้องมีอยู่จริงในตาราง — ไล่จากฝั่ง WQAudio เข้ามา ไม่ใช่จากตารางออกไป
+	## (ทิศนี้จับได้ว่า "นโยบายสั่งช่องที่ไม่มี" ส่วนทิศตรงข้ามจับได้แค่ "มีช่องที่ไม่มีใครสั่ง")
+	for id in ["phase1", "phase2", "crisis"]:
+		_eq("นโยบายสั่งช่อง \"%s\" ได้จริง" % id, WQMusic.SLOTS.has(id), true)
 
-		# ความยาวต้องลงตัวพอดีห้อง ไม่งั้นรอยต่อลูปเบี้ยว
-		var cells := WQMusic.cells(String(t["lead"])).size()
-		_eq("\"%s\" ความยาววินาทีตรงกับจำนวนช่อง × จังหวะ" % id,
-			snappedf(WQMusic.length_sec(id), 0.0001),
-			snappedf(float(cells) * 60.0 / float(t["bpm"]), 0.0001))
+	_eq("ไม่มี mp4 ในนามสกุลที่รองรับ (Godot นำเข้าไม่ได้)", WQMusic.EXTS.has("mp4"), false)
+	_eq("รองรับ ogg mp3 wav", WQMusic.EXTS, ["ogg", "mp3", "wav"])
 
-		var pcm := WQMusic.render(id)
-		_eq("\"%s\" จำนวนแซมเปิลตรงกับความยาวเป๊ะ" % id,
-			pcm.size() / 2, int(round(WQMusic.length_sec(id) * float(WQSynth.RATE))))
-		_eq("\"%s\" อบซ้ำได้ไบต์เดิมเป๊ะ" % id, WQMusic.render(id) == pcm, true)
+	## ยังไม่มีไฟล์ = ทุกช่องต้องคืน "" ไม่ใช่ path ที่ชี้ไปที่ไฟล์ที่ไม่มีอยู่
+	if not WQMusic.has_any():
+		for id in WQMusic.ids():
+			_eq("ยังไม่มีไฟล์ ช่อง \"%s\" จึงคืนทางว่าง" % id, WQMusic.path_for(String(id)), "")
 
-		var peak := 0
-		var i := 0
-		while i + 1 < pcm.size():
-			peak = maxi(peak, absi(pcm.decode_s16(i)))
-			i += 2
-		_eq("\"%s\" ดังพอให้ได้ยิน (พีคเกิน 10%% ของเต็มสเกล)" % id, peak > 3276, true)
-		_eq("\"%s\" ไม่ตัดยอดจนแตก (พีคไม่ชนเพดาน)" % id, peak < 32767, true)
-
-		# ตรวจว่าแต่ละช่องดังจริงด้วยตัวเอง — ถ้าช่องไหนเงียบหายเข้าไปในคนอื่นจะจับได้
-		for ch in ["lead", "bass", "drum"]:
-			var cpcm := WQMusic.render(id, ch)
-			var cpeak := 0
-			var ci := 0
-			while ci + 1 < cpcm.size():
-				cpeak = maxi(cpeak, absi(cpcm.decode_s16(ci)))
-				ci += 2
-			_eq("\"%s\" ช่อง %s ดังจริงด้วยตัวเอง (พีคเกิน 5%% ของเต็มสเกล)" % [id, ch], cpeak > 1638, true)
-
-		var st := WQMusic.stream(id)
-		_eq("\"%s\" สตรีมตั้งลูปไว้แล้ว" % id, st.loop_mode, AudioStreamWAV.LOOP_FORWARD)
-		_eq("\"%s\" จุดจบลูปอยู่ท้ายเพลงพอดี" % id, st.loop_end, pcm.size() / 2)
-
-	_completed["tracks"] = true
+	_completed["slots"] = true
 
 
-## ไฟล์เพลงต้องครบ ไม่มีกำพร้า และต้องเป็นของที่ตัวอบทำเองจริงๆ
-## กติกาเดียวกับ audio/sfx ทุกข้อ — ต่างแค่โฟลเดอร์
+## ไฟล์ที่คนทำเพลงวางไว้ต้องใช้ได้จริง และ **การไม่มีไฟล์ต้องไม่ทำให้อะไรพัง**
 ##
-## **F1/F2 — เกมเล่น "ไฟล์" เสมอ (`_music_stream()` โหลดจากดิสก์) ไม่ใช่ตารางโน้ตตรงๆ**
-## แฮชที่จดเทียบกับดิสก์อย่างเดียวจับไม่ได้ว่า "แก้โน้ตแล้วลืมอบ" เพราะทั้งคู่ "เก่าเท่ากัน"
-## จึงต้องแยกสองเส้นทางตามว่าตราตรงกับ baked.json ไหม:
-##   ตราตรง (ของโค้ด)  → ต้องตรวจเข้ม: เนื้อ PCM ต้องตรงกับ WQMusic.render(id) เป๊ะ
-##                        ไม่ใช่แค่ "เก่าเท่ากัน" — ถ้าไม่ตรงคือมีคนแก้ตารางโน้ตแล้วลืมอบใหม่
-##   ตราไม่ตรง (ของคนทำ) → ตรวจแค่ว่ามีเสียงจริง/ดังพอ/ไม่ซ้ำเพลงอื่น **ห้ามล้ม**เพราะความยาว
-##                        หรือแฮชไม่ตรง (นั่นคือสิ่งที่คาดไว้อยู่แล้วสำหรับไฟล์ที่คนทำวางทับ)
+## สองสถานะนี้ถูกต้องพอๆ กัน: ยังไม่มีใครส่งเพลงมา (ตอนนี้) กับส่งมาแล้วบางช่อง
+## เช็กที่นี่จึงไม่ยืนกรานว่าต้องมีไฟล์ แต่ยืนกรานว่า **ถ้ามี มันต้องเล่นได้จริง**
+## — ไฟล์ที่โหลดไม่ขึ้นหรือเงียบสนิทคือความเสียหายที่เงียบที่สุดของระบบเสียง
 func _check_files() -> void:
-	var on_disk := {}
-	var d := DirAccess.open(MUSIC_DIR)
-	if d == null:
-		_fails += 1
-		print("  ❌ ไม่มีโฟลเดอร์ %s" % MUSIC_DIR)
-		return
+	var d := DirAccess.open(WQMusic.DIR)
+	_eq("มีโฟลเดอร์ %s ให้วางไฟล์" % WQMusic.DIR, d != null, true)
+	if d == null: return
+
+	## ไฟล์ที่ไม่มีช่องรองรับ = ไฟล์กำพร้า ไม่มีใครเล่นมันตลอดกาล และเจ้าของไฟล์จะไม่มีวันรู้
+	## (ข้ามไฟล์ .import ที่ Godot สร้างคู่กับทุกไฟล์เสียง)
 	for f in d.get_files():
-		if f.ends_with(".wav"): on_disk[f.get_basename()] = true
-
-	var stamp := FileAccess.open("%s/baked.json" % MUSIC_DIR, FileAccess.READ)
-	_eq("มี baked.json ของเพลง", stamp != null, true)
-	if stamp == null: return
-	var marks = JSON.parse_string(stamp.get_as_text())
-	stamp.close()
-	_eq("baked.json ของเพลงเป็น Dictionary", marks is Dictionary, true)
-	if not marks is Dictionary: return
-
-	# ตราที่ค้างของเพลงที่ถูกลบจะรอดสายตา เพราะตัวอบตัดตราให้เฉพาะรอบที่อบครบทุกเพลง (F13)
-	var mark_ids: Array = marks.keys()
-	mark_ids.sort()
-	_eq("baked.json จดครบทุก id ไม่ขาดไม่เกิน", mark_ids, WQMusic.ids())
+		if f.ends_with(".import"): continue
+		var base := f.get_basename()
+		var ext := f.get_extension()
+		_eq("ไฟล์ \"%s\" มีช่องรองรับ" % f, WQMusic.SLOTS.has(base), true)
+		_eq("ไฟล์ \"%s\" เป็นนามสกุลที่ Godot นำเข้าได้" % f, WQMusic.EXTS.has(ext), true)
 
 	var seen := {}
 	for id in WQMusic.ids():
-		var path := "%s/%s.wav" % [MUSIC_DIR, id]
-		_eq("มีไฟล์เพลง \"%s\"" % id, ResourceLoader.exists(path), true)
-		if not ResourceLoader.exists(path): continue
-		on_disk.erase(id)
+		var path := WQMusic.own_path(String(id))
+		if path == "": continue          # ช่องนี้ยังว่าง — ถูกต้อง ไม่ใช่ข้อบกพร่อง
 
-		var abs := ProjectSettings.globalize_path(path)
-		var from_code: bool = FileAccess.get_sha256(abs) == String(marks.get(id, ""))
+		var st = load(path)
+		_eq("ไฟล์ของช่อง \"%s\" โหลดเป็นเสียงได้" % id, st is AudioStream, true)
+		if not (st is AudioStream): continue
+		_eq("ไฟล์ของช่อง \"%s\" ยาวเกินครึ่งวินาที (ไม่ใช่ไฟล์เปล่า)" % id,
+			(st as AudioStream).get_length() > 0.5, true)
 
-		var pcm := WQWavProbe.pcm(abs)
-		_eq("\"%s\" มีข้อมูลเสียงอยู่จริงในไฟล์" % id, pcm.size() > 0, true)
-		_eq("\"%s\" ดังพอให้ได้ยิน (พีคเกิน 10%% ของเต็มสเกล)" % id,
-			WQWavProbe.peak(pcm) > 3276, true)
-
-		if from_code:
-			# ตราตรง = ตัวอบเขียนไฟล์นี้เอง — ต้องตรงกับตารางโน้ต "ตอนนี้" เป๊ะ ไม่ใช่แค่ตรงกับ
-			# ตัวเองตอนที่อบ (ถ้าไม่ตรง แปลว่ามีคนแก้ WQMusic.TRACKS แล้วลืมรัน music_bake ใหม่)
-			_eq("\"%s\" เนื้อ PCM ตรงกับตารางโน้ตปัจจุบัน (ไม่ตรง = ลืมอบใหม่ด้วย music_bake)" % id,
-				pcm == WQMusic.render(id), true)
-			_eq("\"%s\" ยาวตรงกับที่ตารางโน้ตบอก" % id,
-				pcm.size() / 2, int(round(WQMusic.length_sec(id) * float(WQSynth.RATE))))
-		# ตราไม่ตรง = ไฟล์ของคนทำเพลง — ตรวจได้แค่ "มีเสียงจริง/ดังพอ" (เช็กไปแล้วข้างบน) กับ
-		# "ไม่ซ้ำเพลงอื่น" (เช็กข้างล่าง) เท่านั้น ห้ามคาดหวังความยาวหรือแฮชตรงกับฉบับร่างของโค้ด
-
-		var key := Marshalls.raw_to_base64(pcm).sha256_text()
-		_eq("\"%s\" ไม่ได้เป็นเพลงชุดเดียวกับ \"%s\"" % [id, String(seen.get(key, ""))],
+		## สองไฟล์ที่เป็นไบต์ชุดเดียวกันเป๊ะ = เผลอก๊อปไฟล์เดิมไปวางสองช่อง
+		## ซึ่งฟังแล้วเหมือน "เพลงไม่เปลี่ยน" ทั้งที่โค้ดสลับเพลงถูกต้องทุกอย่าง
+		var key := FileAccess.get_sha256(ProjectSettings.globalize_path(path))
+		_eq("ไฟล์ของช่อง \"%s\" ไม่ใช่ไฟล์เดียวกับช่อง \"%s\"" % [id, String(seen.get(key, ""))],
 			seen.has(key), false)
 		seen[key] = id
 
-	_eq("ไม่มีไฟล์เพลงกำพร้า", on_disk.keys(), [])
 	_completed["files"] = true
 
 
@@ -212,10 +144,20 @@ func _check_lane() -> void:
 	_eq("เปิดเสียงกลับแล้วบัส Music กลับมาดัง",
 		AudioServer.is_bus_mute(AudioServer.get_bus_index("Music")), false)
 
-	# สตรีมของเพลงต้องตั้งลูปไว้ — ไฟล์ที่ import มาได้ loop_mode = 0 เสมอ
-	var st := WQAudio._music_stream("phase1") as AudioStreamWAV
-	_eq("สตรีมเพลงตั้งลูปไว้", st.loop_mode, AudioStreamWAV.LOOP_FORWARD)
-	_eq("จุดจบลูปไม่ใช่ศูนย์", st.loop_end > 0, true)
+	## สตรีมเพลง — ทั้งสองสถานะต้องถูก: ยังไม่มีไฟล์ = null (เกมเงียบอย่างสงบ)
+	## มีไฟล์แล้ว = ต้องถูกตั้งลูปไว้ ไม่ว่านามสกุลไหน เพราะไฟล์ที่ import มาไม่ได้ลูปให้เอง
+	##
+	## **ต้องไล่ทุกช่อง ไม่ใช่เช็กแค่ phase1** — แต่ละนามสกุลตั้งลูปคนละพร็อพเพอร์ตี้ (.wav ใช้
+	## loop_mode · .ogg/.mp3 ใช้ loop) ถ้าเช็กช่องเดียว เส้นทางของนามสกุลที่ไม่ได้อยู่ในช่องนั้น
+	## จะไม่มีใครตรวจเลย (พิสูจน์มาแล้ว: ลบการตั้ง loop ของ ogg/mp3 ทิ้ง สูทยังเขียวสนิท
+	## เพราะตอนนั้นช่อง phase1 บังเอิญเป็น .wav)
+	for id in WQMusic.ids():
+		var st = WQAudio._music_stream(String(id))
+		if WQMusic.path_for(String(id)) == "":
+			_eq("ช่อง \"%s\" ยังไม่มีไฟล์ สตรีมจึงเป็น null" % id, st, null)
+		else:
+			_eq("ช่อง \"%s\" มีไฟล์แล้ว ต้องถูกตั้งลูปไว้ (%s)" % [id, WQMusic.path_for(String(id)).get_file()],
+				_loops(st), true)
 
 	# ระดับเสียงเพลงต้องลงบัสจริงและถูกจำลงไฟล์ตั้งค่า
 	WQAudio.set_level("Music", 0.4)
@@ -343,6 +285,16 @@ func _check_policy() -> void:
 	_eq("ยังไม่มีแมตช์ ได้เพลงด่าน 1", WQAudio.music_now, "phase1")
 
 	_completed["policy"] = true
+
+
+## สตรีมนี้ถูกตั้งให้เล่นวนแล้วหรือยัง — แต่ละชนิดไฟล์ใช้คนละพร็อพเพอร์ตี้
+func _loops(st) -> bool:
+	if st is AudioStreamWAV:
+		return (st as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_FORWARD \
+			and (st as AudioStreamWAV).loop_end > 0
+	if st is AudioStreamOggVorbis or st is AudioStreamMP3:
+		return bool(st.loop)
+	return false
 
 
 func _eq(label: String, got, want) -> void:

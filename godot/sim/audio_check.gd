@@ -768,8 +768,6 @@ func _check_settings() -> void:
 	_completed["settings"] = true
 
 
-## คืนช่วง PCM ของไฟล์ .wav — ไล่หา chunk "data" จริงๆ ไม่ใช่ข้ามหัว 44 ไบต์ตายตัว
-## เพราะไฟล์ที่คนทำเสียงส่งมามักมี chunk เสริม (LIST/INFO ของโปรแกรมตัดต่อ) คั่นอยู่ก่อน
 func _eq(label: String, got, want) -> void:
 	if got == want: return
 	_fails += 1

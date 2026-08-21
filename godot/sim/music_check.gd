@@ -101,6 +101,14 @@ func _check_tracks() -> void:
 
 ## ไฟล์เพลงต้องครบ ไม่มีกำพร้า และต้องเป็นของที่ตัวอบทำเองจริงๆ
 ## กติกาเดียวกับ audio/sfx ทุกข้อ — ต่างแค่โฟลเดอร์
+##
+## **F1/F2 — เกมเล่น "ไฟล์" เสมอ (`_music_stream()` โหลดจากดิสก์) ไม่ใช่ตารางโน้ตตรงๆ**
+## แฮชที่จดเทียบกับดิสก์อย่างเดียวจับไม่ได้ว่า "แก้โน้ตแล้วลืมอบ" เพราะทั้งคู่ "เก่าเท่ากัน"
+## จึงต้องแยกสองเส้นทางตามว่าตราตรงกับ baked.json ไหม:
+##   ตราตรง (ของโค้ด)  → ต้องตรวจเข้ม: เนื้อ PCM ต้องตรงกับ WQMusic.render(id) เป๊ะ
+##                        ไม่ใช่แค่ "เก่าเท่ากัน" — ถ้าไม่ตรงคือมีคนแก้ตารางโน้ตแล้วลืมอบใหม่
+##   ตราไม่ตรง (ของคนทำ) → ตรวจแค่ว่ามีเสียงจริง/ดังพอ/ไม่ซ้ำเพลงอื่น **ห้ามล้ม**เพราะความยาว
+##                        หรือแฮชไม่ตรง (นั่นคือสิ่งที่คาดไว้อยู่แล้วสำหรับไฟล์ที่คนทำวางทับ)
 func _check_files() -> void:
 	var on_disk := {}
 	var d := DirAccess.open(MUSIC_DIR)
@@ -119,6 +127,11 @@ func _check_files() -> void:
 	_eq("baked.json ของเพลงเป็น Dictionary", marks is Dictionary, true)
 	if not marks is Dictionary: return
 
+	# ตราที่ค้างของเพลงที่ถูกลบจะรอดสายตา เพราะตัวอบตัดตราให้เฉพาะรอบที่อบครบทุกเพลง (F13)
+	var mark_ids: Array = marks.keys()
+	mark_ids.sort()
+	_eq("baked.json จดครบทุก id ไม่ขาดไม่เกิน", mark_ids, WQMusic.ids())
+
 	var seen := {}
 	for id in WQMusic.ids():
 		var path := "%s/%s.wav" % [MUSIC_DIR, id]
@@ -127,15 +140,22 @@ func _check_files() -> void:
 		on_disk.erase(id)
 
 		var abs := ProjectSettings.globalize_path(path)
-		_eq("แฮชที่จดของ \"%s\" ตรงกับไฟล์บนดิสก์จริง" % id,
-			String(marks.get(id, "")), FileAccess.get_sha256(abs))
+		var from_code: bool = FileAccess.get_sha256(abs) == String(marks.get(id, ""))
 
 		var pcm := WQWavProbe.pcm(abs)
 		_eq("\"%s\" มีข้อมูลเสียงอยู่จริงในไฟล์" % id, pcm.size() > 0, true)
 		_eq("\"%s\" ดังพอให้ได้ยิน (พีคเกิน 10%% ของเต็มสเกล)" % id,
 			WQWavProbe.peak(pcm) > 3276, true)
-		_eq("\"%s\" ยาวตรงกับที่ตารางโน้ตบอก" % id,
-			pcm.size() / 2, int(round(WQMusic.length_sec(id) * float(WQSynth.RATE))))
+
+		if from_code:
+			# ตราตรง = ตัวอบเขียนไฟล์นี้เอง — ต้องตรงกับตารางโน้ต "ตอนนี้" เป๊ะ ไม่ใช่แค่ตรงกับ
+			# ตัวเองตอนที่อบ (ถ้าไม่ตรง แปลว่ามีคนแก้ WQMusic.TRACKS แล้วลืมรัน music_bake ใหม่)
+			_eq("\"%s\" เนื้อ PCM ตรงกับตารางโน้ตปัจจุบัน (ไม่ตรง = ลืมอบใหม่ด้วย music_bake)" % id,
+				pcm == WQMusic.render(id), true)
+			_eq("\"%s\" ยาวตรงกับที่ตารางโน้ตบอก" % id,
+				pcm.size() / 2, int(round(WQMusic.length_sec(id) * float(WQSynth.RATE))))
+		# ตราไม่ตรง = ไฟล์ของคนทำเพลง — ตรวจได้แค่ "มีเสียงจริง/ดังพอ" (เช็กไปแล้วข้างบน) กับ
+		# "ไม่ซ้ำเพลงอื่น" (เช็กข้างล่าง) เท่านั้น ห้ามคาดหวังความยาวหรือแฮชตรงกับฉบับร่างของโค้ด
 
 		var key := Marshalls.raw_to_base64(pcm).sha256_text()
 		_eq("\"%s\" ไม่ได้เป็นเพลงชุดเดียวกับ \"%s\"" % [id, String(seen.get(key, ""))],
@@ -158,8 +178,14 @@ func _check_lane() -> void:
 	_eq("มีตัวเล่นเพลงสองตัว", WQAudio._music.size(), 2)
 	_eq("ตัวเล่นเพลงอยู่บนบัส Music", WQAudio._music[0].bus, "Music")
 
+	## ของจริง (_ready() ของ WQAudioBoot) สั่งเพลง phase1 ไปแล้วตั้งแต่ก่อนสูทนี้เริ่ม เพราะ
+	## ยังไม่มีผู้เล่นผูกไว้ตอนนั้น `_want_music()` จึงตกกลับไปที่ phase1 — เล่นเพลงไว้ก่อนตรงนี้
+	## ให้ชัดเจนว่ามีอะไรให้ stop_music() หยุดจริง ไม่งั้นจะ assert แค่ "หลังเรียก stop_music()
+	## แล้ว music_now กลายเป็น ''" ซึ่งล้มไม่ได้เลยไม่ว่า music_now ก่อนหน้าจะเป็นอะไร (F10)
+	WQAudio.play_music("phase1")
+	_eq("ก่อนหยุด มีเพลงดังอยู่จริง (ให้มีอะไรให้ stop_music หยุด)", WQAudio.music_now, "phase1")
 	WQAudio.stop_music()
-	_eq("เริ่มมายังไม่มีเพลง", WQAudio.music_now, "")
+	_eq("หยุดเพลงแล้ว music_now ว่างจริง", WQAudio.music_now, "")
 
 	WQAudio.play_music("phase1")
 	_eq("สั่งเล่นแล้วจำว่าเพลงไหนดังอยู่", WQAudio.music_now, "phase1")
@@ -259,8 +285,59 @@ func _check_policy() -> void:
 	m.month_ended.emit(4)
 	_eq("ภัยพิบัติหมดอายุแล้ว กลับไปเพลงด่าน", WQAudio.music_now, "phase2")
 
-	# ยังไม่มีผู้เล่นผูกไว้ (หน้าเลือกอาชีพ) ต้องเป็นเพลงด่าน 1
+	# ========== F5: ฮิสเทอรีซิสกันเพลงกระพริบตอนสุขภาพแกว่งคาบเกี่ยวเกณฑ์ 40 ==========
+	# สุขภาพจริงวิ่งขึ้นลงหลักหน่วยทุกเดือน (`changed` ยิงหลายสิบครั้ง) — ถ้าตัดสินจาก
+	# < CRISIS_HEALTH ดิบๆ การแกว่ง 39↔41 จะเฟดไขว้ไปกลับเต็มรอบและเพลงเริ่มใหม่จากห้องแรก
+	# ทุกครั้ง ต้อง "เข้า" ที่ 40 แต่ "ออก" ต่อเมื่อถึง CRISIS_EXIT (45) เท่านั้น
+	var switches_before := WQAudio.music_switches
+	me.health = 39.0
+	me.changed.emit()
+	_eq("ตกต่ำกว่า 40 เข้าวิกฤต", WQAudio.music_now, "crisis")
+
+	me.health = 41.0
+	me.changed.emit()
+	me.health = 39.0
+	me.changed.emit()
+	me.health = 41.0
+	me.changed.emit()
+	_eq("แกว่ง 41<->39 คาบเกี่ยว 40 (ยังไม่ถึง 45) ต้องยังวิกฤตอยู่ ไม่ใช่ออกแล้วเข้าใหม่",
+		WQAudio.music_now, "crisis")
+	_eq("แกว่งรอบเกณฑ์ 4 ครั้งไม่ทำให้ music_switches บาน (สลับแค่ตอนเข้าวิกฤตครั้งแรกครั้งเดียว)",
+		WQAudio.music_switches, switches_before + 1)
+
+	me.health = 42.0
+	me.changed.emit()
+	_eq("สุขภาพ 42 (ระหว่าง 40 กับ 45) หลังเคยตกวิกฤต ยังเป็นเพลงวิกฤตอยู่ ไม่ใช่ phase2",
+		WQAudio.music_now, "crisis")
+
+	me.health = 45.0
+	me.changed.emit()
+	_eq("สุขภาพถึง CRISIS_EXIT (45) แล้วออกจากวิกฤตจริง กลับไปเพลงด่าน", WQAudio.music_now, "phase2")
+
+	me.health = 70.0
+	me.changed.emit()
+
+	# ========== F7: ภัยพิบัติกลางเดือน (disaster_started) ต้องได้เพลงวิกฤตทันที ==========
+	# เทสต์เดิมสร้างภัยพิบัติด้วยการเซ็ต active_disasters แล้วยิงแค่ month_ended เท่านั้น
+	# _on_disaster() จึงลบทิ้งได้โดยไม่มีเทสต์ไหนล้ม ทั้งที่ disaster_started คือจังหวะจริงที่
+	# ผู้เล่นเจอกลางเดือน (ไม่ใช่แค่ตอนสิ้นเดือน) — ยิงสัญญาณจริงตรงๆ แบบเดียวกับที่ core ยิง
+	me.phase = 2
+	m.active_disasters = []
+	me.changed.emit()
+	_eq("ก่อนภัยพิบัติ เพลงด่าน 2 อยู่", WQAudio.music_now, "phase2")
+	m.active_disasters = [{"def": {}, "left": 2}]
+	m.disaster_started.emit({})
+	_eq("disaster_started ยิงกลางเดือนจริง ได้เพลงวิกฤตทันที", WQAudio.music_now, "crisis")
+	m.active_disasters = []
+	m.month_ended.emit(5)
+	_eq("ภัยพิบัติจากสัญญาณตรงหมดอายุแล้ว กลับไปเพลงด่าน", WQAudio.music_now, "phase2")
+
+	# ยังไม่มีผู้เล่นและยังไม่มีแมตช์ผูกไว้เลย (หน้าเลือกอาชีพ) ต้องเป็นเพลงด่าน 1
+	# เดิม assert นี้เรียกแค่ bind_player(null) ป้ายเขียนว่า "ยังไม่มีแมตช์" แต่ไม่เคยปลด
+	# แมตช์จริง (F11) — เติม bind(null) ให้ตรงกับที่ป้ายบอก แล้วได้เช็กเพิ่มฟรีหนึ่งข้อ
 	WQAudio.bind_player(null)
+	WQAudio.bind(null)
+	_eq("ปลดแมตช์แล้ว ไม่มีแมตช์ผูกอยู่จริง", WQAudio._match, null)
 	WQAudio.stop_music()
 	WQAudio._refresh_music()
 	_eq("ยังไม่มีแมตช์ ได้เพลงด่าน 1", WQAudio.music_now, "phase1")

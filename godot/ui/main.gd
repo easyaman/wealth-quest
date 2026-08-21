@@ -83,9 +83,19 @@ func _ready() -> void:
 
 	# ฟังเพลงทีละเพลง: WQ_MUSIC=crisis godot --path .   (ปิดเองใน 20 วินาที)
 	# มีเพราะ music_check ตรวจได้แค่ว่ามีเสียงและโครงถูก ไม่ได้ตรวจว่าฟังแล้วรู้เรื่อง
+	# ใช้ preview_music() ไม่ใช่ play_music() ตรงๆ — เมธอดนั้นเป็นของภายในนโยบายเลือกเพลง
+	# ui/ เรียกตรงๆ ไม่ได้ (กฎเหล็กข้อ 6) เหมือนกับที่ WQ_SFX ใช้ preview() ไม่ใช่ _play()
+	#
+	# รับสองเพลงคั่นด้วยจุลภาคได้ (WQ_MUSIC=phase1,crisis) เพื่อฟังรอยต่อของเฟดไขว้จริง —
+	# มิเช่นนั้นไม่มีทางรู้เลยว่าเฟดฟังดีหรือไม่ เพราะ headless เข้า _silent แล้วคืนก่อนเสมอ
+	# รูปแบบเดิม (เพลงเดียว) ยังทำงานเหมือนเดิม
 	var track := OS.get_environment("WQ_MUSIC")
 	if track != "":
-		WQAudio.play_music(track)
+		var track_ids := track.split(",", false)
+		WQAudio.preview_music(String(track_ids[0]))
+		if track_ids.size() > 1:
+			await get_tree().create_timer(6.0).timeout
+			WQAudio.preview_music(String(track_ids[1]))
 		await get_tree().create_timer(20.0).timeout
 		get_tree().quit()
 

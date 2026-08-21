@@ -29,6 +29,11 @@ const SFX_DIR := "res://audio/sfx"
 const MUSIC_DIR := "res://audio/music"
 const FADE := 0.8                ## วินาทีที่ใช้เฟดไขว้ตอนสลับเพลง
 const CRISIS_HEALTH := 40.0      ## เกณฑ์เดียวกับเสียงเตือน health_low
+## เกณฑ์ "ออก" จากเพลงวิกฤต — สูงกว่า CRISIS_HEALTH โดยตั้งใจ (ฮิสเทอรีซิส)
+## สุขภาพที่แกว่ง 39↔41 คาบเกี่ยว CRISIS_HEALTH จะไม่ทำให้เพลงกระพริบ เพราะต้องขึ้นถึง 45
+## ก่อนถึงจะยอมออกจากวิกฤต — ต่างจาก health_low ที่ยังใช้ CRISIS_HEALTH ตรงๆ ไม่มีฮิสเทอรีซิส
+## (เสียงเตือนนั้นดังครั้งเดียวตอนข้ามเข้าไปอยู่แล้ว ไม่มีปัญหาเพลงกระพริบแบบที่นี่)
+const CRISIS_EXIT := 45.0
 
 ## ที่ไฟล์ตั้งค่าเป็น static var ไม่ใช่ const: สูทต้องเปลี่ยนทางไปไฟล์ทดสอบได้ ไม่งั้นรัน
 ## audio_check ทีเดียวระดับเสียงที่นักพัฒนาตั้งไว้บนเครื่องตัวเองก็หายทุกครั้ง
@@ -51,6 +56,9 @@ static var _silent := false
 static var _match: WQMatch
 static var _player = null
 static var _was_critical := false       ## กันเสียงเตือนสุขภาพดังซ้ำทุกครั้งที่ changed
+## สถานะวิกฤตของ "เพลง" — แยกจาก _was_critical โดยตั้งใจ (F5): ตัวนั้นคุมเสียงเตือน health_low
+## ที่ต้องข้าม CRISIS_HEALTH ตรงๆ ไม่มีฮิสเทอรีซิส ถ้าใช้ตัวแปรร่วมกัน แก้เพลงจะไปกระทบเสียงเตือนด้วย
+static var _music_crisis := false
 
 static var music_now := ""       ## id ของเพลงที่ควรกำลังดัง — "" = ไม่มี (เทสต์อ่านตัวนี้)
 static var music_switches := 0   ## นับจำนวนครั้งที่ "เปลี่ยนเพลงจริง" — เทสต์ใช้จับการสั่งซ้ำ
@@ -114,6 +122,9 @@ static func bind(match_ref: WQMatch) -> void:
 		_match.disaster_started.connect(inst._on_disaster)
 		_match.player_finished.connect(inst._on_finished)
 		_match.match_over.connect(inst._on_over)
+	## เปลี่ยนแมตช์ตอนมีภัยพิบัติค้างอยู่ (หรือหลุดออกจากแมตช์เดิม) ต้องประเมินเพลงใหม่ทันที
+	## ไม่งั้นเพลงจะยังเป็นของเก่าค้างอยู่จนกว่า `changed`/`month_ended` ตัวถัดไปจะมาเรียกให้ (F9)
+	_refresh_music()
 
 
 static func bind_player(player) -> void:
@@ -124,6 +135,7 @@ static func bind_player(player) -> void:
 		if _player.changed.is_connected(inst._on_changed): _player.changed.disconnect(inst._on_changed)
 	_player = player
 	_was_critical = false
+	_music_crisis = false
 	if _player != null:
 		_player.acted.connect(inst._on_acted)
 		_player.deal_closed.connect(inst._on_deal)
@@ -198,9 +210,15 @@ static func preview(id: String) -> void:
 ## เปลี่ยนเพลงพื้นหลังด้วยการเฟดไขว้ · **สั่งเพลงที่ดังอยู่แล้วต้องไม่ทำอะไรเลย**
 ## `_refresh_music()` ถูกเรียกทุกครั้งที่สถานะเปลี่ยน ซึ่งหลายสิบครั้งต่อเดือน
 ## ถ้าไม่กันตรงนี้ เพลงจะเริ่มใหม่ตลอดเวลาจนฟังไม่ได้เลย
+##
+## **เรียกได้เฉพาะจาก `_refresh_music()` (นโยบายเลือกเพลงของเกม) กับ `preview_music()`
+## (เครื่องมือฟังจาก terminal) เท่านั้น** — `ui/` ห้ามเรียกตรงๆ (กฎเหล็กข้อ 6) เพราะถ้าเรียกได้
+## วันหนึ่งจะมีหน้าจอที่ลืมสั่งเปลี่ยนกลับ แล้วเพลงวิกฤตจะดังค้างทั้งเกมโดยไม่มีใครรู้ว่าใครสั่ง
 static func play_music(id: String) -> void:
 	if id == music_now: return
-	if not WQMusic.TRACKS.has(id): return
+	if not WQMusic.TRACKS.has(id):
+		push_warning("WQAudio.play_music(\"%s\") — ไม่มีเพลงนี้ในตาราง" % id)
+		return
 	music_now = id
 	music_switches += 1
 	if _silent or _music.size() < 2: return
@@ -215,9 +233,30 @@ static func play_music(id: String) -> void:
 	if _music_tween != null and _music_tween.is_valid(): _music_tween.kill()
 	_music_tween = inst.create_tween()
 	_music_tween.set_parallel(true)
-	_music_tween.tween_property(to, "volume_db", 0.0, FADE)
-	_music_tween.tween_property(from, "volume_db", linear_to_db(0.0001), FADE)
+	## เฟดต้องเป็นเส้นตรงใน "โดเมนแอมพลิจูด" ไม่ใช่โดเมน dB — dB เป็นสเกลลอการิทึม
+	## tween_property บน volume_db ไล่เส้นตรงจาก -80 dB ไป 0 dB ตามเวลา แต่แปลงกลับเป็น
+	## แอมพลิจูดแล้วเป็นเส้นโค้ง exponential กลางทาง (t≈0.4 วิ) ทั้งสองเพลงอยู่ราว -40 dB
+	## = ~1% ของแอมพลิจูดเดิม พร้อมกันทั้งคู่ → หูได้ยินเป็น "รูเงียบ" 0.2–0.3 วิ ซึ่งคือ
+	## "เฟดขาดแล้วเงียบ" ที่สเปกห้ามไว้ตรงตัว (เจ้าของเลือกเฟดไขว้ ไม่ใช่อันนี้)
+	## แก้โดย tween ค่าเชิงเส้นจริง 0→1 แล้วค่อยแปลงเป็น dB เองในคอลแบ็ก — **ห้ามเปลี่ยนกลับไปเป็น
+	## tween_property ตรงๆ บน volume_db** ถึงพื้นจะดูลึกเกินจำเป็น (-80 dB) มันคือรากของบั๊กนี้
+	_music_tween.tween_method(_set_music_vol.bind(to), 0.0, 1.0, FADE)
+	_music_tween.tween_method(_set_music_vol.bind(from), 1.0, 0.0, FADE)
 	_music_tween.chain().tween_callback(from.stop)
+
+
+## แปลงแอมพลิจูดเชิงเส้น 0–1 เป็น dB ก่อนตั้งให้ตัวเล่น — ตัวช่วยของ tween ไล่เฟดข้างบน
+static func _set_music_vol(amp: float, p: AudioStreamPlayer) -> void:
+	p.volume_db = linear_to_db(maxf(amp, 0.0001))
+
+
+## เครื่องมือฟังเพลงทีละเพลงจาก terminal: WQ_MUSIC=<id> godot --path .
+## กติกาเดียวกับ `preview()` ของเลนเสียงสั้น — ทำงานเฉพาะตอนตั้ง WQ_MUSIC เท่านั้น
+## (มีเมธอดนี้แทนที่จะให้ ui/main.gd เรียก play_music() ตรงๆ ด้วยเหตุผลเดียวกับ preview():
+## ถ้าเปิดให้เรียกได้ กฎเหล็กข้อ 6 ก็ไม่เหลืออะไรบังคับ)
+static func preview_music(id: String) -> void:
+	if OS.get_environment("WQ_MUSIC") == "": return
+	play_music(id)
 
 
 static func stop_music() -> void:
@@ -241,6 +280,10 @@ static func _music_stream(id: String) -> AudioStream:
 		w.loop_end = int(round(w.get_length() * float(w.mix_rate)))
 		st = w
 	else:
+		## ตัวอบเขียนไว้เองว่าเรนเดอร์เพลงหนึ่งเพลงใช้เวลาหลายวินาที — เรียบเรียงสดบนเธรดหลัก
+		## ตรงนี้จึงทำให้เกมค้างหลายวินาทีโดยไม่มีอะไรบอก ถ้าไม่ใส่คำเตือนไว้ (F15)
+		push_warning("WQAudio._music_stream(\"%s\") — ไม่มีไฟล์ที่อบไว้ กำลังเรียบเรียงสด " % id +
+			"(เกมจะค้างสักครู่) รัน: godot --headless --path . --import")
 		st = WQMusic.stream(id)
 	_music_cache[id] = st
 	return st
@@ -249,10 +292,22 @@ static func _music_stream(id: String) -> AudioStream:
 ## เลือกเพลงจากสถานะที่ผูกไว้ — **นี่คือที่เดียวที่ตัดสินว่าเพลงไหนควรดัง**
 ## `ui/` สั่งไม่ได้ (กฎเหล็กข้อ 6) เพราะถ้าสั่งได้ วันหนึ่งจะมีหน้าจอที่ลืมสั่งเปลี่ยนกลับ
 ## แล้วเพลงวิกฤตจะดังค้างทั้งเกมโดยไม่มีใครรู้ว่าใครเป็นคนสั่ง
+##
+## **ฮิสเทอรีซิสรอบเกณฑ์วิกฤต (F5)** — `_want_music()` ถูกเรียกจาก `changed` ที่ยิงหลายสิบครั้ง
+## ต่อเดือน สุขภาพที่แกว่ง 39↔41 คาบเกี่ยว CRISIS_HEALTH (40) ดิบๆ จะทำให้เฟดไขว้เต็มรอบไปกลับ
+## และ**เพลงเริ่มใหม่จากห้องแรกทุกครั้ง** จึงต้อง "เข้า" วิกฤตที่ CRISIS_HEALTH แต่ "ออก" ต่อเมื่อ
+## ถึง CRISIS_EXIT (สูงกว่า) เท่านั้น — ภัยพิบัติไม่ต้องมีฮิสเทอรีซิสเพราะเป็นสัญญาณไม่ต่อเนื่อง
+## (เริ่ม/หมดอายุเป็นจุดๆ ไม่ใช่ค่าที่แกว่งขึ้นลงแบบสุขภาพ) จึงบังคับวิกฤตทันทีเมื่อมีอยู่เสมอ
 static func _want_music() -> String:
 	if _player == null: return "phase1"
-	if float(_player.health) < CRISIS_HEALTH: return "crisis"
-	if _match != null and not _match.active_disasters.is_empty(): return "crisis"
+	var disaster: bool = _match != null and not _match.active_disasters.is_empty()
+	if disaster:
+		_music_crisis = true
+	elif _music_crisis:
+		_music_crisis = float(_player.health) < CRISIS_EXIT
+	else:
+		_music_crisis = float(_player.health) < CRISIS_HEALTH
+	if _music_crisis: return "crisis"
 	return "phase2" if int(_player.phase) >= 2 else "phase1"
 
 

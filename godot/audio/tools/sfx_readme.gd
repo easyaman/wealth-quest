@@ -72,12 +72,22 @@ func _init() -> void:
 				else "🙌 คนทำ"
 		lines.append("| `%s` | %s | %d | %.1f | %s |" % [id, String(WHEN.get(id, "—")),
 			int(WQMusic.TRACKS[id]["bpm"]), WQMusic.length_sec(id), msrc])
+	## สองสเปกนี้เคยรวมเป็นหัวข้อเดียว วางไว้ใต้ตารางเพลงพอดี อ่านแล้วเข้าใจผิดว่า
+	## "เพลงต้องยาวไม่เกิน 2 วินาที" — แยกให้ชัดว่าสเปกไหนคุมของอะไร (F8)
 	lines.append("")
-	lines.append("## สเปกสำหรับคนทำเสียง")
+	lines.append("## สเปกสำหรับคนทำเสียงสั้น")
 	lines.append("")
 	lines.append("- mono · 22050 Hz ขึ้นไป · 16-bit PCM `.wav`")
 	lines.append("- ยาวไม่เกิน 2 วินาที (เสียงชนะยาวสุดที่ 1.2 วินาที)")
-	lines.append("- ชื่อไฟล์ = id ในตารางข้างบนเป๊ะ")
+	lines.append("- ชื่อไฟล์ = id ในตารางเสียงสั้นข้างบนเป๊ะ")
+	lines.append("- ทำให้ดังพอๆ กับไฟล์ที่อบไว้ ระบบไม่มี normalize ให้")
+	lines.append("")
+	lines.append("## สเปกสำหรับคนทำเพลง")
+	lines.append("")
+	lines.append("- ลูปได้ไม่มีรอยต่อ — ต้นเพลงต่อท้ายเพลงต้องไร้รอยสะดุด เพราะเพลงเล่นวนตลอดด่าน")
+	lines.append("- ความยาวเท่าของเดิมที่แทนที่เป๊ะ (ดูช่อง \"ยาว (วิ)\" ในตารางเพลงข้างบน)")
+	lines.append("- mono · 22050 Hz ขึ้นไป · 16-bit PCM `.wav`")
+	lines.append("- ชื่อไฟล์ = id ในตารางเพลงข้างบนเป๊ะ")
 	lines.append("- ทำให้ดังพอๆ กับไฟล์ที่อบไว้ ระบบไม่มี normalize ให้")
 
 	var out := FileAccess.open(OUT, FileAccess.WRITE)

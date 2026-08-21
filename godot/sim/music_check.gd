@@ -76,6 +76,16 @@ func _check_tracks() -> void:
 		_eq("\"%s\" ดังพอให้ได้ยิน (พีคเกิน 10%% ของเต็มสเกล)" % id, peak > 3276, true)
 		_eq("\"%s\" ไม่ตัดยอดจนแตก (พีคไม่ชนเพดาน)" % id, peak < 32767, true)
 
+		# ตรวจว่าแต่ละช่องดังจริงด้วยตัวเอง — ถ้าช่องไหนเงียบหายเข้าไปในคนอื่นจะจับได้
+		for ch in ["lead", "bass", "drum"]:
+			var cpcm := WQMusic.render(id, ch)
+			var cpeak := 0
+			var ci := 0
+			while ci + 1 < cpcm.size():
+				cpeak = maxi(cpeak, absi(cpcm.decode_s16(ci)))
+				ci += 2
+			_eq("\"%s\" ช่อง %s ดังจริงด้วยตัวเอง (พีคเกิน 5%% ของเต็มสเกล)" % [id, ch], cpeak > 1638, true)
+
 		var st := WQMusic.stream(id)
 		_eq("\"%s\" สตรีมตั้งลูปไว้แล้ว" % id, st.loop_mode, AudioStreamWAV.LOOP_FORWARD)
 		_eq("\"%s\" จุดจบลูปอยู่ท้ายเพลงพอดี" % id, st.loop_end, pcm.size() / 2)

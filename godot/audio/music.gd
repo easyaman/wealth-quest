@@ -102,7 +102,11 @@ static func length_sec(id: String) -> float:
 ##
 ## รางผสมเป็น int32 ไม่ใช่ int16 เพราะสามช่องบวกกันเกินช่วง 16 บิตได้ระหว่างทาง
 ## แล้วค่อยตัดยอดตอนแปลงกลับครั้งเดียว — ถ้าตัดยอดทีละช่องจะเพี้ยนกว่าที่ควร
-static func render(id: String) -> PackedByteArray:
+##
+## พารามิเตอร์ `only` มีไว้ให้สูทตรวจสอบว่า **แต่ละช่องดังจริงด้วยตัวเอง**
+## ไม่งั้นช่องที่เงียบหายเข้าไปในคนอื่นจะตรวจไม่ได้เลย
+## ถ้าตั้ง `only != ""` ให้เรียบเรียงเฉพาะช่องนั้นช่องเดียว (วนข้ามช่องอื่น)
+static func render(id: String, only := "") -> PackedByteArray:
 	var t: Dictionary = TRACKS[id]
 	var spb := 60.0 / float(t["bpm"])
 	var frames := int(round(length_sec(id) * float(WQSynth.RATE)))
@@ -110,6 +114,9 @@ static func render(id: String) -> PackedByteArray:
 	mix.resize(frames)
 
 	for ch in ["lead", "bass", "drum"]:
+		# ถ้าระบุช่องเฉพาะให้ข้ามช่องอื่นทั้งหมด
+		if only != "" and ch != only:
+			continue
 		var cs := cells(String(t[ch]))
 		var i := 0
 		while i < cs.size():

@@ -7,7 +7,7 @@ extends SceneTree
 ## ไม่ได้ตรวจว่าเพราะไหม — อันนั้นต้องเปิดฟังเอง: WQ_MUSIC=phase1 godot --path .
 
 const MUSIC_DIR := "res://audio/music"
-const ALL_CHECKS: Array[String] = ["tracks"]
+const ALL_CHECKS: Array[String] = ["tracks", "files"]
 
 var _fails := 0
 ## เช็กไหนที่รันจนจบฟังก์ชันจริง — กันสูทเขียวปลอมตอน SCRIPT ERROR หลุดกลางฟังก์ชัน
@@ -17,6 +17,7 @@ var _completed := {}
 
 func _init() -> void:
 	_check_tracks()
+	_check_files()
 	for name in ALL_CHECKS:
 		if not _completed.get(name, false):
 			_fails += 1
@@ -91,6 +92,53 @@ func _check_tracks() -> void:
 		_eq("\"%s\" จุดจบลูปอยู่ท้ายเพลงพอดี" % id, st.loop_end, pcm.size() / 2)
 
 	_completed["tracks"] = true
+
+
+## ไฟล์เพลงต้องครบ ไม่มีกำพร้า และต้องเป็นของที่ตัวอบทำเองจริงๆ
+## กติกาเดียวกับ audio/sfx ทุกข้อ — ต่างแค่โฟลเดอร์
+func _check_files() -> void:
+	var on_disk := {}
+	var d := DirAccess.open(MUSIC_DIR)
+	if d == null:
+		_fails += 1
+		print("  ❌ ไม่มีโฟลเดอร์ %s" % MUSIC_DIR)
+		return
+	for f in d.get_files():
+		if f.ends_with(".wav"): on_disk[f.get_basename()] = true
+
+	var stamp := FileAccess.open("%s/baked.json" % MUSIC_DIR, FileAccess.READ)
+	_eq("มี baked.json ของเพลง", stamp != null, true)
+	if stamp == null: return
+	var marks = JSON.parse_string(stamp.get_as_text())
+	stamp.close()
+	_eq("baked.json ของเพลงเป็น Dictionary", marks is Dictionary, true)
+	if not marks is Dictionary: return
+
+	var seen := {}
+	for id in WQMusic.ids():
+		var path := "%s/%s.wav" % [MUSIC_DIR, id]
+		_eq("มีไฟล์เพลง \"%s\"" % id, ResourceLoader.exists(path), true)
+		if not ResourceLoader.exists(path): continue
+		on_disk.erase(id)
+
+		var abs := ProjectSettings.globalize_path(path)
+		_eq("แฮชที่จดของ \"%s\" ตรงกับไฟล์บนดิสก์จริง" % id,
+			String(marks.get(id, "")), FileAccess.get_sha256(abs))
+
+		var pcm := WQWavProbe.pcm(abs)
+		_eq("\"%s\" มีข้อมูลเสียงอยู่จริงในไฟล์" % id, pcm.size() > 0, true)
+		_eq("\"%s\" ดังพอให้ได้ยิน (พีคเกิน 10%% ของเต็มสเกล)" % id,
+			WQWavProbe.peak(pcm) > 3276, true)
+		_eq("\"%s\" ยาวตรงกับที่ตารางโน้ตบอก" % id,
+			pcm.size() / 2, int(round(WQMusic.length_sec(id) * float(WQSynth.RATE))))
+
+		var key := Marshalls.raw_to_base64(pcm).sha256_text()
+		_eq("\"%s\" ไม่ได้เป็นเพลงชุดเดียวกับ \"%s\"" % [id, String(seen.get(key, ""))],
+			seen.has(key), false)
+		seen[key] = id
+
+	_eq("ไม่มีไฟล์เพลงกำพร้า", on_disk.keys(), [])
+	_completed["files"] = true
 
 
 func _eq(label: String, got, want) -> void:

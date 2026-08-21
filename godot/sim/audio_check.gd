@@ -148,14 +148,9 @@ func _check_files() -> void:
 	for id in WQBank.ids():
 		var abs := ProjectSettings.globalize_path("%s/%s.wav" % [SFX_DIR, id])
 		if not FileAccess.file_exists(abs): continue
-		var raw := FileAccess.get_file_as_bytes(abs)
-		var pcm := _wav_pcm(raw)
+		var pcm := WQWavProbe.pcm(abs)
 		_eq("\"%s\" มีข้อมูลเสียงอยู่จริงในไฟล์" % id, pcm.size() > 0, true)
-		var peak := 0
-		var i := 0
-		while i + 1 < pcm.size():
-			peak = maxi(peak, absi(pcm.decode_s16(i)))
-			i += 2
+		var peak := WQWavProbe.peak(pcm)
 		_eq("\"%s\" ดังพอให้ได้ยิน (พีคเกิน 10%% ของเต็มสเกล)" % id, peak > 3276, true)
 
 		var key := Marshalls.raw_to_base64(pcm).sha256_text()
@@ -775,20 +770,6 @@ func _check_settings() -> void:
 
 ## คืนช่วง PCM ของไฟล์ .wav — ไล่หา chunk "data" จริงๆ ไม่ใช่ข้ามหัว 44 ไบต์ตายตัว
 ## เพราะไฟล์ที่คนทำเสียงส่งมามักมี chunk เสริม (LIST/INFO ของโปรแกรมตัดต่อ) คั่นอยู่ก่อน
-func _wav_pcm(raw: PackedByteArray) -> PackedByteArray:
-	if raw.size() < 12 or raw.slice(0, 4).get_string_from_ascii() != "RIFF":
-		return PackedByteArray()
-	var pos := 12
-	while pos + 8 <= raw.size():
-		var id4 := raw.slice(pos, pos + 4).get_string_from_ascii()
-		var size := raw.decode_u32(pos + 4)
-		var body := pos + 8
-		if id4 == "data":
-			return raw.slice(body, mini(body + int(size), raw.size()))
-		pos = body + int(size) + (int(size) & 1)      # chunk ยาวเลขคี่มีไบต์ padding ต่อท้าย
-	return PackedByteArray()
-
-
 func _eq(label: String, got, want) -> void:
 	if got == want: return
 	_fails += 1

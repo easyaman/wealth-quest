@@ -26,7 +26,11 @@ const POOL := 8                  ## เสียงซ้อนกันได�
 const HISTORY := 256          ## เก็บประวัติการเล่นย้อนหลังแค่นี้พอ
 const COOLDOWN := 0.06           ## กันเสียงเดิมซ้อนตัวเองตอนกดปุ่มถี่ๆ (วินาที)
 const SFX_DIR := "res://audio/sfx"
-const SETTINGS := "user://settings.cfg"
+
+## ที่ไฟล์ตั้งค่าเป็น static var ไม่ใช่ const: สูทต้องเปลี่ยนทางไปไฟล์ทดสอบได้ ไม่งั้นรัน
+## audio_check ทีเดียวระดับเสียงที่นักพัฒนาตั้งไว้บนเครื่องตัวเองก็หายทุกครั้ง
+## (กติกาเดียวกับ `WQSave.dir` ที่ flow_check เปลี่ยนทางอยู่แล้ว)
+static var settings_path := "user://settings.cfg"
 
 static var inst: WQAudio         ## โหนดจริงใน tree — autoload ตั้งให้ตอน _ready()
 
@@ -195,7 +199,7 @@ static func _apply_levels() -> void:
 
 static func _load_settings() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS) == OK:
+	if cfg.load(settings_path) == OK:
 		_levels["Master"] = float(cfg.get_value("audio", "master", 1.0))
 		_levels["SFX"] = float(cfg.get_value("audio", "sfx", 1.0))
 		muted = bool(cfg.get_value("audio", "muted", false))
@@ -206,11 +210,11 @@ static func _load_settings() -> void:
 ## เสียงจะเปลี่ยนไปมาทุกครั้งที่ผู้เล่นโหลดคนละช่อง
 static func _save_settings() -> void:
 	var cfg := ConfigFile.new()
-	cfg.load(SETTINGS)
+	cfg.load(settings_path)
 	cfg.set_value("audio", "master", _levels["Master"])
 	cfg.set_value("audio", "sfx", _levels["SFX"])
 	cfg.set_value("audio", "muted", muted)
-	cfg.save(SETTINGS)
+	cfg.save(settings_path)
 
 
 # ========== เล่นจริง ==========

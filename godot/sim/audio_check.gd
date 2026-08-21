@@ -7,7 +7,8 @@ extends SceneTree
 ## ฟังจริงด้วย:  WQ_SFX=<id> godot --path .
 
 const SFX_DIR := "res://audio/sfx"
-const ALL_CHECKS: Array[String] = ["bank", "synth", "files", "acted", "audio", "wiring"]
+const ALL_CHECKS: Array[String] = ["bank", "synth", "files", "acted", "audio", "wiring",
+	"settings"]
 
 var _fails := 0
 ## เช็กไหนที่ "รันจนจบฟังก์ชันจริง" — ไม่ใช่แค่ไม่มีบรรทัดไหนล้มด้วย _eq()
@@ -29,6 +30,7 @@ func _init() -> void:
 	await process_frame
 	_check_audio()
 	await _check_wiring()
+	await _check_settings()
 	for name in ALL_CHECKS:
 		if not _completed.get(name, false):
 			_fails += 1
@@ -344,6 +346,15 @@ func _check_acted() -> void:
 ## เสียงต้องดังเฉพาะของผู้เล่นคนที่ผูกไว้ ไม่ใช่ของบอท
 ## เกมมีบอทสามตัวทำครบทุกอย่างทุกเดือน ถ้าฟังทุกคนจะได้ยินเสียงรัวตลอดเวลาจนไร้ความหมาย
 func _check_audio() -> void:
+	## ห้ามแตะไฟล์ตั้งค่าจริงของนักพัฒนา (ท่าเดียวกับที่ flow_check ทำกับ WQSave.dir)
+	## และต้องรีเซ็ตสถานะเอง เพราะ autoload อ่านไฟล์จริงไปแล้วตอน _ready() — ถ้าเครื่องไหน
+	## เคยปิดเสียงค้างไว้ สูททั้งชุดจะล้มด้วยเหตุผลที่ไม่เกี่ยวกับโค้ดเลย
+	WQAudio.settings_path = "user://settings_test.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(WQAudio.settings_path))
+	WQAudio.set_muted(false)
+	WQAudio.set_level("Master", 1.0)
+	WQAudio.set_level("SFX", 1.0)
+
 	WQData.load_all()
 	var m := WQMatch.new()
 	m.setup({"mode": "solo", "seed": 20260815, "players": [
@@ -585,6 +596,7 @@ func _check_wiring() -> void:
 	_eq("ปิดแผงมีเสียง", WQAudio.played.has("panel_close"), true)
 
 	# บันทึก/โหลดจริงลงช่องทดสอบ
+	WQAudio.set_level("SFX", 0.3)      # ค่าที่ต้อง **ไม่** ติดไปกับไฟล์เซฟ (เช็กหลังโหลดข้างล่าง)
 	WQAudio._last.clear()
 	WQAudio.played.clear()
 	main._on_save_slot(WQSave.MANUAL_SLOTS[0])
@@ -596,6 +608,14 @@ func _check_wiring() -> void:
 	main._on_load_slot(WQSave.MANUAL_SLOTS[0])
 	await process_frame
 	_eq("โหลดสำเร็จแล้วมีเสียง", WQAudio.played.has("load"), true)
+
+	## ระดับเสียงต้องไม่ติดไปกับไฟล์เซฟ — เซฟมี 6 ช่อง ถ้าเก็บในเซฟ เสียงจะเปลี่ยนไปมา
+	## ทุกครั้งที่ผู้เล่นโหลดคนละช่อง (เพิ่งบันทึกช่องนี้ไปตอนเสียง 0.3)
+	WQAudio.set_level("SFX", 0.9)
+	main._on_load_slot(WQSave.MANUAL_SLOTS[0])
+	await process_frame
+	_eq("โหลดเซฟแล้วระดับเสียงต้องไม่เปลี่ยนตาม", WQAudio.get_level("SFX"), 0.9)
+	WQAudio.set_level("SFX", 1.0)
 
 	# ปุ่มบน HUD ทั้งสามตัวต้องมีเสียงคลิก
 	for btn_name in ["_save", "_load", "_end"]:
@@ -622,6 +642,19 @@ func _check_wiring() -> void:
 	main.action_panel._do("rest")
 	_eq("ทำได้แล้วไม่มีเสียงปฏิเสธ ได้ยินเสียงของ core แทน",
 		WQAudio.played, ["rest"] as Array[String])
+
+	# ปุ่ม 🔊 ต้องเปิดแผงปรับเสียงจริง ไม่ใช่แค่มีปุ่มอยู่เฉยๆ
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main.hud._audio.pressed.emit()
+	await process_frame
+	_eq("กดปุ่ม 🔊 แล้วแผงปรับเสียงเปิดจริง", main.audio_panel != null, true)
+	_eq("กดปุ่ม 🔊 มีเสียงคลิก", WQAudio.played.has("click"), true)
+	_eq("เปิดแผงปรับเสียงมีเสียงเปิดแผง", WQAudio.played.has("panel_open"), true)
+
+	main.audio_panel._close.pressed.emit()
+	await process_frame
+	_eq("กดปิดในแผงแล้วแผงหายไปจริง", main.audio_panel == null, true)
 
 	# ลูกเต๋า — ภาพเคลื่อนไหวล้วน จึงอยู่เลน UI
 	var d := WQDice.new()
@@ -656,6 +689,59 @@ func _check_wiring() -> void:
 	root.remove_child(main)
 	main.free()
 	_completed["wiring"] = true
+
+## ระดับเสียงต้องอยู่ข้ามการเปิดเกมใหม่ และต้อง **ไม่** อยู่ในไฟล์เซฟ
+## (เซฟมี 6 ช่อง ถ้าเก็บในเซฟ เสียงจะเปลี่ยนไปมาตามช่องที่โหลด)
+func _check_settings() -> void:
+	WQAudio.set_level("SFX", 0.3)
+	WQAudio.set_muted(true)
+
+	var cfg := ConfigFile.new()
+	_eq("เขียนไฟล์ตั้งค่าแล้ว", cfg.load(WQAudio.settings_path), OK)
+	_eq("จำระดับเสียง SFX", float(cfg.get_value("audio", "sfx", -1.0)), 0.3)
+	_eq("จำสถานะปิดเสียง", bool(cfg.get_value("audio", "muted", false)), true)
+
+	# โหลดกลับมาต้องได้ค่าเดิม — เหมือนเปิดเกมใหม่
+	WQAudio._levels["SFX"] = 1.0
+	WQAudio.muted = false
+	WQAudio._load_settings()
+	_eq("โหลดค่าเดิมกลับมาได้", WQAudio.get_level("SFX"), 0.3)
+	_eq("โหลดสถานะปิดเสียงกลับมาได้", WQAudio.muted, true)
+
+	WQAudio.set_muted(false)
+	WQAudio.set_level("SFX", 1.0)
+
+	var panel := WQAudioPanel.new()
+	root.add_child(panel)
+	await process_frame
+	_eq("สไลเดอร์ตั้งค่าตามที่ WQAudio จำไว้", panel._sfx.value, 1.0)
+
+	panel._sfx.value = 0.5
+	await process_frame
+	_eq("ขยับสไลเดอร์แล้วเสียงเปลี่ยนจริง", WQAudio.get_level("SFX"), 0.5)
+	_eq("ขยับสไลเดอร์แล้วลงบัสจริงด้วย",
+		snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("SFX")), 0.01),
+		snappedf(linear_to_db(0.5), 0.01))
+
+	panel._mute.button_pressed = true
+	await process_frame
+	_eq("ติ๊กปิดเสียงแล้วปิดจริง", WQAudio.muted, true)
+	panel._mute.button_pressed = false
+	await process_frame
+
+	# ปุ่มปิดแผงต้องบอกคนที่เปิดมันด้วย ไม่งั้นแผงค้างจนเปิดใหม่ไม่ได้
+	var closed_heard := [false]
+	panel.closed.connect(func(): closed_heard[0] = true)
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	panel._close.pressed.emit()
+	_eq("กดปิดแผงแล้วยิงสัญญาณ closed", closed_heard[0], true)
+	_eq("กดปิดแผงแล้วมีเสียง", WQAudio.played.has("panel_close"), true)
+
+	WQAudio.set_level("SFX", 1.0)
+	root.remove_child(panel)
+	panel.free()
+	_completed["settings"] = true
 
 
 func _eq(label: String, got, want) -> void:

@@ -11,6 +11,7 @@ extends PanelContainer
 signal end_turn_pressed
 signal save_pressed
 signal load_pressed
+signal audio_pressed
 
 const DIM := Color("8fa6bd")
 const WARN := Color("ff8080")
@@ -23,6 +24,7 @@ var _cash: Label
 var _net: Label
 var _time: Label
 var _health: Label
+var _audio: Button
 var _save: Button
 var _load: Button
 var _end: Button
@@ -50,6 +52,13 @@ func _init() -> void:
 
 	# ปุ่มบันทึก/โหลดอยู่ก่อนปุ่มจบตา — จบตาคือปุ่มที่กดบ่อยที่สุดและกดผิดแล้วย้อนไม่ได้
 	# จึงต้องอยู่ริมสุดตัวเดียว ไม่มีอะไรมาอยู่ถัดจากมันให้กดพลาด
+	var audio_btn := Button.new()
+	_audio = audio_btn
+	audio_btn.text = "🔊"
+	audio_btn.tooltip_text = "ปรับเสียง"
+	audio_btn.pressed.connect(func(): WQAudio.ui("click"); audio_pressed.emit())
+	row.add_child(audio_btn)
+
 	var save_btn := Button.new()
 	_save = save_btn
 	save_btn.text = "💾"

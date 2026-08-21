@@ -31,6 +31,7 @@ var lessons: WQLessons
 var setup_screen: WQSetupScreen
 var dream_screen: WQDreamRoll     ## หน้าทอยความฝันด่าน 2 — มีอยู่แปลว่ากำลังรอผู้เล่นตัดสินใจ
 var save_panel: WQSavePanel       ## หน้าบันทึก/โหลด — มีอยู่แปลว่ากำลังเปิดค้างอยู่
+var audio_panel: WQAudioPanel     ## แผงปรับเสียง — มีอยู่แปลว่ากำลังเปิดค้างอยู่
 var tutorial: WQTutorial          ## การสอน 5 เดือนแรก — ซ่อนตัวเองเมื่อจบหรือถูกข้าม
 var _scroll: ScrollContainer          ## คอลัมน์กลาง — ตัวที่ WQ_SHOT_SCROLL เลื่อนตอนถ่ายภาพ
 var _shot_path := ""
@@ -57,9 +58,10 @@ func _ready() -> void:
 		var forced_roll := OS.get_environment("WQ_ROLL")
 		if forced_roll != "": setup_screen.skip_to_jobs(forced_roll.to_int())
 
-	# WQ_PANEL=save|load เปิดหน้าบันทึก/โหลดค้างไว้เลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
+	# WQ_PANEL=save|load|audio เปิดหน้านั้นค้างไว้เลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
 	var panel := OS.get_environment("WQ_PANEL")
-	if panel != "": _open_save_panel(panel)
+	if panel == "audio": _open_audio_panel()
+	elif panel != "": _open_save_panel(panel)
 
 	# ถ่ายภาพหน้าจอแล้วปิดตัวเอง — ใช้ตรวจงาน UI จาก terminal ได้โดยไม่ต้องเปิดเกมเอง
 	_shot_path = OS.get_environment("WQ_SHOT")
@@ -292,6 +294,7 @@ func _build_layout() -> void:
 	hud.end_turn_pressed.connect(_end_turn)
 	hud.save_pressed.connect(func(): _open_save_panel("save"))
 	hud.load_pressed.connect(func(): _open_save_panel("load"))
+	hud.audio_pressed.connect(_open_audio_panel)
 
 	# การสอนต้องลอยอยู่เหนือทุกอย่างในหน้าจอหลัก แต่ยังอยู่ใต้หน้าจอเต็มจอ
 	# (หน้าทอยความฝัน/หน้าบันทึก ถูก add ทีหลัง จึงทับการ์ดสอนตอนเปิดอยู่แล้ว)
@@ -385,6 +388,22 @@ func _on_place_clicked(place_id: String) -> void:
 ## สถานะฝั่ง UI ที่ต้องกลับมาเหมือนเดิมตอนโหลด — ฝากไว้ในไฟล์เซฟผ่านช่อง `ui`
 func _ui_state() -> Dictionary:
 	return {"tut": tutorial.save_state()}
+
+
+## แผงปรับเสียงเป็นของ "นอกเกม" — เปิดค้างไว้ไม่กระทบตาที่เล่นอยู่ ต่างจากแผงบันทึก
+## ที่ต้องปิดก่อนถึงจะเล่นต่อได้ จึงไม่ต้องล้างของเก่าเหมือน _close_screen()
+func _open_audio_panel() -> void:
+	if audio_panel != null: return
+	WQAudio.ui("panel_open")
+	audio_panel = WQAudioPanel.new()
+	audio_panel.closed.connect(_close_audio_panel)
+	add_child(audio_panel)
+
+
+func _close_audio_panel() -> void:
+	if audio_panel == null: return
+	audio_panel.queue_free()
+	audio_panel = null
 
 
 func _open_save_panel(mode: String) -> void:

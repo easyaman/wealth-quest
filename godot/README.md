@@ -18,6 +18,12 @@ WQ_PLACE=gym WQ_SHOT=/tmp/gym.png godot --path .             # วางผู�
 godot --headless --path . --script res://world/tools/model_lint.gd    # ตรวจโมเดลทุกชิ้น (tris · วัสดุเดียว · ฐาน y=0)
 godot --headless --path . --script res://world/tools/glb_export.gd    # อบเมชต่อกล่องเป็น .glb (ไม่แตะไฟล์ที่คนปั้นมา)
 godot --path . --script res://world/tools/icon_bake.gd                # อบไอคอน UI จากโมเดล — **ห้ามใส่ --headless**
+godot --headless --path . --script res://sim/audio_check.gd          # 7) ระบบเสียงทั้งระบบ
+godot --headless --path . --script res://audio/tools/sfx_bake.gd     # อบเสียงเป็น .wav (ไม่แตะไฟล์ที่คนทำมา)
+godot --headless --path . --script res://audio/tools/sfx_readme.gd   # สร้าง audio/README.md
+WQ_SFX=win godot --path .                                            # ฟังเสียงตัวเดียวแล้วปิดเอง
+WQ_MUTE=1 godot --path .                                             # เปิดเกมแบบไม่มีเสียง
+WQ_PANEL=audio WQ_SHOT=/tmp/audio.png godot --path .                 # ถ่ายภาพแผงปรับเสียง
 ```
 
 อ่าน `CLAUDE.md` (บริบทและกฎของโปรเจกต์) และ `../WEALTH-QUEST-GDD.md` (เอกสารออกแบบ)
@@ -39,7 +45,7 @@ godot --path . --script res://world/tools/icon_bake.gd                # อบ�
 | ฉาก 3D low poly | ✅ เมือง 10 อาคาร · แท่นโชว์ · VFX · สภาพภัยพิบัติ (ยังเป็นเมชต่อกล่อง ไม่มี `.glb` ที่คนปั้น) |
 | โมเดลทั้งเกม | ✅ **มีของให้เห็นครบ 38/38 ชิ้น** — ไม่มีอะไรเป็นกล่องเปล่าอีกแล้ว (งานปั้นจริงยัง 0/38) |
 | กิจกรรมที่กดจาก UI ได้ | ✅ ครบทุกอย่างที่ core ทำได้ — นอน · อาหาร · สำรวจดีล · OT · freelance · เรียน · พักผ่อน · ฟิตเนส · รีสอร์ต · กู้ · ชำระหนี้ · ซื้อของ · เดินทาง |
-| เสียง | ⬜ ยังไม่มี |
+| เสียง | ✅ **30 เสียงครบทุกเหตุการณ์** สังเคราะห์เอง อบเป็น `.wav` จริง · ปรับ/ปิดได้จาก HUD จำค่าข้ามเกม (เสียงที่คนทำจริงยัง 0/30) |
 
 ## บั๊กที่เจอตอนทำให้พอร์ตรันได้ครั้งแรก
 
@@ -88,7 +94,10 @@ godot --path . --script res://world/tools/icon_bake.gd                # อบ�
 
 - **ยังไม่มี `.glb` ที่คนปั้นมาจริงสักไฟล์** — 0/38 ชิ้น ทรงของทุกชิ้นยังเป็นเมชต่อกล่องจากโค้ด
   ท่อส่งงานเดินครบวงแล้ว วางไฟล์ทับได้ทีละชิ้น (เช็กลิสต์ใน `world/models/README.md`)
-- ยังไม่มีเสียง
+- **ยังไม่มีเสียงที่คนทำจริงสักไฟล์** — 0/30 ทุกตัวเป็นคลื่นสังเคราะห์จากโค้ด
+  ท่อเดินครบวงแล้ว วางไฟล์ทับได้ทีละตัว (เช็กลิสต์ใน `audio/README.md`)
+- ยังไม่มีเพลงพื้นหลัง — ยังไม่มีบัส `Music` ด้วย (ตอนนี้มีแค่ Master กับ SFX ต้องเพิ่มทั้งใน
+  `WQAudio._ensure_bus()` และ `_levels` ตอนที่จะทำ)
 - ยังไม่ได้ฝังฟอนต์ไทยที่มีสิทธิ์ใช้งานลงในโปรเจกต์ (ตอนนี้ยืมจากระบบผ่าน `SystemFont`)
 
 ## หมายเหตุ

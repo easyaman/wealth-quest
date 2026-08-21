@@ -134,6 +134,35 @@ func _check_files() -> void:
 		var abs := ProjectSettings.globalize_path(path)
 		_eq("แฮชที่จดของ \"%s\" ตรงกับไฟล์บนดิสก์จริง" % id,
 			String(marks.get(id, "")), FileAccess.get_sha256(abs))
+
+	## **ตรวจได้แค่ว่า "มีเสียงออกมาจริงและไม่ซ้ำกัน" ไม่ได้ตรวจว่าฟังแล้วรู้เรื่อง**
+	## ต้องมีเพราะสองความเสียหายนี้เงียบสนิทกับเช็กข้างบน: ไฟล์ที่แอมพลิจูดเกือบศูนย์ยัง
+	## "มีไฟล์ · โหลดได้ · แฮชตรง" ครบทุกข้อ และสเปกที่ก๊อปมาวางแล้วลืมแก้ก็ให้ไบต์ชุดเดียวกัน
+	## เป๊ะ = สองเหตุการณ์คนละเรื่องดังเหมือนกันจนแยกไม่ออก · ส่วน "ฟังรู้เรื่องไหม" ต้องใช้หูคน
+	## ฟังทีละตัวจริงๆ ด้วย WQ_SFX=<id> godot --path . (เช็กลิสต์อยู่ใน audio/README.md)
+	## อ่าน **ไฟล์ดิบบนดิสก์** ไม่ใช่ตัวที่ load() คืนมา — Godot นำเข้า .wav เป็น QOA (ถูกบีบอัด)
+	## `AudioStreamWAV.data` จึงเป็นไบต์ QOA ไม่ใช่ PCM ถอดเป็น s16 แล้วได้ค่าขยะ (ตรวจแล้ว:
+	## ทุกไฟล์ให้พีค ~32767 เท่ากันหมด = เช็กที่ผ่านตลอดโดยไม่ได้ตรวจอะไรเลย) และไฟล์ดิบคือ
+	## สิ่งที่คนทำเสียงจะเอามาวางทับจริงๆ ด้วย
+	var seen_bytes := {}
+	for id in WQBank.ids():
+		var abs := ProjectSettings.globalize_path("%s/%s.wav" % [SFX_DIR, id])
+		if not FileAccess.file_exists(abs): continue
+		var raw := FileAccess.get_file_as_bytes(abs)
+		var pcm := _wav_pcm(raw)
+		_eq("\"%s\" มีข้อมูลเสียงอยู่จริงในไฟล์" % id, pcm.size() > 0, true)
+		var peak := 0
+		var i := 0
+		while i + 1 < pcm.size():
+			peak = maxi(peak, absi(pcm.decode_s16(i)))
+			i += 2
+		_eq("\"%s\" ดังพอให้ได้ยิน (พีคเกิน 10%% ของเต็มสเกล)" % id, peak > 3276, true)
+
+		var key := Marshalls.raw_to_base64(pcm).sha256_text()
+		_eq("\"%s\" ไม่ได้เป็นเสียงชุดเดียวกับ \"%s\"" % [id, String(seen_bytes.get(key, ""))],
+			seen_bytes.has(key), false)
+		seen_bytes[key] = id
+
 	_completed["files"] = true
 
 
@@ -742,6 +771,22 @@ func _check_settings() -> void:
 	root.remove_child(panel)
 	panel.free()
 	_completed["settings"] = true
+
+
+## คืนช่วง PCM ของไฟล์ .wav — ไล่หา chunk "data" จริงๆ ไม่ใช่ข้ามหัว 44 ไบต์ตายตัว
+## เพราะไฟล์ที่คนทำเสียงส่งมามักมี chunk เสริม (LIST/INFO ของโปรแกรมตัดต่อ) คั่นอยู่ก่อน
+func _wav_pcm(raw: PackedByteArray) -> PackedByteArray:
+	if raw.size() < 12 or raw.slice(0, 4).get_string_from_ascii() != "RIFF":
+		return PackedByteArray()
+	var pos := 12
+	while pos + 8 <= raw.size():
+		var id4 := raw.slice(pos, pos + 4).get_string_from_ascii()
+		var size := raw.decode_u32(pos + 4)
+		var body := pos + 8
+		if id4 == "data":
+			return raw.slice(body, mini(body + int(size), raw.size()))
+		pos = body + int(size) + (int(size) & 1)      # chunk ยาวเลขคี่มีไบต์ padding ต่อท้าย
+	return PackedByteArray()
 
 
 func _eq(label: String, got, want) -> void:

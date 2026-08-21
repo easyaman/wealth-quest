@@ -23,6 +23,8 @@ var _cash: Label
 var _net: Label
 var _time: Label
 var _health: Label
+var _save: Button
+var _load: Button
 var _end: Button
 
 
@@ -49,20 +51,22 @@ func _init() -> void:
 	# ปุ่มบันทึก/โหลดอยู่ก่อนปุ่มจบตา — จบตาคือปุ่มที่กดบ่อยที่สุดและกดผิดแล้วย้อนไม่ได้
 	# จึงต้องอยู่ริมสุดตัวเดียว ไม่มีอะไรมาอยู่ถัดจากมันให้กดพลาด
 	var save_btn := Button.new()
+	_save = save_btn
 	save_btn.text = "💾"
 	save_btn.tooltip_text = "บันทึกเกม"
-	save_btn.pressed.connect(func(): save_pressed.emit())
+	save_btn.pressed.connect(func(): WQAudio.ui("click"); save_pressed.emit())
 	row.add_child(save_btn)
 
 	var load_btn := Button.new()
+	_load = load_btn
 	load_btn.text = "📂"
 	load_btn.tooltip_text = "โหลดเกม"
-	load_btn.pressed.connect(func(): load_pressed.emit())
+	load_btn.pressed.connect(func(): WQAudio.ui("click"); load_pressed.emit())
 	row.add_child(load_btn)
 
 	_end = Button.new()
 	_end.text = "จบตา (Space)"
-	_end.pressed.connect(func(): end_turn_pressed.emit())
+	_end.pressed.connect(func(): WQAudio.ui("click"); end_turn_pressed.emit())
 	row.add_child(_end)
 
 

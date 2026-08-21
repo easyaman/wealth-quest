@@ -45,6 +45,7 @@ func _ready() -> void:
 ## (ปุ่มทอยถูกกดรัวๆ ได้จริง ถ้าปล่อยให้ซ้อนกัน สัญญาณ `rolled` จะยิงหลายครั้งต่อการทอยหนึ่งครั้ง)
 func roll_to(n: int) -> void:
 	if rolling: return
+	WQAudio.ui("dice_roll")
 	_target = clampi(n, 1, 6)
 	_left = TICKS
 	_acc = 0.0
@@ -85,6 +86,7 @@ func _process(dt: float) -> void:
 
 
 func _settle() -> void:
+	WQAudio.ui("dice_land")
 	rolling = false
 	set_process(false)
 	face = _target

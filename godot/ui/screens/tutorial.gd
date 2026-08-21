@@ -39,6 +39,9 @@ var _text: RichTextLabel
 var _wait: Label
 var _dots: Label
 var _next: Button
+## สเต็ปล่าสุดที่ส่งเสียงไปแล้ว — `refresh()` ถูกเรียกทุกครั้งที่สถานะเกมเปลี่ยน (หลายสิบครั้ง
+## ต่อเดือน) ถ้าไม่จำไว้ เสียงขึ้นสเต็ปจะดังรัวทั้งที่การ์ดยังเป็นใบเดิม
+var _voiced := -1
 var _skip: Button
 var _hooked: Control             ## วิดเจ็ตที่สเต็ปนี้ชี้อยู่ (ต่อสัญญาณ item_rect_changed ไว้)
 var _placing := false            ## กันเรียกซ้อนตอนที่การจัดตำแหน่งไปเปลี่ยนขนาดการ์ดเอง
@@ -195,6 +198,10 @@ func refresh() -> void:
 			return
 		refresh()
 		return
+
+	if _voiced != step:
+		_voiced = step
+		WQAudio.ui("tutorial_step")
 
 	_title.text = String(st.t)
 	_text.text = String(st.x)

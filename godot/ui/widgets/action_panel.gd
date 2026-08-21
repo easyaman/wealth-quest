@@ -262,15 +262,19 @@ func _desc(p, act: String) -> String:
 	return ""
 
 
+## เดิมทิ้งค่าที่ core คืนมาทั้งหมด ผู้เล่นกดปุ่มแล้วทำไม่ได้จึงไม่มีอะไรตอบเลยสักอย่าง
+## ตอนสำเร็จเสียงมาจากสัญญาณ `acted` ของ core เอง ที่นี่รับผิดชอบแค่ "ทำไม่ได้"
 func _do(act: String) -> void:
+	var res := {}
 	match act:
-		"scout": _p.scout()
-		"ot": _p.side_job("ot")
-		"freelance": _p.side_job("freelance")
-		"study": _p.study()
-		"rest": _p.rest()
-		"gym": _p.exercise()
-		"resort": _p.vacation()
+		"scout": res = _p.scout()
+		"ot": res = _p.side_job("ot")
+		"freelance": res = _p.side_job("freelance")
+		"study": res = _p.study()
+		"rest": res = _p.rest()
+		"gym": res = _p.exercise()
+		"resort": res = _p.vacation()
+	if not bool(res.get("ok", true)): WQAudio.ui("denied")
 
 
 # ========== แพ็กเกจฟิตเนส / รีสอร์ต ==========

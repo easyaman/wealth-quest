@@ -9,7 +9,7 @@ config/features=PackedStringArray("4.3")
 
 [autoload]
 
-WQAudio="*res://audio/audio.gd"
+WQAudioBoot="*res://audio/audio.gd"
 
 [display]
 window/size/viewport_width=1600

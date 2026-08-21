@@ -1,9 +1,17 @@
+class_name WQAudio
 extends Node
-## WQAudio — autoload ตัวเดียวของโปรเจกต์ (ลงทะเบียนใน project.godot)
+## WQAudio — ระบบเสียงตัวเดียวของโปรเจกต์ (autoload `WQAudioBoot` ใน project.godot)
 ##
 ## ที่ต้องเป็น autoload: เสียงคลิกต้องเรียกได้จากทุก widget ถ้าเป็นโหนดใน Main.tscn
 ## ทุกวิดเจ็ตจะต้องไต่ get_node ขึ้นไปหาพ่อ ซึ่งเปราะและผิดสไตล์ที่วิดเจ็ตทุกตัวในเกมนี้
 ## เป็นอิสระจากกัน (bind ของใครของมัน)
+##
+## **ทำไม API ถึงเป็น static ทั้งชุด แล้ว autoload ถึงชื่อ `WQAudioBoot` ไม่ใช่ `WQAudio`:**
+## โหมด `--script` ที่สูททุกตัวใน sim/ ใช้ **ไม่ลงทะเบียนชื่อ autoload เป็นตัวระบุส่วนกลาง**
+## (ตรวจแล้ว: โหนดอยู่ใน tree จริง แต่โค้ดที่เขียน `WQAudio.ui()` คอมไพล์ไม่ผ่านทั้งชุด
+## แปลว่าถ้าใช้ชื่อ autoload ตรงๆ ui/ ทุกไฟล์จะพัง headless พร้อมกันหมด) ส่วนชื่อที่มาจาก
+## `class_name` ลงทะเบียนให้ทุกโหมด — autoload จึงเหลือหน้าที่เดียวคือพาโหนดตัวจริงเข้า tree
+## แล้วฝากไว้ที่ `inst` ให้ฟังก์ชัน static เรียกใช้ (ตัวเล่นเสียงต้องมีพ่อแม่ถึงจะ play() ได้)
 ##
 ## **สองเลน — ห้ามปนกัน:**
 ##   เหตุการณ์ของเกม → มาจากสัญญาณเท่านั้น ไม่มี API ให้ ui/ สั่งยิง (กฎเดียวกับ world/city/vfx.gd)
@@ -15,24 +23,27 @@ extends Node
 ## ตลอดเวลาจนไม่มีความหมาย
 
 const POOL := 8                  ## เสียงซ้อนกันได้ 8 ตัว พอสำหรับเกมที่ไม่มีอะไรยิงรัว
+const HISTORY := 256          ## เก็บประวัติการเล่นย้อนหลังแค่นี้พอ
 const COOLDOWN := 0.06           ## กันเสียงเดิมซ้อนตัวเองตอนกดปุ่มถี่ๆ (วินาที)
 const SFX_DIR := "res://audio/sfx"
 const SETTINGS := "user://settings.cfg"
 
-var played: Array[String] = []   ## ประวัติการเล่น — audio_check ใช้ตรวจว่าสัญญาณไหนทำให้อะไรดัง
-var muted := false
+static var inst: WQAudio         ## โหนดจริงใน tree — autoload ตั้งให้ตอน _ready()
 
-var _levels := {"Master": 1.0, "SFX": 1.0}
-var _players: Array[AudioStreamPlayer] = []
-var _cache := {}                 ## id -> AudioStream
-var _last := {}                  ## id -> เวลาที่เล่นครั้งล่าสุด
-var _next := 0
+static var played: Array[String] = []  ## ประวัติการเล่น — audio_check ใช้ตรวจว่าสัญญาณไหนทำให้อะไรดัง
+static var muted := false
+
+static var _levels := {"Master": 1.0, "SFX": 1.0}
+static var _players: Array[AudioStreamPlayer] = []
+static var _cache := {}          ## id -> AudioStream
+static var _last := {}           ## id -> เวลาที่เล่นครั้งล่าสุด
+static var _next := 0
 ## "บันทึกว่าเล่นอะไร แต่ไม่ยิงเสียงจริง" — ไม่ใช่ "ไม่แตะเซิร์ฟเวอร์เสียง"
 ## ระดับเสียงยังลงบัสจริงเสมอ เพราะแผงปรับเสียงต้องทดสอบแบบ headless ได้
-var _silent := false
-var _match: WQMatch
-var _player = null
-var _was_critical := false       ## กันเสียงเตือนสุขภาพดังซ้ำทุกครั้งที่ changed
+static var _silent := false
+static var _match: WQMatch
+static var _player = null
+static var _was_critical := false       ## กันเสียงเตือนสุขภาพดังซ้ำทุกครั้งที่ changed
 
 
 ## headless ใช้ไดรเวอร์เสียง Dummy ที่ไม่คืน AudioStreamPlayback ให้เลย พอ play() จริง
@@ -40,6 +51,7 @@ var _was_critical := false       ## กันเสียงเตือนส�
 ## ที่กลบของจริงในผลรัน และไม่มีใครได้ยินเสียงนั้นอยู่แล้ว จึงบันทึกอย่างเดียวไม่ต้องยิง
 ## WQ_MUTE=1 ให้ผลเดียวกันตอนรันเกมแบบมีจอ — สำหรับคนที่อยากเปิดเกมทำงานอื่นไปเงียบๆ
 func _ready() -> void:
+	inst = self
 	_silent = OS.get_environment("WQ_MUTE") != "" or DisplayServer.get_name() == "headless"
 	_ensure_bus()
 	for _i in POOL:
@@ -52,7 +64,7 @@ func _ready() -> void:
 
 ## headless เริ่มมาด้วยบัสเดียว (ตรวจแล้ว: bus_count = 1) จึงสร้างบัส SFX เองแทนการ
 ## พึ่ง default_bus_layout.tres — ได้ผลเหมือนกันทุกโหมดและเทสต์ headless ได้จริง
-func _ensure_bus() -> void:
+static func _ensure_bus() -> void:
 	if AudioServer.get_bus_index("SFX") >= 0: return
 	var idx := AudioServer.bus_count
 	AudioServer.add_bus(idx)
@@ -62,37 +74,37 @@ func _ensure_bus() -> void:
 
 # ========== ผูกกับเกม ==========
 
-func bind(match_ref: WQMatch) -> void:
+static func bind(match_ref: WQMatch) -> void:
 	if _match == match_ref: return
 	if _match != null:
-		if _match.month_ended.is_connected(_on_month_ended):
-			_match.month_ended.disconnect(_on_month_ended)
-		if _match.disaster_started.is_connected(_on_disaster):
-			_match.disaster_started.disconnect(_on_disaster)
-		if _match.player_finished.is_connected(_on_finished):
-			_match.player_finished.disconnect(_on_finished)
-		if _match.match_over.is_connected(_on_over):
-			_match.match_over.disconnect(_on_over)
+		if _match.month_ended.is_connected(inst._on_month_ended):
+			_match.month_ended.disconnect(inst._on_month_ended)
+		if _match.disaster_started.is_connected(inst._on_disaster):
+			_match.disaster_started.disconnect(inst._on_disaster)
+		if _match.player_finished.is_connected(inst._on_finished):
+			_match.player_finished.disconnect(inst._on_finished)
+		if _match.match_over.is_connected(inst._on_over):
+			_match.match_over.disconnect(inst._on_over)
 	_match = match_ref
 	if _match != null:
-		_match.month_ended.connect(_on_month_ended)
-		_match.disaster_started.connect(_on_disaster)
-		_match.player_finished.connect(_on_finished)
-		_match.match_over.connect(_on_over)
+		_match.month_ended.connect(inst._on_month_ended)
+		_match.disaster_started.connect(inst._on_disaster)
+		_match.player_finished.connect(inst._on_finished)
+		_match.match_over.connect(inst._on_over)
 
 
-func bind_player(player) -> void:
+static func bind_player(player) -> void:
 	if _player == player: return
 	if _player != null:
-		if _player.acted.is_connected(_on_acted): _player.acted.disconnect(_on_acted)
-		if _player.deal_closed.is_connected(_on_deal): _player.deal_closed.disconnect(_on_deal)
-		if _player.changed.is_connected(_on_changed): _player.changed.disconnect(_on_changed)
+		if _player.acted.is_connected(inst._on_acted): _player.acted.disconnect(inst._on_acted)
+		if _player.deal_closed.is_connected(inst._on_deal): _player.deal_closed.disconnect(inst._on_deal)
+		if _player.changed.is_connected(inst._on_changed): _player.changed.disconnect(inst._on_changed)
 	_player = player
 	_was_critical = false
 	if _player != null:
-		_player.acted.connect(_on_acted)
-		_player.deal_closed.connect(_on_deal)
-		_player.changed.connect(_on_changed)
+		_player.acted.connect(inst._on_acted)
+		_player.deal_closed.connect(inst._on_deal)
+		_player.changed.connect(inst._on_changed)
 
 
 func _on_acted(kind: String) -> void:
@@ -137,7 +149,7 @@ func _on_changed() -> void:
 
 ## เสียงที่ widget เรียกเองได้ — เฉพาะ id ใน WQBank.UI_IDS เท่านั้น
 ## เหตุการณ์ของเกมต้องมาจากสัญญาณ ไม่ใช่จากที่นี่
-func ui(id: String) -> void:
+static func ui(id: String) -> void:
 	if not WQBank.UI_IDS.has(id):
 		push_warning("WQAudio.ui(\"%s\") — ไม่ใช่เสียงเลน UI ต้องมาจากสัญญาณ" % id)
 		return
@@ -149,31 +161,31 @@ func ui(id: String) -> void:
 ## เฉพาะตอนที่รันด้วย WQ_SFX ซึ่งเป็นโหมดฟังเสียงล้วนๆ ไม่มีเกมเดินอยู่ข้างหลัง
 ## (มีเมธอดนี้แทนที่จะให้ ui/main.gd เรียก _play() ตรงๆ เพราะ _play เป็นของภายใน
 ## ถ้าเปิดให้เรียกได้ กฎสองเลนข้างบนก็ไม่เหลืออะไรบังคับ)
-func preview(id: String) -> void:
+static func preview(id: String) -> void:
 	if OS.get_environment("WQ_SFX") == "": return
 	_play(id)
 
 
 # ========== ระดับเสียง ==========
 
-func set_level(bus: String, v: float) -> void:
+static func set_level(bus: String, v: float) -> void:
 	if not _levels.has(bus): return
 	_levels[bus] = clampf(v, 0.0, 1.0)
 	_apply_levels()
 	_save_settings()
 
 
-func get_level(bus: String) -> float:
+static func get_level(bus: String) -> float:
 	return float(_levels.get(bus, 1.0))
 
 
-func set_muted(v: bool) -> void:
+static func set_muted(v: bool) -> void:
 	muted = v
 	_apply_levels()
 	_save_settings()
 
 
-func _apply_levels() -> void:
+static func _apply_levels() -> void:
 	for bus in _levels:
 		var idx := AudioServer.get_bus_index(String(bus))
 		if idx < 0: continue
@@ -181,7 +193,7 @@ func _apply_levels() -> void:
 		AudioServer.set_bus_mute(idx, muted)
 
 
-func _load_settings() -> void:
+static func _load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS) == OK:
 		_levels["Master"] = float(cfg.get_value("audio", "master", 1.0))
@@ -192,7 +204,7 @@ func _load_settings() -> void:
 
 ## เก็บแยกจากไฟล์เซฟโดยตั้งใจ — เซฟมี 6 ช่อง ถ้าเก็บระดับเสียงไว้ในเซฟ
 ## เสียงจะเปลี่ยนไปมาทุกครั้งที่ผู้เล่นโหลดคนละช่อง
-func _save_settings() -> void:
+static func _save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(SETTINGS)
 	cfg.set_value("audio", "master", _levels["Master"])
@@ -203,13 +215,16 @@ func _save_settings() -> void:
 
 # ========== เล่นจริง ==========
 
-func _play(id: String) -> void:
+static func _play(id: String) -> void:
 	if muted: return
 	if not WQBank.SPEC.has(id): return
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - float(_last.get(id, -99.0)) < COOLDOWN: return
 	_last[id] = now
 	played.append(id)
+	## เกมหนึ่งตายาวหลายพันเสียง ถ้าเก็บไว้หมดรายการนี้จะโตไปเรื่อยๆ ตลอดเซสชัน
+	## เก็บแค่ท้ายๆ พอ — มีไว้ให้เทสต์อ่านว่าสัญญาณไหนทำให้อะไรดัง ไม่ใช่ประวัติทั้งเกม
+	if played.size() > HISTORY: played = played.slice(played.size() - HISTORY)
 	if _silent or _players.is_empty(): return
 
 	var st := _stream(id)
@@ -222,7 +237,7 @@ func _play(id: String) -> void:
 
 ## โหลดไฟล์ที่อบไว้ · ถ้าไฟล์หาย ตกกลับไปสังเคราะห์สดให้เกมยังมีเสียง
 ## (เกิดได้ตอนที่คนเพิ่ง clone repo แล้วยังไม่ได้รัน --import)
-func _stream(id: String) -> AudioStream:
+static func _stream(id: String) -> AudioStream:
 	if _cache.has(id): return _cache[id]
 	var path := "%s/%s.wav" % [SFX_DIR, id]
 	var st: AudioStream = load(path) if ResourceLoader.exists(path) else WQSynth.stream(WQBank.SPEC[id])

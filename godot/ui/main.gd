@@ -68,6 +68,17 @@ func _ready() -> void:
 	var scroll_to := OS.get_environment("WQ_SHOT_SCROLL")
 	if scroll_to != "": _scroll.set_deferred("scroll_vertical", scroll_to.to_int())
 
+	# ฟังเสียงทีละตัวจาก terminal: WQ_SFX=win godot --path .
+	# มีเพราะ audio_check ตรวจได้แค่ว่ามีไฟล์และยิงถูกจังหวะ ไม่ได้ตรวจว่าฟังแล้วรู้เรื่อง
+	# (บทเรียนเดียวกับที่ต้องเปิดดูไอคอนจริงทุกครั้งหลังอบ)
+	# ใช้ preview() ไม่ใช่ _play() — เมธอดภายในของ WQAudio ไม่ใช่ของที่ ui/ เรียกได้
+	var sfx := OS.get_environment("WQ_SFX")
+	if sfx != "":
+		await get_tree().create_timer(0.2).timeout
+		WQAudio.preview(sfx)
+		await get_tree().create_timer(2.0).timeout
+		get_tree().quit()
+
 
 ## **ห้าม `free()` หน้าจอทิ้งตรงนี้** — เรามาถึงที่นี่จากปุ่มที่กำลังส่งสัญญาณ `pressed` อยู่
 ## ตัวมันเองยังถูกล็อกอยู่ Godot จึงปฏิเสธ ("Object is locked and can't be freed")
@@ -134,6 +145,13 @@ func _adopt_match(new_match: WQMatch) -> void:
 		m.month_ended.disconnect(_on_month_ended)
 	m = new_match
 	m.month_ended.connect(_on_month_ended)
+	## เสียงต้องตามผู้เล่นคนจริงเสมอ ไม่ใช่ `get_current()` ซึ่งเป็นบอทได้ระหว่างตาบอท
+	## (main.gd เองก็มี `if p.is_ai: return` กันไว้หลายจุดด้วยเหตุผลเดียวกัน)
+	WQAudio.bind(m)
+	for pl in m.players:
+		if not pl.is_ai:
+			WQAudio.bind_player(pl)
+			break
 	city.bind(m)
 	tutorial.bind(m.get_current(), m, {
 		"time": time_budget, "deals": deal_market, "city": city, "shop": shop,
@@ -371,6 +389,7 @@ func _ui_state() -> Dictionary:
 
 func _open_save_panel(mode: String) -> void:
 	if save_panel != null: return
+	WQAudio.ui("panel_open")
 	save_panel = WQSavePanel.new()
 	save_panel.save_requested.connect(_on_save_slot)
 	save_panel.load_requested.connect(_on_load_slot)
@@ -380,6 +399,8 @@ func _open_save_panel(mode: String) -> void:
 
 
 func _close_save_panel() -> void:
+	if save_panel == null: return      # ปิดของที่ไม่ได้เปิดอยู่ ต้องไม่มีเสียง
+	WQAudio.ui("panel_close")
 	_close_screen(save_panel)
 	save_panel = null
 
@@ -389,6 +410,7 @@ func _on_save_slot(slot: String) -> void:
 	var err := WQSave.write_slot(m, slot, _ui_state())
 	_close_save_panel()
 	if err == OK:
+		WQAudio.ui("save")
 		m.log_line("💾 บันทึกลงช่อง %s แล้ว" % slot, "good", null)
 	else:
 		m.log_line("⚠️ บันทึกไม่สำเร็จ (รหัส %d)" % err, "bad", null)
@@ -409,6 +431,7 @@ func _on_load_slot(slot: String) -> void:
 	if dream_screen != null:
 		_close_screen(dream_screen)
 		dream_screen = null
+	WQAudio.ui("load")
 	_adopt_match(loaded)
 	# สอนต่อจากสเต็ปเดิม — ไฟล์ที่บันทึกตอนปิดการสอนไปแล้วจะได้ −1 แปลว่าไม่ต้องสอนอีก
 	tutorial.resume(int(WQSave.read_extra(slot).get("tut", -1)))

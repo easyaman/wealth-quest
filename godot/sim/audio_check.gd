@@ -7,7 +7,7 @@ extends SceneTree
 ## ฟังจริงด้วย:  WQ_SFX=<id> godot --path .
 
 const SFX_DIR := "res://audio/sfx"
-const ALL_CHECKS: Array[String] = ["bank", "synth", "files", "acted", "audio"]
+const ALL_CHECKS: Array[String] = ["bank", "synth", "files", "acted", "audio", "wiring"]
 
 var _fails := 0
 ## เช็กไหนที่ "รันจนจบฟังก์ชันจริง" — ไม่ใช่แค่ไม่มีบรรทัดไหนล้มด้วย _eq()
@@ -28,6 +28,7 @@ func _init() -> void:
 	## pool ต้องได้เข้า tree ก่อน ซึ่งเกิดหลัง _init() คืนค่ากลับไปหนึ่งเฟรม
 	await process_frame
 	_check_audio()
+	await _check_wiring()
 	for name in ALL_CHECKS:
 		if not _completed.get(name, false):
 			_fails += 1
@@ -352,187 +353,309 @@ func _check_audio() -> void:
 	var me = m.players[0]
 	var bot = m.players[1]
 
-	## โหมด `--script` ไม่ลงทะเบียนชื่อ autoload เป็นตัวระบุส่วนกลางให้ (ตรวจแล้ว: โหนดอยู่ที่
-	## /root/WQAudio จริง แต่เขียน `WQAudio.ui()` ตรงๆ คอมไพล์ไม่ผ่าน) — ต่างจากตอนรันเกมปกติ
-	## ที่ ui/ เรียก `WQAudio.ui()` ได้เลย (ตรวจแล้วเหมือนกันด้วยการรันซีนจริง) สูทจึงหยิบผ่าน root
-	var audio := root.get_node("WQAudio")
-
-	audio.bind(m)
-	audio.bind_player(me)
+	WQAudio.bind(m)
+	WQAudio.bind_player(me)
 
 	# บัสต้องมีจริง แม้ headless จะเริ่มมาแค่บัสเดียว
 	_eq("มีบัส SFX", AudioServer.get_bus_index("SFX") >= 0, true)
-	_eq("pool มี 8 ตัว", audio._players.size(), 8)
+	_eq("pool มี 8 ตัว", WQAudio._players.size(), 8)
 
-	audio.played.clear()
+	WQAudio.played.clear()
 	me.place = "home"
 	_eq("เราพักผ่อนสำเร็จจริง", bool(me.rest().get("ok", false)), true)
-	_eq("acted ของเราทำให้เสียงดัง", audio.played, ["rest"] as Array[String])
+	_eq("acted ของเราทำให้เสียงดัง", WQAudio.played, ["rest"] as Array[String])
 
 	## ล้าง _last ด้วย ไม่งั้นเทสต์นี้เขียวเพราะ COOLDOWN กลืนเสียง "rest" ของบอทให้
 	## ไม่ใช่เพราะเราไม่ได้ฟังบอท (พิสูจน์แล้ว: ให้ bind() ต่อสาย acted ของผู้เล่นทุกคน
 	## แล้วเทสต์ก็ยังเขียวอยู่ดี) — และต้องยืนยันว่าบอททำสำเร็จจริง ไม่ใช่เงียบเพราะทำไม่ได้
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	bot.place = "home"
 	_eq("บอทพักผ่อนสำเร็จจริง", bool(bot.rest().get("ok", false)), true)
-	_eq("acted ของบอทต้องเงียบ", audio.played, [] as Array[String])
+	_eq("acted ของบอทต้องเงียบ", WQAudio.played, [] as Array[String])
 
 	# เลน UI
-	audio.played.clear()
-	audio.ui("click")
-	_eq("ui() เล่นเสียงในรายการได้", audio.played, ["click"] as Array[String])
+	WQAudio.played.clear()
+	WQAudio.ui("click")
+	_eq("ui() เล่นเสียงในรายการได้", WQAudio.played, ["click"] as Array[String])
 
-	audio.played.clear()
-	audio.ui("win")     # ไม่อยู่ใน UI_IDS — ต้องถูกปฏิเสธ
-	_eq("ui() เล่นเสียงเหตุการณ์ของเกมไม่ได้", audio.played, [] as Array[String])
+	WQAudio.played.clear()
+	WQAudio.ui("win")     # ไม่อยู่ใน UI_IDS — ต้องถูกปฏิเสธ
+	_eq("ui() เล่นเสียงเหตุการณ์ของเกมไม่ได้", WQAudio.played, [] as Array[String])
 
 	# preview() คือเครื่องมือฟังจาก terminal — ต้องเงียบสนิทเมื่อไม่ได้ตั้ง WQ_SFX
 	# ไม่งั้นมันจะกลายเป็นประตูหลังให้ ui/ ยิงเสียงเหตุการณ์เองได้ ซึ่งพังกฎสองเลนทั้งข้อ
-	audio.played.clear()
-	audio.preview("win")
-	_eq("preview() นอกโหมด WQ_SFX ต้องเงียบ", audio.played, [] as Array[String])
+	WQAudio.played.clear()
+	WQAudio.preview("win")
+	_eq("preview() นอกโหมด WQ_SFX ต้องเงียบ", WQAudio.played, [] as Array[String])
 
 	# เสียงเดิมที่ยิงซ้ำภายใน COOLDOWN ต้องถูกกลืน — กันเสียงซ้อนตัวเองตอนกดปุ่มรัว
-	audio._last.clear()
-	audio.played.clear()
-	audio.ui("click")
-	audio.ui("click")
-	_eq("ยิงเสียงเดิมซ้ำติดๆ กันแล้วดังครั้งเดียว", audio.played, ["click"] as Array[String])
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	WQAudio.ui("click")
+	WQAudio.ui("click")
+	_eq("ยิงเสียงเดิมซ้ำติดๆ กันแล้วดังครั้งเดียว", WQAudio.played, ["click"] as Array[String])
 
 	# ปิดเสียงแล้วต้องไม่มีอะไรดัง
 	## ล้าง _last ก่อน ไม่งั้นเทสต์นี้เขียวเพราะ COOLDOWN กลืนเสียงให้ ไม่ใช่เพราะ mute ทำงาน
 	## (พิสูจน์มาแล้ว: ลบบรรทัด `if muted: return` ใน _play ทิ้ง เทสต์ก็ยังเขียวอยู่ดี)
-	audio._last.clear()
-	audio.set_muted(true)
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.set_muted(true)
+	WQAudio.played.clear()
 	me.hours = me.get_hours_max()
 	me.rest()
-	audio.ui("click")
-	_eq("ปิดเสียงแล้วเงียบสนิท", audio.played, [] as Array[String])
-	audio.set_muted(false)
+	WQAudio.ui("click")
+	_eq("ปิดเสียงแล้วเงียบสนิท", WQAudio.played, [] as Array[String])
+	WQAudio.set_muted(false)
 
 	# ยิงรัวแล้ว pool ต้องไม่งอก
-	for _i in 100: audio.ui("click")
-	_eq("pool ไม่โตแม้ยิงรัว 100 ครั้ง", audio._players.size(), 8)
+	for _i in 100: WQAudio.ui("click")
+	_eq("pool ไม่โตแม้ยิงรัว 100 ครั้ง", WQAudio._players.size(), 8)
+
+	# ประวัติการเล่นต้องไม่โตไม่รู้จบตลอดเซสชัน
+	WQAudio.played.clear()
+	for _i in WQAudio.HISTORY + 50:
+		WQAudio._last.clear()
+		WQAudio.ui("click")
+	_eq("ประวัติการเล่นถูกตัดท้ายไว้ที่ HISTORY", WQAudio.played.size(), WQAudio.HISTORY)
 
 	# ระดับเสียงต้องแปลงเป็น dB ลงบัสจริง
-	audio.set_level("SFX", 0.5)
+	WQAudio.set_level("SFX", 0.5)
 	_eq("ระดับเสียงลงบัสจริง",
 		snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("SFX")), 0.01),
 		snappedf(linear_to_db(0.5), 0.01))
-	audio.set_level("SFX", 1.0)
+	WQAudio.set_level("SFX", 1.0)
 
 	# ========== เลนเหตุการณ์: มาจากสัญญาณของแมตช์/ผู้เล่นเท่านั้น ==========
 	# ยิงสัญญาณตรงๆ เพราะที่นี่ทดสอบ "ใครฟังอะไรแล้วเล่นเสียงไหน" ส่วนที่ core ยิงถูกจังหวะไหม
 	# เป็นงานของ flow_check กับ _check_acted ข้างบน
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	me.deal_closed.emit({})
-	_eq("ปิดดีลแล้วมีเสียง", audio.played, ["deal_closed"] as Array[String])
+	_eq("ปิดดีลแล้วมีเสียง", WQAudio.played, ["deal_closed"] as Array[String])
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	m.disaster_started.emit({})
-	_eq("ภัยพิบัติมาแล้วมีเสียง", audio.played, ["disaster"] as Array[String])
+	_eq("ภัยพิบัติมาแล้วมีเสียง", WQAudio.played, ["disaster"] as Array[String])
 
 	# สิ้นเดือนที่เหลือเก็บเป็นบวก → เสียงเงินเดือนออกต่อท้าย
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	me.retired = false
 	me.salary = 1000000.0
 	_eq("ตั้งค่าให้เดือนนี้เหลือเก็บเป็นบวกจริง", me.get_monthly_cashflow() > 0.0, true)
 	m.month_ended.emit(1)
-	_eq("สิ้นเดือนบวกได้ยินทั้งสิ้นเดือนและเงินเดือน", audio.played,
+	_eq("สิ้นเดือนบวกได้ยินทั้งสิ้นเดือนและเงินเดือน", WQAudio.played,
 		["month_end", "payday"] as Array[String])
 
 	# เดือนที่ติดลบต้องไม่มีเสียงเหรียญ ไม่งั้นสอนผู้เล่นผิดว่าเดือนนี้ผ่านไปด้วยดี
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	me.retired = true
 	_eq("ตั้งค่าให้เดือนนี้ติดลบจริง", me.get_monthly_cashflow() < 0.0, true)
 	m.month_ended.emit(2)
-	_eq("สิ้นเดือนติดลบได้ยินแค่สิ้นเดือน", audio.played, ["month_end"] as Array[String])
+	_eq("สิ้นเดือนติดลบได้ยินแค่สิ้นเดือน", WQAudio.played, ["month_end"] as Array[String])
 	me.retired = false
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	m.player_finished.emit(me)
-	_eq("เราถึงฝันแล้วมีเสียงชนะ", audio.played, ["win"] as Array[String])
+	_eq("เราถึงฝันแล้วมีเสียงชนะ", WQAudio.played, ["win"] as Array[String])
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	m.player_finished.emit(bot)
-	_eq("บอทถึงฝันก่อนต้องไม่ได้ยินเสียงชนะ", audio.played, [] as Array[String])
+	_eq("บอทถึงฝันก่อนต้องไม่ได้ยินเสียงชนะ", WQAudio.played, [] as Array[String])
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	me.phase = 1
 	m.match_over.emit()
-	_eq("จบเกมทั้งที่ยังไม่ถึงเฟส 3 มีเสียงแพ้", audio.played, ["lose"] as Array[String])
+	_eq("จบเกมทั้งที่ยังไม่ถึงเฟส 3 มีเสียงแพ้", WQAudio.played, ["lose"] as Array[String])
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	me.phase = 3
 	m.match_over.emit()
-	_eq("จบเกมตอนถึงเฟส 3 แล้วต้องไม่มีเสียงแพ้", audio.played, [] as Array[String])
+	_eq("จบเกมตอนถึงเฟส 3 แล้วต้องไม่มีเสียงแพ้", WQAudio.played, [] as Array[String])
 
 	# เตือนสุขภาพครั้งเดียวตอนข้ามเข้าโซนวิกฤต — `changed` ยิงหลายสิบครั้งต่อเดือน
 	# ล้าง _last ทุกครั้ง ไม่งั้นเทสต์ "ไม่ซ้ำ" จะเขียวเพราะ COOLDOWN ไม่ใช่เพราะจำสถานะได้
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	me.health = 30.0
 	me.changed.emit()
-	_eq("สุขภาพตกเข้าโซนวิกฤตแล้วเตือน", audio.played, ["health_low"] as Array[String])
+	_eq("สุขภาพตกเข้าโซนวิกฤตแล้วเตือน", WQAudio.played, ["health_low"] as Array[String])
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	me.changed.emit()
-	_eq("อยู่ในโซนวิกฤตต่อไม่เตือนซ้ำ", audio.played, [] as Array[String])
+	_eq("อยู่ในโซนวิกฤตต่อไม่เตือนซ้ำ", WQAudio.played, [] as Array[String])
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	me.health = 70.0
 	me.changed.emit()
 	me.health = 30.0
 	me.changed.emit()
-	_eq("ออกจากโซนแล้วตกกลับเข้าไปใหม่ ต้องเตือนอีกครั้ง", audio.played,
+	_eq("ออกจากโซนแล้วตกกลับเข้าไปใหม่ ต้องเตือนอีกครั้ง", WQAudio.played,
 		["health_low"] as Array[String])
 
 	# ========== ผูกใหม่ต้องปลดสายเก่า ==========
 	# ถ้าไม่ปลด เริ่มแมตช์ใหม่หรือเปลี่ยนผู้เล่นแล้วจะได้ยินเสียงของทุกคนที่เคยผูกไว้ซ้อนกัน
-	audio._last.clear()
-	audio.played.clear()
-	audio.bind_player(bot)
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	WQAudio.bind_player(bot)
 	me.place = "home"
 	me.hours = me.get_hours_max()
 	_eq("คนเก่าพักผ่อนสำเร็จจริง (ไม่ใช่เงียบเพราะทำไม่ได้)",
 		bool(me.rest().get("ok", false)), true)
-	_eq("ผูกคนใหม่แล้วเสียงของคนเก่าต้องเงียบ", audio.played, [] as Array[String])
+	_eq("ผูกคนใหม่แล้วเสียงของคนเก่าต้องเงียบ", WQAudio.played, [] as Array[String])
 
-	audio._last.clear()
-	audio.played.clear()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
 	bot.place = "home"
 	bot.hours = bot.get_hours_max()
 	_eq("คนใหม่พักผ่อนสำเร็จจริง", bool(bot.rest().get("ok", false)), true)
-	_eq("ผูกคนใหม่แล้วได้ยินเสียงของคนใหม่", audio.played, ["rest"] as Array[String])
-	audio.bind_player(me)
+	_eq("ผูกคนใหม่แล้วได้ยินเสียงของคนใหม่", WQAudio.played, ["rest"] as Array[String])
+	WQAudio.bind_player(me)
 
-	audio._last.clear()
-	audio.played.clear()
-	audio.bind(null)
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	WQAudio.bind(null)
 	m.disaster_started.emit({})
-	_eq("ปลดแมตช์แล้วสัญญาณของแมตช์เก่าต้องเงียบ", audio.played, [] as Array[String])
-	audio.bind(m)
+	_eq("ปลดแมตช์แล้วสัญญาณของแมตช์เก่าต้องเงียบ", WQAudio.played, [] as Array[String])
+	WQAudio.bind(m)
 
-	# headless ไม่ยิงเสียงจริง (เหตุผลอยู่ใน audio.gd) ทางโหลดสตรีมจึงไม่ถูกเดินผ่าน _play()
+	# headless ไม่ยิงเสียงจริง (เหตุผลอยู่ใน audio/audio.gd) ทางโหลดสตรีมจึงไม่ถูกเดินผ่าน _play()
 	# ต้องเรียกตรงๆ เอง ไม่งั้นไฟล์เสียงที่โหลดไม่ขึ้นจะไปโผล่ตอนเปิดเกมจริงเท่านั้น
 	for id in WQBank.ids():
-		_eq("โหลดสตรีมของ \"%s\" ได้" % id, audio._stream(id) is AudioStream, true)
-	_eq("แคชสตรีมไว้ตัวเดียวต่อ id", audio._stream("click"), audio._cache["click"])
+		_eq("โหลดสตรีมของ \"%s\" ได้" % id, WQAudio._stream(id) is AudioStream, true)
+	_eq("แคชสตรีมไว้ตัวเดียวต่อ id", WQAudio._stream("click"), WQAudio._cache["click"])
 
 	_completed["audio"] = true
+
+## หน้าจอจริงต้องผูก WQAudio เข้ากับแมตช์ ไม่ใช่แค่มีระบบเสียงอยู่เฉยๆ
+## นี่คือบั๊กแบบที่ flow_check เคยจับได้: ของมีครบทุกชิ้นแต่ไม่มีใครต่อสายให้
+func _check_wiring() -> void:
+	WQSave.dir = "user://saves_test"      # ห้ามแตะไฟล์เซฟจริงของผู้เล่น (ท่าเดียวกับ flow_check)
+	for slot in WQSave.MANUAL_SLOTS + WQSave.AUTO_SLOTS:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(WQSave.path_for(slot)))
+
+	var main: Control = load("res://ui/Main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+
+	## เดินเข้าเกมทางเดียวกับผู้เล่นจริง (ท่าเดียวกับ flow_check) ไม่ใช่เรียก _start_match() ตรงๆ
+	## เพราะ _ready() สร้างหน้าเลือกอาชีพไปแล้ว การข้ามหน้านั้นคือการทดสอบเส้นทางที่ไม่มีใครเดิน
+	main.setup_screen.skip_to_jobs(4)
+	main.setup_screen._job.select(String(main.setup_screen.offer.jobs[0].id))
+	main.setup_screen._job._confirm.pressed.emit()
+	await process_frame
+
+	var human = null
+	for p in main.m.players:
+		if not p.is_ai: human = p
+	_eq("main.gd ผูกแมตช์เข้ากับ WQAudio แล้ว", WQAudio._match, main.m)
+	_eq("main.gd ผูกผู้เล่นคนจริงเข้ากับ WQAudio แล้ว", WQAudio._player, human)
+	## get_current() เป็นบอทได้ระหว่างตาบอท — main.gd เองก็มี `if p.is_ai: return` กันไว้หลายจุด
+	_eq("ที่ผูกไว้ต้องไม่ใช่บอท", bool(WQAudio._player.is_ai), false)
+
+	# เสียงจากสัญญาณของ core ต้องดังผ่านหน้าจอจริง ไม่ใช่ดังแค่ตอนเทสต์ผูกเอง
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	human.place = "home"
+	human.hours = human.get_hours_max()
+	_eq("พักผ่อนผ่านหน้าจอจริงสำเร็จ", bool(human.rest().get("ok", false)), true)
+	_eq("เสียงของ core ดังผ่านหน้าจอจริง", WQAudio.played, ["rest"] as Array[String])
+
+	# เปิด/ปิดแผงบันทึก
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main._open_save_panel("save")
+	await process_frame
+	_eq("เปิดแผงมีเสียง", WQAudio.played.has("panel_open"), true)
+
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main._close_save_panel()
+	await process_frame
+	_eq("ปิดแผงมีเสียง", WQAudio.played.has("panel_close"), true)
+
+	# บันทึก/โหลดจริงลงช่องทดสอบ
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main._on_save_slot(WQSave.MANUAL_SLOTS[0])
+	await process_frame
+	_eq("บันทึกสำเร็จแล้วมีเสียง", WQAudio.played.has("save"), true)
+
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main._on_load_slot(WQSave.MANUAL_SLOTS[0])
+	await process_frame
+	_eq("โหลดสำเร็จแล้วมีเสียง", WQAudio.played.has("load"), true)
+
+	# ปุ่มบน HUD ทั้งสามตัวต้องมีเสียงคลิก
+	for btn_name in ["_save", "_load", "_end"]:
+		WQAudio._last.clear()
+		WQAudio.played.clear()
+		(main.hud.get(btn_name) as Button).pressed.emit()
+		await process_frame
+		_eq("ปุ่ม %s บน HUD มีเสียงคลิก" % btn_name, WQAudio.played.has("click"), true)
+		if main.save_panel != null: main._close_save_panel()
+
+	# กดแล้วทำไม่ได้ต้องมีเสียงปฏิเสธ ไม่งั้นผู้เล่นกดแล้วไม่มีอะไรตอบเลย
+	var me2 = main.m.get_current()
+	me2.place = "home"                    # หาดีลต้องยืนอยู่ที่ตลาดอสังหาฯ
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main.action_panel.bind(me2)
+	main.action_panel._do("scout")
+	_eq("ทำไม่ได้แล้วมีเสียงปฏิเสธ", WQAudio.played, ["denied"] as Array[String])
+
+	# ทำได้ต้องไม่มีเสียงปฏิเสธ — เสียงสำเร็จมาจากสัญญาณ acted ของ core เอง
+	me2.hours = me2.get_hours_max()
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main.action_panel._do("rest")
+	_eq("ทำได้แล้วไม่มีเสียงปฏิเสธ ได้ยินเสียงของ core แทน",
+		WQAudio.played, ["rest"] as Array[String])
+
+	# ลูกเต๋า — ภาพเคลื่อนไหวล้วน จึงอยู่เลน UI
+	var d := WQDice.new()
+	root.add_child(d)
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	d.roll_to(4)
+	_eq("เริ่มทอยแล้วมีเสียง", WQAudio.played, ["dice_roll"] as Array[String])
+	d.finish_now()
+	_eq("ลูกเต๋าหยุดแล้วมีเสียง", WQAudio.played,
+		["dice_roll", "dice_land"] as Array[String])
+	root.remove_child(d)
+	d.free()
+
+	# การสอนขึ้นสเต็ปใหม่
+	_eq("เกมใหม่ต้องกำลังสอนอยู่", bool(main.tutorial.running), true)
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main.tutorial._next.pressed.emit()
+	await process_frame
+	_eq("ขึ้นสเต็ปใหม่แล้วมีเสียง", WQAudio.played.has("tutorial_step"), true)
+
+	## `refresh()` ถูกเรียกทุกครั้งที่สถานะเกมเปลี่ยน ไม่ใช่แค่ตอนเปลี่ยนสเต็ป
+	## ล้าง _last ก่อน ไม่งั้นเทสต์นี้เขียวเพราะ COOLDOWN ไม่ใช่เพราะการ์ดยังเป็นใบเดิม
+	WQAudio._last.clear()
+	WQAudio.played.clear()
+	main.tutorial.refresh()
+	await process_frame
+	_eq("การ์ดใบเดิมถูก refresh ซ้ำ ต้องไม่มีเสียงอีก",
+		WQAudio.played.has("tutorial_step"), false)
+
+	root.remove_child(main)
+	main.free()
+	_completed["wiring"] = true
 
 
 func _eq(label: String, got, want) -> void:

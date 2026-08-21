@@ -28,6 +28,7 @@ const COOLDOWN := 0.06           ## กันเสียงเดิมซ้�
 const SFX_DIR := "res://audio/sfx"
 const MUSIC_DIR := "res://audio/music"
 const FADE := 0.8                ## วินาทีที่ใช้เฟดไขว้ตอนสลับเพลง
+const CRISIS_HEALTH := 40.0      ## เกณฑ์เดียวกับเสียงเตือน health_low
 
 ## ที่ไฟล์ตั้งค่าเป็น static var ไม่ใช่ const: สูทต้องเปลี่ยนทางไปไฟล์ทดสอบได้ ไม่งั้นรัน
 ## audio_check ทีเดียวระดับเสียงที่นักพัฒนาตั้งไว้บนเครื่องตัวเองก็หายทุกครั้ง
@@ -81,6 +82,7 @@ func _ready() -> void:
 		add_child(mp)
 		_music.append(mp)
 	_load_settings()
+	_refresh_music()
 
 
 ## headless เริ่มมาด้วยบัสเดียว (ตรวจแล้ว: bus_count = 1) จึงสร้างบัสเองแทนการ
@@ -126,6 +128,7 @@ static func bind_player(player) -> void:
 		_player.acted.connect(inst._on_acted)
 		_player.deal_closed.connect(inst._on_deal)
 		_player.changed.connect(inst._on_changed)
+	_refresh_music()
 
 
 func _on_acted(kind: String) -> void:
@@ -143,10 +146,12 @@ func _on_month_ended(_month: int) -> void:
 	_play("month_end")
 	if _player == null: return
 	if _player.get_total_income() - _player.get_total_expenses() > 0.0: _play("payday")
+	_refresh_music()
 
 
 func _on_disaster(_def: Dictionary) -> void:
 	_play("disaster")
+	_refresh_music()
 
 
 func _on_finished(p) -> void:
@@ -161,9 +166,10 @@ func _on_over() -> void:
 ## `changed` ยิงหลายสิบครั้งต่อเดือน ถ้าเล่นทุกครั้งจะกลายเป็นเสียงหอนไม่หยุด
 func _on_changed() -> void:
 	if _player == null: return
-	var crit: bool = float(_player.health) < 40.0
+	var crit: bool = float(_player.health) < CRISIS_HEALTH
 	if crit and not _was_critical: _play("health_low")
 	_was_critical = crit
+	_refresh_music()
 
 
 # ========== เลน UI ==========
@@ -238,6 +244,20 @@ static func _music_stream(id: String) -> AudioStream:
 		st = WQMusic.stream(id)
 	_music_cache[id] = st
 	return st
+
+
+## เลือกเพลงจากสถานะที่ผูกไว้ — **นี่คือที่เดียวที่ตัดสินว่าเพลงไหนควรดัง**
+## `ui/` สั่งไม่ได้ (กฎเหล็กข้อ 6) เพราะถ้าสั่งได้ วันหนึ่งจะมีหน้าจอที่ลืมสั่งเปลี่ยนกลับ
+## แล้วเพลงวิกฤตจะดังค้างทั้งเกมโดยไม่มีใครรู้ว่าใครเป็นคนสั่ง
+static func _want_music() -> String:
+	if _player == null: return "phase1"
+	if float(_player.health) < CRISIS_HEALTH: return "crisis"
+	if _match != null and not _match.active_disasters.is_empty(): return "crisis"
+	return "phase2" if int(_player.phase) >= 2 else "phase1"
+
+
+static func _refresh_music() -> void:
+	play_music(_want_music())
 
 
 # ========== ระดับเสียง ==========

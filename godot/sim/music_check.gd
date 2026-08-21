@@ -7,7 +7,7 @@ extends SceneTree
 ## ไม่ได้ตรวจว่าเพราะไหม — อันนั้นต้องเปิดฟังเอง: WQ_MUSIC=phase1 godot --path .
 
 const MUSIC_DIR := "res://audio/music"
-const ALL_CHECKS: Array[String] = ["tracks", "files", "lane"]
+const ALL_CHECKS: Array[String] = ["tracks", "files", "lane", "policy"]
 
 var _fails := 0
 ## เช็กไหนที่รันจนจบฟังก์ชันจริง — กันสูทเขียวปลอมตอน SCRIPT ERROR หลุดกลางฟังก์ชัน
@@ -22,6 +22,7 @@ func _init() -> void:
 	## กลับไปหนึ่งเฟรม เหมือนกันกับ audio_check.gd (กติกาเดียวกัน เหตุผลเดียวกัน)
 	await process_frame
 	await _check_lane()
+	_check_policy()
 	for name in ALL_CHECKS:
 		if not _completed.get(name, false):
 			_fails += 1
@@ -216,6 +217,55 @@ func _check_lane() -> void:
 	panel.free()
 
 	_completed["lane"] = true
+
+
+## เพลงต้องเปลี่ยนตามสถานะจริงของผู้เล่นที่ผูกไว้ ไม่ใช่ให้ ui/ สั่ง (กฎเหล็กข้อ 6)
+## และวิกฤตต้องชนะทุกเงื่อนไข — ตอนสุขภาพจะหมดหรือภัยพิบัติลงแล้วยังได้ยินเพลงเดินเรื่อยๆ
+## คือเกมโกหกผู้เล่นว่าทุกอย่างปกติดี
+func _check_policy() -> void:
+	WQData.load_all()
+	var m := WQMatch.new()
+	m.setup({"mode": "solo", "seed": 20260821, "players": [
+		{"name": "คุณ", "job_id": "teacher", "is_ai": false},
+	]})
+	var me = m.players[0]
+
+	WQAudio.bind(m)
+	WQAudio.bind_player(me)
+
+	me.health = 70.0
+	me.phase = 1
+	m.active_disasters = []
+	me.changed.emit()
+	_eq("ด่าน 1 ปกติ ได้เพลงด่าน 1", WQAudio.music_now, "phase1")
+
+	me.phase = 2
+	me.changed.emit()
+	_eq("เข้าด่าน 2 แล้วเปลี่ยนเพลง", WQAudio.music_now, "phase2")
+
+	me.health = 30.0
+	me.changed.emit()
+	_eq("สุขภาพต่ำกว่าเกณฑ์ วิกฤตชนะเงื่อนไขด่าน", WQAudio.music_now, "crisis")
+
+	me.health = 70.0
+	me.changed.emit()
+	_eq("สุขภาพกลับมา ได้เพลงด่าน 2 คืน", WQAudio.music_now, "phase2")
+
+	m.active_disasters = [{"def": {}, "left": 2}]
+	m.month_ended.emit(3)
+	_eq("มีภัยพิบัติค้างอยู่ ได้เพลงวิกฤต", WQAudio.music_now, "crisis")
+
+	m.active_disasters = []
+	m.month_ended.emit(4)
+	_eq("ภัยพิบัติหมดอายุแล้ว กลับไปเพลงด่าน", WQAudio.music_now, "phase2")
+
+	# ยังไม่มีผู้เล่นผูกไว้ (หน้าเลือกอาชีพ) ต้องเป็นเพลงด่าน 1
+	WQAudio.bind_player(null)
+	WQAudio.stop_music()
+	WQAudio._refresh_music()
+	_eq("ยังไม่มีแมตช์ ได้เพลงด่าน 1", WQAudio.music_now, "phase1")
+
+	_completed["policy"] = true
 
 
 func _eq(label: String, got, want) -> void:

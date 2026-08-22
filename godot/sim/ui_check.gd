@@ -116,6 +116,24 @@ func _init() -> void:
 	WQSetup.fill_bots(one_seat, WQRng.new(999))
 	_eq("fill_bots ไม่แตะตัวสุ่มของแมตช์", m.rng.s, rng_before)
 
+	# --- WQModeSelect: หน้าเมนูเลือกจำนวนที่นั่ง ---
+	var mode_screen := WQModeSelect.new()
+	_eq("มีปุ่มครบทุกจำนวนที่นั่ง", mode_screen.buttons.size(), WQSetup.SEATS)
+	_eq("บรรทัดอธิบายครบทุกปุ่ม", mode_screen.hints.size(), WQSetup.SEATS)
+
+	# ใช้ Array ห่อค่าไว้ เพราะ lambda ของ GDScript จับตัวแปรนอกสโคปด้วยค่า (by value)
+	# assign ตรงๆ เข้าตัวแปร int จะไม่ยิงกลับออกมา ต้อง mutate object ที่แชร์กันแทน
+	var picked := [-1]
+	mode_screen.chosen.connect(func(n: int): picked[0] = n)
+	mode_screen.buttons[2].pressed.emit()
+	_eq("กดปุ่มที่สามแล้วยิงเลข 3", picked[0], 3)
+
+	# จำนวนคู่แข่งในโต๊ะมีผลกับเกมจริง (refill_market ตั้งเป้าดีลจาก 4 + จำนวนผู้เล่น)
+	# ปุ่มจึงต้องบอกให้เห็นก่อนกด ไม่ใช่ให้ไปเซอร์ไพรส์เอาในเกม
+	_has("ปุ่มเล่นคนเดียวบอกว่ามีบอท 3 ตัว", mode_screen.hints[0].text, "3")
+	_has("ปุ่มเล่น 4 คนบอกว่าไม่มีบอท", mode_screen.hints[3].text, "ไม่มีบอท")
+	mode_screen.free()
+
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
 

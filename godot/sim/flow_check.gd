@@ -155,9 +155,22 @@ func _check_save_load() -> void:
 	_eq("ช่อง 1 ต้องมีไฟล์แล้ว", WQSave.slot_info("1").get("empty"), false)
 
 	# เดินเกมต่อ — สิ้นเดือนต้อง autosave ให้เองด้วย (GDD 14.3)
+	# การเขียนไฟล์ถูกเลื่อนไปด้วย `call_deferred` (FIX 2 รอบรีวิวสุดท้าย) จึงต้องรอหนึ่งเฟรม
+	# ก่อนจะเห็นไฟล์จริง — ไม่งั้นเช็ก `slot_info` ข้างล่างจะมาก่อนไฟล์ถูกเขียนเสมอ
 	_main._end_turn()
 	_eq("เดือนเดินหน้าแล้ว", _main.m.month, month_at_save + 1)
+	await process_frame
 	_eq("สิ้นเดือนต้อง autosave ให้เอง", WQSave.slot_info("auto1").get("empty"), false)
+
+	# FIX 2: ก่อนแก้ ไฟล์ autosave ถูกเขียนตอน `turn` ยังเป็น `players.size()` (นอกช่วง array)
+	# เพราะ `month_ended` (core/match.gd) ยิงก่อนรีเซ็ต `turn` — โหลดกลับมาแล้ว `get_current()`
+	# จะเป็น null ตลอดไป (บอร์ดว่าง ไม่มีม่าน กด "จบตา" ครั้งแรกพัง) โหลดตรงๆ ด้วย `WQSave.read_slot`
+	# (ไม่ผ่านหน้าจอ) เพื่อไม่ให้ไปยุ่งกับ `_main.m` ที่การทดสอบข้อถัดไปยังต้องใช้ต่อ
+	var auto_loaded := WQSave.read_slot("auto1")
+	_eq("โหลดช่อง autosave กลับมาได้จริง", auto_loaded != null, true)
+	_eq("turn ในไฟล์ autosave ต้องอยู่ในช่วงที่ใช้ได้",
+		auto_loaded.turn >= 0 and auto_loaded.turn < auto_loaded.players.size(), true)
+	_eq("get_current() หลังโหลด autosave ต้องไม่ใช่ null", auto_loaded.get_current() != null, true)
 
 	_main.hud.load_pressed.emit()
 	_eq("กด 📂 แล้วหน้าโหลดต้องเปิด", _main.save_panel != null, true)
@@ -252,6 +265,16 @@ func _check_hotseat_setup() -> void:
 	key.pressed = true
 	main2._unhandled_input(key)
 	_eq("เคาะ SPACE ทะลุม่านไม่ได้", main2.m.turn, turn_before)
+
+	# เส้นทางที่บั๊กจริงหลุดผ่าน (Critical 1 รอบรีวิวสุดท้าย): คลิกปุ่ม "จบตา (Space)" ของ HUD
+	# ทิ้ง focus ไว้ที่ปุ่มนั้น กด SPACE ครั้งถัดไปจึงวิ่งเป็น `ui_accept` ตรงไปหาปุ่มที่ focus อยู่
+	# ไม่ผ่าน `_unhandled_input()` เลย — เทสต์ข้างบนที่เรียก `_unhandled_input()` ตรงๆ จับเส้นทางนี้
+	# ไม่ได้ ที่นี่จำลองด้วยการยิงสัญญาณ `end_turn_pressed` ของ HUD เอง (เหมือนปุ่มถูกกดจริง)
+	var turn_before2: int = main2.m.turn
+	var pass_name_before := String(main2.pass_screen._name.text)
+	main2.hud.end_turn_pressed.emit()
+	_eq("ปุ่มจบตาของ HUD ก็ทะลุม่านไม่ได้เช่นกัน", main2.m.turn, turn_before2)
+	_eq("ม่านยังกั้นให้คนเดิม", main2.pass_screen._name.text, pass_name_before)
 
 	main2.pass_screen._btn.pressed.emit()
 	await process_frame

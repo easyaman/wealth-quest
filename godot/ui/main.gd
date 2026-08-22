@@ -275,11 +275,13 @@ func _write_autosave() -> void:
 	WQSave.write_auto(m, _ui_state())
 
 
-## รายละเอียดว่าทำไมต้องยืมฟอนต์จากระบบอยู่ใน ui/theme/fonts.gd
+## รายละเอียดว่าทำไมต้องฝังฟอนต์ไทยเองอยู่ใน ui/theme/fonts.gd
 func _apply_thai_font() -> void:
 	var t := Theme.new()
 	t.default_font = WQFonts.thai()
 	t.default_font_size = 14
+	# `default_font` ไม่ครอบ `[b]` ของ RichTextLabel — มันหาจากช่องนี้ช่องเดียว
+	t.set_font("bold_font", "RichTextLabel", WQFonts.bold())
 	theme = t
 
 

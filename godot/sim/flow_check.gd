@@ -47,6 +47,8 @@ func _check_setup_to_match() -> void:
 	_main.setup_screen.skip_to_jobs(4)
 	var job_id := String(_main.setup_screen.offer.jobs[0].id)
 	_main.setup_screen._job.select(job_id)
+	_eq("เกมคนเดียวไม่ต้องมีป้ายที่นั่ง",
+		_main.setup_screen._job._head.text.contains("ผู้เล่น"), false)
 
 	# กดปุ่มยืนยันจริง — นี่คือเส้นทางที่เคยขาดเพราะ free() ระหว่างปุ่มกำลังส่งสัญญาณ
 	_main.setup_screen._job._confirm.pressed.emit()
@@ -204,6 +206,8 @@ func _check_hotseat_setup() -> void:
 	_ne_int("ผู้เล่นคนที่สองใช้เมล็ดคนละตัว", main2.setup_screen._seed, first_offer_seed)
 
 	main2.setup_screen.skip_to_jobs(2)
+	_has("หน้าเลือกอาชีพยังบอกว่าเป็นที่นั่งของใคร",
+		main2.setup_screen._job._head.text, "ผู้เล่น 2")
 	var job2 := String(main2.setup_screen.offer.jobs[0].id)
 	main2.setup_screen._job.select(job2)
 	main2.setup_screen._job._confirm.pressed.emit()

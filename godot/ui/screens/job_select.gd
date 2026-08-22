@@ -17,6 +17,9 @@ const CARD_MIN := Vector2(300, 0)
 
 var offer: Dictionary = {}       ## ผลทอยจาก WQSetup.roll_start
 var picked_id := ""              ## อาชีพที่กำลังเลือกอยู่
+## ป้ายที่นั่ง — มาจาก setup_screen.start() ก่อน show_offer() เสมอ ว่างอยู่ = เล่นคนเดียว
+## ต้องอยู่ให้ทันตอนกดข้ามหน้าเต๋าไปเลือกอาชีพเลย ไม่งั้นคนที่สองจะไม่รู้ว่าถึงตาตัวเอง
+var seat_label := ""
 
 var _head: Label
 var _die: WQDice
@@ -98,9 +101,10 @@ func show_offer(o: Dictionary) -> void:
 	offer = o
 	_die.face = int(offer.roll)
 	# ไม่ใส่อีโมจิ 🎲 ซ้ำในข้อความ — มีลูกเต๋าที่วาดจริงอยู่ข้างๆ แล้ว
-	_head.text = "ทอยได้ %d — %s   ·   เลือกได้ %d อาชีพ   ·   โบนัสเวลา +%d ชม./เดือน" % [
+	var head_text := "ทอยได้ %d — %s   ·   เลือกได้ %d อาชีพ   ·   โบนัสเวลา +%d ชม./เดือน" % [
 		int(offer.roll), String(offer.label), (offer.jobs as Array).size(),
 		int(offer.bonus_hours)]
+	_head.text = head_text if seat_label == "" else "%s — %s" % [seat_label, head_text]
 	_build_list()
 	if not (offer.jobs as Array).is_empty(): select(String(offer.jobs[0].id))
 

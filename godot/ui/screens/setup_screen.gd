@@ -172,6 +172,9 @@ func start(seed_value: int, seat_label := "") -> void:
 	_seed = seed_value
 	_title.text = "🎲 ทอยเต๋าเปิดโอกาสของคุณ" if seat_label == "" \
 		else "🎲 %s — ทอยเต๋าเปิดโอกาสของคุณ" % seat_label
+	# ต้องตั้งก่อน show_jobs() ทุกทาง (ทั้งกดเองและ skip_to_jobs) ไม่งั้นหน้าเลือกอาชีพ
+	# จะโผล่โดยไม่มีป้ายบอกว่าเป็นที่นั่งของใคร ซึ่งเป็นจังหวะที่คนผิดคนเผลอกดเลือกได้ง่ายที่สุด
+	_job.seat_label = seat_label
 	offer = {}
 	_result.text = ""
 	_next_btn.visible = false

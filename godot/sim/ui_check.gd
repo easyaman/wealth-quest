@@ -79,6 +79,43 @@ func _init() -> void:
 	await _check_dice()
 	await _check_dream_roll()
 
+	# --- WQSetup.fill_bots: เติมที่นั่งบอทจนครบโต๊ะ (hot-seat) ---
+	var one_seat: Array = [{"name": "ผู้เล่น 1", "job_id": "teacher", "is_ai": false}]
+	var seats := WQSetup.fill_bots(one_seat, WQRng.new(777))
+	_eq("เติมบอทจนครบ 4 ที่นั่ง", seats.size(), WQSetup.SEATS)
+	_eq("ที่นั่งของคนจริงยังอยู่ที่เดิม", String(seats[0].job_id), "teacher")
+	_eq("ของเดิมที่ส่งเข้าไปต้องไม่ถูกแก้", one_seat.size(), 1)
+
+	var seen := {}
+	for s in seats:
+		_eq("ไม่มีใครในโต๊ะได้อาชีพซ้ำกัน", seen.has(String(s.job_id)), false)
+		seen[String(s.job_id)] = true
+
+	for i in range(1, seats.size()):
+		_eq("ที่นั่งที่เติมมาต้องเป็นบอท", bool(seats[i].is_ai), true)
+		var tier: int = int(WQData.job(String(seats[i].job_id)).tier)
+		_eq("โบนัสเวลา 20 ชม. ให้เฉพาะบอทอาชีพ tier 1",
+			int(seats[i].bonus_hours), 20 if tier <= 1 else 0)
+		_eq("บอทมีชื่อจากรายชื่อประจำโต๊ะ",
+			WQSetup.BOT_NAMES.has(String(seats[i].name)), true)
+
+	# เมล็ดเดิมต้องได้โต๊ะเดิมเป๊ะ ไม่งั้นตั้งโต๊ะสองครั้งด้วยค่าเดิมแล้วได้บอทคนละชุด
+	var again := WQSetup.fill_bots(one_seat, WQRng.new(777))
+	_eq("เมล็ดเดิมได้โต๊ะเดิม", str(again), str(seats))
+
+	# โต๊ะที่คนจริงเต็มแล้ว = ไม่มีบอท (เล่น 4 คน)
+	var full := WQSetup.fill_bots([
+		{"name": "ผู้เล่น 1", "job_id": "teacher", "is_ai": false},
+		{"name": "ผู้เล่น 2", "job_id": "nurse", "is_ai": false},
+		{"name": "ผู้เล่น 3", "job_id": "cleaner", "is_ai": false},
+		{"name": "ผู้เล่น 4", "job_id": "pilot", "is_ai": false}], WQRng.new(777))
+	_eq("โต๊ะที่คนจริงเต็มแล้วต้องไม่มีบอท", full.size(), 4)
+
+	# ข้อที่ทำให้ parity พังถ้าเขียนผิด — ตัวสุ่มของแมตช์ต้องไม่ขยับแม้แต่ก้าวเดียว
+	var rng_before: int = m.rng.s
+	WQSetup.fill_bots(one_seat, WQRng.new(999))
+	_eq("fill_bots ไม่แตะตัวสุ่มของแมตช์", m.rng.s, rng_before)
+
 	print("ui_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
 

@@ -28,6 +28,7 @@ func _init() -> void:
 	await _check_tutorial()
 	await _check_match_to_phase2()
 	await _check_save_load()
+	await _check_hotseat_setup()
 
 	print("flow_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
@@ -35,8 +36,13 @@ func _init() -> void:
 
 ## หน้า setup → เลือกอาชีพ → แมตช์เริ่มจริง
 func _check_setup_to_match() -> void:
-	_eq("เปิดเกมมาต้องอยู่ที่หน้า setup", _main.setup_screen != null, true)
-	_eq("ยังไม่เลือกอาชีพ ยังไม่มีแมตช์", _main.m == null, true)
+	_eq("เปิดเกมมาต้องอยู่ที่หน้าเมนูเลือกจำนวนคน", _main.mode_screen != null, true)
+	_eq("ยังไม่เลือกอะไร ยังไม่มีแมตช์", _main.m == null, true)
+
+	_main.mode_screen.buttons[0].pressed.emit()      # เล่นคนเดียว
+	await process_frame
+	_eq("เลือกคนเดียวแล้วต้องไปที่หน้าทอยเต๋า", _main.setup_screen != null, true)
+	_eq("หน้าเมนูต้องถูกเก็บทิ้ง", _main.mode_screen == null, true)
 
 	_main.setup_screen.skip_to_jobs(4)
 	var job_id := String(_main.setup_screen.offer.jobs[0].id)
@@ -53,6 +59,12 @@ func _check_setup_to_match() -> void:
 	_eq("แต้มที่ทอยได้ถูกส่งเข้าแมตช์", p.roll, 4)
 	_eq("โบนัสเวลาจากแต้มถูกส่งเข้าแมตช์", p.bonus_hours,
 		int(WQData.cfg.roll_table["4"].bonusHours))
+	_eq("เล่นคนเดียวยังได้โต๊ะ 4 ที่นั่ง", _main.m.players.size(), WQSetup.SEATS)
+	var bots := 0
+	for pl in _main.m.players:
+		if pl.is_ai: bots += 1
+	_eq("เล่นคนเดียวมีบอท 3 ตัว", bots, 3)
+	_eq("เล่นคนเดียวโหมดยังเป็น solo", String(_main.m.mode), "solo")
 
 
 ## การสอน 5 เดือนแรก — ต้องเปิดเองสำหรับเกมใหม่ ชี้ถูกวิดเจ็ต และสเต็ปที่ให้ลงมือทำต้องรอจริง
@@ -167,6 +179,53 @@ func _check_save_load() -> void:
 
 
 ## ปุ่มของแถวที่ i ในหน้าบันทึก/โหลด (แถว 0–2 = ช่องที่ผู้เล่นกดเอง)
+## โต๊ะ hot-seat: ทอยเต๋าและเลือกอาชีพทีละคนจนครบ แล้วเข้าเกมที่มีคนจริงสองคน
+func _check_hotseat_setup() -> void:
+	var main2: Control = load("res://ui/Main.tscn").instantiate()
+	root.add_child(main2)
+	await process_frame
+
+	main2.mode_screen.buttons[1].pressed.emit()      # เล่น 2 คน
+	await process_frame
+	_eq("เลือก 2 คนแล้วไปที่หน้าทอยเต๋าของผู้เล่น 1", main2.setup_screen != null, true)
+	_has("หัวข้อบอกว่ากำลังตั้งที่นั่งของใคร", main2.setup_screen._title.text, "ผู้เล่น 1")
+
+	var first_offer_seed: int = main2.setup_screen._seed
+	main2.setup_screen.skip_to_jobs(4)
+	var job1 := String(main2.setup_screen.offer.jobs[0].id)
+	main2.setup_screen._job.select(job1)
+	main2.setup_screen._job._confirm.pressed.emit()
+	await process_frame
+
+	_eq("ตั้งที่นั่งแรกเสร็จแล้วยังไม่เริ่มเกม", main2.m == null, true)
+	_eq("ต้องเด้งหน้าทอยเต๋าของผู้เล่น 2 ต่อทันที", main2.setup_screen != null, true)
+	_has("หัวข้อเปลี่ยนเป็นผู้เล่น 2", main2.setup_screen._title.text, "ผู้เล่น 2")
+	# เมล็ดเดียวกันทุกคน = ทุกคนทอยได้แต้มเดียวกันและได้ชุดอาชีพเดียวกันเป๊ะ
+	_ne_int("ผู้เล่นคนที่สองใช้เมล็ดคนละตัว", main2.setup_screen._seed, first_offer_seed)
+
+	main2.setup_screen.skip_to_jobs(2)
+	var job2 := String(main2.setup_screen.offer.jobs[0].id)
+	main2.setup_screen._job.select(job2)
+	main2.setup_screen._job._confirm.pressed.emit()
+	await process_frame
+
+	_eq("ตั้งครบสองที่นั่งแล้วเกมต้องเริ่ม", main2.m != null, true)
+	_eq("หน้าทอยเต๋าต้องถูกเก็บทิ้ง", main2.setup_screen == null, true)
+	_eq("โต๊ะมี 4 ที่นั่ง", main2.m.players.size(), WQSetup.SEATS)
+	var humans := 0
+	for pl in main2.m.players:
+		if not pl.is_ai: humans += 1
+	_eq("คนจริงสองคน", humans, 2)
+	_eq("โหมดเป็น multi", String(main2.m.mode), "multi")
+	_eq("ผู้เล่น 1 ได้อาชีพที่เลือก", String(main2.m.players[0].job.id), job1)
+	_eq("ผู้เล่น 2 ได้อาชีพที่เลือก", String(main2.m.players[1].job.id), job2)
+	# การสอนชี้วิดเจ็ตของคนเดียว ในโต๊ะหลายคนมันจะชี้ผิดคนทันทีที่เปลี่ยนตา
+	_eq("โต๊ะหลายคนต้องไม่เปิดการสอน", main2.tutorial.running, false)
+
+	main2.queue_free()
+	await process_frame
+
+
 func _slot_button(i: int) -> Button:
 	var row: Control = _main.save_panel._rows.get_child(i)
 	return row.get_child(row.get_child_count() - 1)
@@ -182,3 +241,9 @@ func _has(label: String, haystack: String, needle: String) -> void:
 	if haystack.contains(needle): return
 	_fails += 1
 	print("  ❌ %s: \"%s\" ไม่มี \"%s\"" % [label, haystack, needle])
+
+
+func _ne_int(label: String, got: int, unwanted: int) -> void:
+	if got != unwanted: return
+	_fails += 1
+	print("  ❌ %s: ค่าซ้ำกัน (%d)" % [label, got])

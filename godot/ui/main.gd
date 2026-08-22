@@ -8,6 +8,11 @@ extends Control
 
 const BG := WQPalette.BG_DEEP
 const SEED := 20260815
+## ระยะห่างเมล็ดสุ่มระหว่างที่นั่ง — สูตรเดียวกับต้นแบบเว็บ (`ui.html:381`)
+## ถ้าทุกที่นั่งใช้เมล็ดเดียวกัน ทุกคนจะทอยได้แต้มเดียวกันและได้ชุดอาชีพเดียวกันเป๊ะ
+const SEAT_SEED_STEP := 7919
+## เมล็ดของตัวสุ่มที่ใช้เลือกอาชีพบอท — **คนละตัวกับของแมตช์** (ดู WQSetup.fill_bots)
+const BOT_SEED_OFFSET := 555
 
 var m: WQMatch
 var hud: WQHud
@@ -29,6 +34,10 @@ var city: WQCity
 var log_label: RichTextLabel
 var lessons: WQLessons
 var setup_screen: WQSetupScreen
+var mode_screen: WQModeSelect     ## หน้าเลือกจำนวนคน — มีอยู่แปลว่ายังไม่ได้เริ่มตั้งโต๊ะ
+var _humans := 1                  ## คนจริงกี่คนในโต๊ะนี้
+var _seats: Array = []            ## ที่นั่งของคนจริงที่ตั้งเสร็จแล้ว
+var _seat_idx := 0                ## กำลังตั้งที่นั่งที่เท่าไร (นับจาก 0)
 var dream_screen: WQDreamRoll     ## หน้าทอยความฝันด่าน 2 — มีอยู่แปลว่ากำลังรอผู้เล่นตัดสินใจ
 var save_panel: WQSavePanel       ## หน้าบันทึก/โหลด — มีอยู่แปลว่ากำลังเปิดค้างอยู่
 var audio_panel: WQAudioPanel     ## แผงปรับเสียง — มีอยู่แปลว่ากำลังเปิดค้างอยู่
@@ -47,16 +56,17 @@ func _ready() -> void:
 	# ซึ่งข้ามได้ด้วย WQ_JOB=<job_id> เพื่อไม่ต้องกดผ่านหน้าเลือกอาชีพทุกครั้ง
 	var forced := OS.get_environment("WQ_JOB")
 	if forced != "":
-		_start_match(forced, 0, 0)
+		_humans = 1
+		_seats = [{"name": "คุณ", "job_id": forced, "is_ai": false,
+			"roll": 0, "bonus_hours": 0}]
+		_start_match()
 	else:
-		setup_screen = WQSetupScreen.new()
-		setup_screen.chosen.connect(_on_job_chosen)
-		setup_screen.load_requested.connect(func(): _open_save_panel("load"))
-		add_child(setup_screen)
-		setup_screen.start(SEED)
-		# WQ_ROLL=<1-6> ข้ามภาพทอยเต๋าไปหน้าเลือกอาชีพเลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
-		var forced_roll := OS.get_environment("WQ_ROLL")
-		if forced_roll != "": setup_screen.skip_to_jobs(forced_roll.to_int())
+		# WQ_HUMANS=<1-4> ข้ามหน้าเมนูไปตั้งโต๊ะเลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
+		var humans := OS.get_environment("WQ_HUMANS")
+		if humans != "":
+			_begin_seats(clampi(humans.to_int(), 1, WQSetup.SEATS))
+		else:
+			_open_mode_select()
 
 	# WQ_PANEL=save|load|audio เปิดหน้านั้นค้างไว้เลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
 	var panel := OS.get_environment("WQ_PANEL")
@@ -111,31 +121,79 @@ func _close_screen(screen: Control) -> void:
 	screen.call_deferred("free")
 
 
+func _open_mode_select() -> void:
+	mode_screen = WQModeSelect.new()
+	mode_screen.chosen.connect(_on_humans_chosen)
+	mode_screen.load_requested.connect(func(): _open_save_panel("load"))
+	add_child(mode_screen)
+
+
+func _on_humans_chosen(human_count: int) -> void:
+	_close_screen(mode_screen)
+	mode_screen = null
+	_begin_seats(human_count)
+
+
+## เริ่มตั้งโต๊ะ — คนจริงทอยเต๋าและเลือกอาชีพทีละคนจนครบ แล้วค่อยเติมบอท
+func _begin_seats(human_count: int) -> void:
+	_humans = human_count
+	_seats = []
+	_seat_idx = 0
+	_open_setup_screen()
+
+
+func _open_setup_screen() -> void:
+	setup_screen = WQSetupScreen.new()
+	setup_screen.chosen.connect(_on_job_chosen)
+	setup_screen.load_requested.connect(func(): _open_save_panel("load"))
+	add_child(setup_screen)
+	setup_screen.start(SEED + _seat_idx * SEAT_SEED_STEP, _seat_name())
+	# WQ_ROLL=<1-6> ข้ามภาพทอยเต๋าไปหน้าเลือกอาชีพเลย — ใช้ตอนถ่ายภาพหน้าจอจาก terminal
+	var forced_roll := OS.get_environment("WQ_ROLL")
+	if forced_roll != "": setup_screen.skip_to_jobs(forced_roll.to_int())
+
+
+## ชื่อที่นั่งที่กำลังตั้ง — เล่นคนเดียวไม่ต้องมีเลขที่นั่ง มันมีที่นั่งเดียว
+func _seat_name() -> String:
+	return "" if _humans == 1 else "ผู้เล่น %d" % (_seat_idx + 1)
+
+
 func _on_job_chosen(job_id: String, roll: int, bonus_hours: int) -> void:
 	_close_screen(setup_screen)
 	setup_screen = null
-	_start_match(job_id, roll, bonus_hours)
+	_seats.append({
+		"name": "คุณ" if _humans == 1 else "ผู้เล่น %d" % (_seat_idx + 1),
+		"job_id": job_id, "is_ai": false, "roll": roll, "bonus_hours": bonus_hours})
+	_seat_idx += 1
+	if _seat_idx < _humans:
+		_open_setup_screen()
+		return
+	_start_match()
 
 
-func _start_match(job_id: String, roll: int, bonus_hours: int) -> void:
+func _start_match() -> void:
 	var fresh := WQMatch.new()
-	fresh.setup({"mode": "solo", "seed": SEED, "players": [
-		{"name": "คุณ", "job_id": job_id, "is_ai": false,
-			"roll": roll, "bonus_hours": bonus_hours},
-		{"name": "บอท A", "job_id": "programmer", "is_ai": true},
-		{"name": "บอท B", "job_id": "pilot", "is_ai": true},
-	]})
+	# ตัวสุ่มของบอทเป็นคนละตัวกับของแมตช์เสมอ เหตุผลอยู่ที่ WQSetup.fill_bots()
+	fresh.setup({
+		"mode": "solo" if _humans == 1 else "multi", "seed": SEED,
+		"players": WQSetup.fill_bots(_seats, WQRng.new(SEED + BOT_SEED_OFFSET))})
 	_adopt_match(fresh)
 
 	# การสอนเปิดให้เองสำหรับเกมใหม่ (GDD 12.4) — ปิดได้ด้วยปุ่ม "ข้ามการสอน" บนการ์ด
 	# WQ_TUT=off ปิดตั้งแต่ต้นสำหรับถ่ายภาพหน้าจอ · WQ_TUT=<เลข> กระโดดไปสเต็ปนั้นเลย
-	var tut := OS.get_environment("WQ_TUT")
-	if tut == "off":
+	#
+	# โต๊ะหลายคนไม่สอน — การ์ดสอนชี้วิดเจ็ตของผู้เล่นที่ผูกไว้ตอนเริ่มเกม พอเปลี่ยนตา
+	# มันจะชี้ไปที่จอของคนอื่นทันทีโดยยังพูดเหมือนเดิม
+	if _humans > 1:
 		tutorial.stop()
-	elif tut != "":
-		tutorial.resume(tut.to_int())
 	else:
-		tutorial.start()
+		var tut := OS.get_environment("WQ_TUT")
+		if tut == "off":
+			tutorial.stop()
+		elif tut != "":
+			tutorial.resume(tut.to_int())
+		else:
+			tutorial.start()
 
 	# WQ_PLACE=<place_id> วางผู้เล่นไว้ที่นั่นเลยโดยไม่เสียเวลาเดินทาง — ใช้ถ่ายภาพหน้าจอ
 	# ของแผงที่หน้าตาเปลี่ยนตามสถานที่ (ฟิตเนส/รีสอร์ตกางแพ็กเกจ · ธนาคารกางปุ่มกู้)
@@ -465,6 +523,9 @@ func _on_load_slot(slot: String) -> void:
 	if setup_screen != null:
 		_close_screen(setup_screen)
 		setup_screen = null
+	if mode_screen != null:
+		_close_screen(mode_screen)
+		mode_screen = null
 	if dream_screen != null:
 		_close_screen(dream_screen)
 		dream_screen = null

@@ -584,7 +584,9 @@ func _check_wiring() -> void:
 	await process_frame
 
 	## เดินเข้าเกมทางเดียวกับผู้เล่นจริง (ท่าเดียวกับ flow_check) ไม่ใช่เรียก _start_match() ตรงๆ
-	## เพราะ _ready() สร้างหน้าเลือกอาชีพไปแล้ว การข้ามหน้านั้นคือการทดสอบเส้นทางที่ไม่มีใครเดิน
+	## เพราะ _ready() สร้างหน้าเมนูเลือกจำนวนคนไปก่อนแล้ว การข้ามหน้านั้นคือการทดสอบเส้นทางที่ไม่มีใครเดิน
+	main.mode_screen.buttons[0].pressed.emit()      # เล่นคนเดียว
+	await process_frame
 	main.setup_screen.skip_to_jobs(4)
 	main.setup_screen._job.select(String(main.setup_screen.offer.jobs[0].id))
 	main.setup_screen._job._confirm.pressed.emit()

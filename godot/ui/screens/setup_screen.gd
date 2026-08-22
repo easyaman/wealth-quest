@@ -25,6 +25,7 @@ const GOLD := Color("f2b233")
 var offer: Dictionary = {}       ## ผลทอยที่ได้ — ว่างอยู่แปลว่ายังไม่ได้ทอย
 
 var _intro: Control
+var _title: Label                ## หัวข้อ — เปลี่ยนตามที่นั่งที่กำลังตั้งในโต๊ะ hot-seat
 var _table: VBoxContainer
 var _dice: WQDice
 var _roll_btn: Button
@@ -68,11 +69,11 @@ func _build_intro() -> Control:
 	col.custom_minimum_size = Vector2(680, 0)
 	center.add_child(col)
 
-	var title := Label.new()
-	title.text = "🎲 ทอยเต๋าเปิดโอกาสของคุณ"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 26)
-	col.add_child(title)
+	_title = Label.new()
+	_title.text = "🎲 ทอยเต๋าเปิดโอกาสของคุณ"
+	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title.add_theme_font_size_override("font_size", 26)
+	col.add_child(_title)
 
 	col.add_child(_para("เต๋าลูกนี้ทอยครั้งเดียวตอนเกิด — มันไม่ได้ตัดสินว่าคุณเก่งแค่ไหน "
 		+ "แต่ตัดสินว่าคุณ [b]มีทางให้เลือกกี่ทาง[/b] แต้มยิ่งสูง อาชีพให้เลือกยิ่งเยอะ "
@@ -164,8 +165,13 @@ func _para(bb: String, size: int) -> RichTextLabel:
 
 
 ## เตรียมหน้าจอด้วยเมล็ดของแมตช์ที่กำลังจะเริ่ม — ยังไม่ทอยจนกว่าผู้เล่นจะกดปุ่มเอง
-func start(seed_value: int) -> void:
+## เตรียมหน้าจอด้วยเมล็ดของที่นั่งที่กำลังตั้ง — ยังไม่ทอยจนกว่าผู้เล่นจะกดปุ่มเอง
+## `seat_label` ว่าง = เล่นคนเดียว หัวข้อเดิมไม่เปลี่ยน · ในโต๊ะ hot-seat ต้องบอกให้ชัด
+## ว่ากำลังตั้งที่นั่งของใครอยู่ ไม่งั้นคนที่สองจะไม่รู้ว่าถึงตาตัวเองแล้ว
+func start(seed_value: int, seat_label := "") -> void:
 	_seed = seed_value
+	_title.text = "🎲 ทอยเต๋าเปิดโอกาสของคุณ" if seat_label == "" \
+		else "🎲 %s — ทอยเต๋าเปิดโอกาสของคุณ" % seat_label
 	offer = {}
 	_result.text = ""
 	_next_btn.visible = false

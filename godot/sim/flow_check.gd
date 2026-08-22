@@ -164,6 +164,8 @@ func _check_save_load() -> void:
 	_slot_button(0).pressed.emit()
 	await process_frame
 	_eq("โหลดแล้วหน้าโหลดต้องปิดเอง", _main.save_panel == null, true)
+	# โต๊ะคนเดียวไม่มีใครให้ส่งเครื่องให้ — โหลดแล้วต้องไม่มีม่านขึ้นมาคั่นเล่นเปล่าๆ
+	_eq("เกมคนเดียวโหลดแล้วต้องไม่มีม่าน", _main.pass_screen == null, true)
 	_eq("ย้อนกลับไปเดือนที่บันทึกไว้", _main.m.month, month_at_save)
 	# กฎเหล็กข้อ 4: state ตัวสุ่มต้องกลับมาด้วย ไม่งั้นผู้เล่นเซฟ-โหลดรีดผลที่ชอบได้
 	_eq("state ของตัวสุ่มกลับมาเหมือนตอนบันทึก", _main.m.rng.s, rng_at_save)
@@ -281,7 +283,20 @@ func _check_hotseat_setup() -> void:
 	await process_frame
 
 	# --- เซฟ/โหลดกลางโต๊ะ hot-seat ---
-	# คนที่กดโหลดอาจไม่ใช่คนที่ถึงตา ม่านจึงต้องกลับมาเองหลังโหลด
+	# คนที่กดโหลดอาจไม่ใช่คนที่ถึงตา ม่านจึงต้องกลับมาเองหลังโหลด และถ้าคนที่ถึงตามี
+	# pending_dream ค้างอยู่ในไฟล์เซฟ ม่านต้องขึ้นก่อนการ์ดความฝันเสมอ เหมือนตอนจบตาปกติ
+	# (Critical 1 จากรอบรีวิว 1 — `_adopt_match()` เป็นคนยกม่านให้ก่อน `_refresh()` ของมันเอง)
+	var dream_p = main2.m.get_current()
+	dream_p.finished = main2.m.month
+	dream_p.pending_dream = true
+	main2._refresh()
+	_eq("ตั้ง pending_dream ค้างไว้ต้องเด้งการ์ดความฝันก่อนเซฟ", main2.dream_screen != null, true)
+	# ปิดการ์ดทิ้งตรงๆ โดยไม่ตัดสินใจ (ไม่ผ่าน _on_dream_chosen ซึ่งจะเคลียร์ pending_dream)
+	# ต้องให้ pending_dream ยังเป็นจริงตอนเซฟ ถึงจะทดสอบลำดับม่าน→การ์ดความฝันตอนโหลดได้จริง
+	main2._close_screen(main2.dream_screen)
+	main2.dream_screen = null
+	await process_frame
+
 	main2._open_save_panel("save")
 	await process_frame
 	main2.save_panel.save_requested.emit("1")
@@ -298,7 +313,16 @@ func _check_hotseat_setup() -> void:
 	_eq("โหลดแล้วถึงตาคนเดิม", main2.m.turn, turn_at_save)
 	_eq("คนที่ถึงตายังเป็นคนเดิม", String(main2.m.get_current().pname), name_at_save)
 	_eq("โหลดกลางโต๊ะหลายคนต้องมีม่านกั้น", main2.pass_screen != null, true)
+	# นี่คือประเด็นหลักของ Critical 1: pending_dream ที่ค้างมาในไฟล์เซฟต้องไม่แซงม่าน
+	_eq("ม่านต้องขึ้นก่อนการ์ดความฝันเสมอ แม้มี pending_dream ค้างมาในไฟล์เซฟ",
+		main2.dream_screen == null, true)
 	main2.pass_screen._btn.pressed.emit()
+	await process_frame
+	_eq("เปิดม่านแล้วการ์ดความฝันที่ค้างมาจากไฟล์เซฟค่อยโผล่", main2.dream_screen != null, true)
+
+	# เก็บกวาดให้ main2 ว่างก่อน queue_free() — เหมือนที่ _check_match_to_phase2() ทำ
+	main2.dream_screen.skip_to(3)
+	main2.dream_screen._keep_btn.pressed.emit()
 	await process_frame
 
 	main2.queue_free()

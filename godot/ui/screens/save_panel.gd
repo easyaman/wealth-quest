@@ -139,7 +139,7 @@ func _describe(info: Dictionary) -> String:
 	var stage := "ด่าน 1" if phase == 1 else ("ด่าน 2" if phase == 2 else "ทำความฝันสำเร็จ")
 	# ไฟล์เซฟก่อนมี hot-seat ไม่มีช่อง humans — ของพวกนั้นคือเกมคนเดียวทั้งหมด
 	var humans: int = int(info.get("humans", 1))
-	var table := "" if humans <= 1 else "hot-seat %d คน · " % humans
+	var table := "" if humans <= 1 else "ผลัดกันเล่น %d คน · " % humans
 	return "%sเดือนที่ %d · %s %s · สุทธิ %s฿ · %s · %s" % [
 		table, int(info.get("month", 0)), String(info.get("job_icon", "")),
 		String(info.get("job", "")), WQFmt.m(float(info.get("net_worth", 0))),

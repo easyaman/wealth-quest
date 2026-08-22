@@ -60,14 +60,18 @@ static func to_dict(m: WQMatch, extra: Dictionary = {}) -> Dictionary:
 ## ไม่งั้นแค่เปิดหน้ารายการเซฟก็ต้องประกอบเกมหกเกมพร้อมกัน
 static func meta_of(m: WQMatch) -> Dictionary:
 	var who = null
+	var humans := 0
 	for p in m.players:
 		if not p.is_ai:
-			who = p
-			break
+			humans += 1
+			if who == null: who = p
 	if who == null and not m.players.is_empty(): who = m.players[0]
 	return {
 		"saved_at": int(Time.get_unix_time_from_system()),
 		"month": m.month, "mode": m.mode,
+		## จำนวนคนจริง — ไม่งั้นเซฟของโต๊ะสามคนกับของเกมคนเดียวหน้าตาเหมือนกันในหน้ารายการ
+		## ไฟล์เซฟเก่าไม่มีช่องนี้ ฝั่งที่อ่านต้อง `get("humans", 1)` เสมอ
+		"humans": humans,
 		"name": String(who.pname) if who != null else "",
 		"job": String(who.job.get("name", "")) if who != null else "",
 		"job_icon": String(who.job.get("icon", "")) if who != null else "",

@@ -46,6 +46,25 @@ func _init() -> void:
 
 	_check_slots(m)
 
+	# --- โต๊ะ hot-seat: หัวไฟล์ต้องบอกจำนวนคนจริง ---
+	# ไม่งั้นเซฟของเกมสามคนกับเซฟของเกมคนเดียวหน้าตาเหมือนกันจนแยกไม่ออกในหน้ารายการ
+	var hs := WQMatch.new()
+	hs.setup({"mode": "multi", "seed": 20260815, "players": [
+		{"name": "ผู้เล่น 1", "job_id": "teacher", "is_ai": false},
+		{"name": "ผู้เล่น 2", "job_id": "nurse", "is_ai": false},
+		{"name": "บอท A", "job_id": "pilot", "is_ai": true}]})
+	_eq("หัวไฟล์นับคนจริงถูก", int(WQSave.meta_of(hs).get("humans", -1)), 2)
+	_eq("หัวไฟล์เก็บโหมดไว้ด้วย", String(WQSave.meta_of(hs).get("mode", "")), "multi")
+
+	# โหลดกลับมาต้องได้โต๊ะเดิม ทั้งจำนวนคน ใครเป็นบอท และถึงตาใคร
+	hs.turn = 1
+	# ชื่อ hs_round_trip (ไม่ใช่ round_trip เฉยๆ) เพราะฟังก์ชันนี้มีตัวแปร round_trip อยู่แล้วด้านบน
+	var hs_round_trip := WQSave.from_dict(WQSave.to_dict(hs))
+	_eq("โหลดกลับมาได้ผู้เล่นครบ", hs_round_trip.players.size(), 3)
+	_eq("ใครเป็นบอทยังเหมือนเดิม", bool(hs_round_trip.players[2].is_ai), true)
+	_eq("คนจริงยังเป็นคนจริง", bool(hs_round_trip.players[1].is_ai), false)
+	_eq("ถึงตาใครยังเหมือนเดิม", hs_round_trip.turn, 1)
+
 	print("save_check: %s" % ("ผ่านทั้งหมด ✅" if _fails == 0 else "ไม่ผ่าน %d ข้อ ❌" % _fails))
 	quit(1 if _fails > 0 else 0)
 

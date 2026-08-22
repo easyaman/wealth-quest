@@ -280,6 +280,27 @@ func _check_hotseat_setup() -> void:
 	main2.dream_screen._keep_btn.pressed.emit()
 	await process_frame
 
+	# --- เซฟ/โหลดกลางโต๊ะ hot-seat ---
+	# คนที่กดโหลดอาจไม่ใช่คนที่ถึงตา ม่านจึงต้องกลับมาเองหลังโหลด
+	main2._open_save_panel("save")
+	await process_frame
+	main2.save_panel.save_requested.emit("1")
+	await process_frame
+
+	var turn_at_save: int = main2.m.turn
+	var name_at_save := String(main2.m.get_current().pname)
+	main2._open_save_panel("load")
+	await process_frame
+	main2.save_panel.load_requested.emit("1")
+	await process_frame
+
+	_eq("โหลดแล้วได้โต๊ะขนาดเดิม", main2.m.players.size(), WQSetup.SEATS)
+	_eq("โหลดแล้วถึงตาคนเดิม", main2.m.turn, turn_at_save)
+	_eq("คนที่ถึงตายังเป็นคนเดิม", String(main2.m.get_current().pname), name_at_save)
+	_eq("โหลดกลางโต๊ะหลายคนต้องมีม่านกั้น", main2.pass_screen != null, true)
+	main2.pass_screen._btn.pressed.emit()
+	await process_frame
+
 	main2.queue_free()
 	await process_frame
 

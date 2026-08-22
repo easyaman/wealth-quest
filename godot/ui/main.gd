@@ -548,6 +548,8 @@ func _on_load_slot(slot: String) -> void:
 	tutorial.resume(int(WQSave.read_extra(slot).get("tut", -1)))
 	m.log_line("📂 โหลดจากช่อง %s แล้ว" % slot, "good", null)
 	_refresh()
+	# คนที่กดโหลดอาจไม่ใช่คนที่ถึงตา — ม่านต้องกลับมาเองเหมือนตอนจบตา
+	_maybe_pass_screen()
 
 
 func _end_turn() -> void:

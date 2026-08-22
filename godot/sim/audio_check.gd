@@ -592,11 +592,9 @@ func _check_wiring() -> void:
 	main.setup_screen._job._confirm.pressed.emit()
 	await process_frame
 
-	var human = null
-	for p in main.m.players:
-		if not p.is_ai: human = p
 	_eq("main.gd ผูกแมตช์เข้ากับ WQAudio แล้ว", WQAudio._match, main.m)
-	_eq("main.gd ผูกผู้เล่นคนจริงเข้ากับ WQAudio แล้ว", WQAudio._player, human)
+	var human = main.m.get_current()
+	_eq("main.gd ผูกคนที่ถึงตาเข้ากับ WQAudio แล้ว", WQAudio._player, human)
 	## get_current() เป็นบอทได้ระหว่างตาบอท — main.gd เองก็มี `if p.is_ai: return` กันไว้หลายจุด
 	_eq("ที่ผูกไว้ต้องไม่ใช่บอท", bool(WQAudio._player.is_ai), false)
 
@@ -712,6 +710,37 @@ func _check_wiring() -> void:
 	_eq("การ์ดใบเดิมถูก refresh ซ้ำ ต้องไม่มีเสียงอีก",
 		WQAudio.played.has("tutorial_step"), false)
 
+	# --- โต๊ะ hot-seat: เสียงต้องย้ายตามคนที่ถึงตา ---
+	# เดิมผูกกับคนจริง "คนแรก" ครั้งเดียวตอนเริ่มเกม ผู้เล่นคนที่ 2-4 จึงเงียบสนิททั้งเกม
+	# และเพลงวิกฤตอ่านสุขภาพของคนแรกตลอด ทั้งที่คนที่กำลังเล่นอาจสุขภาพดีอยู่
+	var main2: Control = load("res://ui/Main.tscn").instantiate()
+	root.add_child(main2)
+	await process_frame
+	main2.mode_screen.buttons[1].pressed.emit()      # เล่น 2 คน
+	await process_frame
+	for _seat in 2:
+		main2.setup_screen.skip_to_jobs(4)
+		main2.setup_screen._job.select(String(main2.setup_screen.offer.jobs[0].id))
+		main2.setup_screen._job._confirm.pressed.emit()
+		await process_frame
+
+	# โต๊ะ hot-seat มีม่านคั่นตั้งแต่ตาแรก — เปิดมันก่อน ไม่งั้นม่านของตาถัดไปจะไม่ขึ้น
+	main2.pass_screen._btn.pressed.emit()
+	await process_frame
+
+	var first = main2.m.get_current()
+	_eq("เริ่มเกมผูกเสียงกับคนแรก", WQAudio._player, first)
+	main2._end_turn()
+	await process_frame
+	main2.pass_screen._btn.pressed.emit()
+	await process_frame
+	var second = main2.m.get_current()
+	_ne_obj("ถึงตาคนที่สองแล้วเป็นคนละคน", second, first)
+	_eq("เสียงย้ายตามคนที่ถึงตา", WQAudio._player, second)
+	_eq("และยังไม่ใช่บอท", bool(WQAudio._player.is_ai), false)
+	main2.queue_free()
+	await process_frame
+
 	root.remove_child(main)
 	main.free()
 	_completed["wiring"] = true
@@ -774,3 +803,9 @@ func _eq(label: String, got, want) -> void:
 	if got == want: return
 	_fails += 1
 	print("  ❌ %s: ได้ %s ต้องการ %s" % [label, str(got), str(want)])
+
+
+func _ne_obj(label: String, got, unwanted) -> void:
+	if got != unwanted: return
+	_fails += 1
+	print("  ❌ %s: ได้คนเดิม (%s)" % [label, str(got)])

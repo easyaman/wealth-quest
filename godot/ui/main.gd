@@ -238,13 +238,7 @@ func _adopt_match(new_match: WQMatch) -> void:
 		m.month_ended.disconnect(_on_month_ended)
 	m = new_match
 	m.month_ended.connect(_on_month_ended)
-	## เสียงต้องตามผู้เล่นคนจริงเสมอ ไม่ใช่ `get_current()` ซึ่งเป็นบอทได้ระหว่างตาบอท
-	## (main.gd เองก็มี `if p.is_ai: return` กันไว้หลายจุดด้วยเหตุผลเดียวกัน)
 	WQAudio.bind(m)
-	for pl in m.players:
-		if not pl.is_ai:
-			WQAudio.bind_player(pl)
-			break
 	city.bind(m)
 	tutorial.bind(m.get_current(), m, {
 		"time": time_budget, "deals": deal_market, "city": city, "shop": shop,
@@ -416,6 +410,10 @@ func _refresh() -> void:
 	if m == null: return
 	var p = m.get_current()
 	if p == null: return
+	## เสียงต้องตามคนที่ถึงตา ไม่ใช่ล็อกไว้กับคนจริงคนแรกตลอดเกม — ในโต๊ะ hot-seat
+	## คนที่ 2-4 จะเงียบสนิททั้งเกม และเพลงวิกฤตจะอ่านสุขภาพของคนแรกตลอด
+	## ระหว่างตาบอทไม่ต้องย้าย เสียงของบอทไม่ควรดัง (กฎเดียวกับที่ main.gd ใช้อยู่หลายจุด)
+	if not p.is_ai: WQAudio.bind_player(p)
 	time_budget.bind(p)
 	deal_market.bind(p, m)
 	statement.bind(p)

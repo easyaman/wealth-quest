@@ -230,6 +230,7 @@ func _check_hotseat_setup() -> void:
 	# ตั้งที่นั่งสุดท้ายเสร็จ เครื่องยังอยู่ในมือผู้เล่นคนสุดท้าย ถ้าไม่มีม่านคั่น
 	# จอของผู้เล่น 1 (เงินสด หนี้ ดีลที่ถืออยู่) จะโผล่ใส่หน้าเขาทันที
 	_eq("ตั้งโต๊ะเสร็จต้องมีม่านก่อนตาแรก", main2.pass_screen != null, true)
+	_has("ม่านแรกบอกชื่อคนที่ถึงตาจริง", main2.pass_screen._name.text, String(main2.m.get_current().pname))
 	main2.pass_screen._btn.pressed.emit()
 	await process_frame
 	_eq("กดพร้อมแล้วม่านแรกต้องเปิด", main2.pass_screen == null, true)
@@ -254,6 +255,30 @@ func _check_hotseat_setup() -> void:
 	await process_frame
 	_eq("กดพร้อมแล้วม่านต้องเปิด", main2.pass_screen == null, true)
 	_eq("เปิดม่านแล้วยังเป็นตาคนเดิม", main2.m.get_current(), p2)
+
+	# --- ลำดับม่าน vs การ์ดความฝัน ---
+	# คนถัดไปผ่านด่าน 1 พอดี — ม่านต้องมาก่อน การ์ดความฝันห้ามโผล่ใส่หน้าคนที่กำลังจะส่งเครื่อง
+	# ผูก pending_dream กับ "คนที่กำลังจะเป็นตาถัดไปจริง" (อ่านจาก get_current() ก่อนเรียก
+	# _end_turn() เสมอ) ไม่ใช่ผูกกับผู้เล่นคนใดคนหนึ่งตายตัว เพราะโต๊ะสองคนจริง+สองบอทนี้
+	# ตากลับมาเป็นของคนเดิม (p2) ทันทีหลัง _end_turn() หนึ่งครั้ง (บอทเล่นเองแล้ว start_index
+	# หมุนพอดีมาลงที่ p2 อีกรอบ) — บั๊กที่ทดสอบอยู่ที่ "ลำดับ" ม่าน→_refresh() ไม่ได้ขึ้นกับว่า
+	# ใครเป็นคนถัดไป จึงยังทดสอบโค้ดพาธเดียวกับที่แก้ใน _end_turn() ได้ตรงจุด
+	var nxt = main2.m.get_current()
+	nxt.finished = main2.m.month
+	nxt.pending_dream = true
+	main2._end_turn()
+	await process_frame
+	_eq("ม่านขึ้นก่อน", main2.pass_screen != null, true)
+	_eq("การ์ดความฝันต้องยังไม่โผล่", main2.dream_screen == null, true)
+	main2.pass_screen._btn.pressed.emit()
+	await process_frame
+	_eq("เปิดม่านแล้วการ์ดความฝันค่อยมา", main2.dream_screen != null, true)
+
+	# เก็บกวาดให้โต๊ะกลับสู่สถานะเล่นปกติ — เทสต์ถัดไปในฟังก์ชันนี้ (บันทึก/โหลด) ต้องไม่เจอ
+	# โอเวอร์เลย์ค้าง เหมือนที่ _check_match_to_phase2() ทำ
+	main2.dream_screen.skip_to(3)
+	main2.dream_screen._keep_btn.pressed.emit()
+	await process_frame
 
 	main2.queue_free()
 	await process_frame

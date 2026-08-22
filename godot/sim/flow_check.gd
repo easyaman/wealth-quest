@@ -226,6 +226,35 @@ func _check_hotseat_setup() -> void:
 	# การสอนชี้วิดเจ็ตของคนเดียว ในโต๊ะหลายคนมันจะชี้ผิดคนทันทีที่เปลี่ยนตา
 	_eq("โต๊ะหลายคนต้องไม่เปิดการสอน", main2.tutorial.running, false)
 
+	# --- ม่านส่งเครื่อง ---
+	# ตั้งที่นั่งสุดท้ายเสร็จ เครื่องยังอยู่ในมือผู้เล่นคนสุดท้าย ถ้าไม่มีม่านคั่น
+	# จอของผู้เล่น 1 (เงินสด หนี้ ดีลที่ถืออยู่) จะโผล่ใส่หน้าเขาทันที
+	_eq("ตั้งโต๊ะเสร็จต้องมีม่านก่อนตาแรก", main2.pass_screen != null, true)
+	main2.pass_screen._btn.pressed.emit()
+	await process_frame
+	_eq("กดพร้อมแล้วม่านแรกต้องเปิด", main2.pass_screen == null, true)
+
+	var p1 = main2.m.get_current()
+	main2._end_turn()
+	await process_frame
+	_eq("จบตาคนแรกแล้วต้องมีม่านกั้น", main2.pass_screen != null, true)
+	var p2 = main2.m.get_current()
+	_ne_obj("ม่านกั้นให้คนละคนกับคนที่เพิ่งเล่นจบ", p2, p1)
+	_has("ม่านบอกว่าเป็นตาของใคร", main2.pass_screen._name.text, String(p2.pname))
+
+	# ม่านต้องกันคีย์ SPACE ด้วย ไม่งั้นเคาะทะลุไปจบตาของคนที่ยังไม่ได้เริ่มเล่น
+	var turn_before: int = main2.m.turn
+	var key := InputEventKey.new()
+	key.keycode = KEY_SPACE
+	key.pressed = true
+	main2._unhandled_input(key)
+	_eq("เคาะ SPACE ทะลุม่านไม่ได้", main2.m.turn, turn_before)
+
+	main2.pass_screen._btn.pressed.emit()
+	await process_frame
+	_eq("กดพร้อมแล้วม่านต้องเปิด", main2.pass_screen == null, true)
+	_eq("เปิดม่านแล้วยังเป็นตาคนเดิม", main2.m.get_current(), p2)
+
 	main2.queue_free()
 	await process_frame
 
@@ -251,3 +280,9 @@ func _ne_int(label: String, got: int, unwanted: int) -> void:
 	if got != unwanted: return
 	_fails += 1
 	print("  ❌ %s: ค่าซ้ำกัน (%d)" % [label, got])
+
+
+func _ne_obj(label: String, got, unwanted) -> void:
+	if got != unwanted: return
+	_fails += 1
+	print("  ❌ %s: ได้คนเดิม (%s)" % [label, str(got)])

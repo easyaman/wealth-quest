@@ -38,6 +38,7 @@ var log_label: RichTextLabel
 var lessons: WQLessons
 var setup_screen: WQSetupScreen
 var mode_screen: WQModeSelect     ## หน้าเลือกจำนวนคน — มีอยู่แปลว่ายังไม่ได้เริ่มตั้งโต๊ะ
+var pass_screen: WQPassScreen     ## ม่านส่งเครื่อง — มีอยู่แปลว่ากำลังรอคนถัดไปกดพร้อม
 var _humans := 1                  ## คนจริงกี่คนในโต๊ะนี้
 var _seats: Array = []            ## ที่นั่งของคนจริงที่ตั้งเสร็จแล้ว
 var _seat_idx := 0                ## กำลังตั้งที่นั่งที่เท่าไร (นับจาก 0)
@@ -218,6 +219,11 @@ func _start_match() -> void:
 		me.finished = m.month
 		me.pending_dream = true
 		_refresh()
+
+	# ม่านต้องมาตั้งแต่ตาแรกของโต๊ะ hot-seat — คนที่เพิ่งตั้งที่นั่งสุดท้ายยังถือเครื่องอยู่
+	# ถ้าเปิดจอเลย เขาจะเห็นเงินสด หนี้ และดีลของผู้เล่น 1 ก่อนเกมจะเริ่มด้วยซ้ำ
+	# (ต้นแบบเว็บก็ทำแบบนี้ — `nextSetup()` เรียก `afterTurnChange()` ที่ `ui.html:419`)
+	_maybe_pass_screen()
 
 
 ## รับแมตช์มาใช้เป็นเกมปัจจุบัน — ใช้ทั้งตอนเริ่มเกมใหม่และตอน **โหลดไฟล์เซฟ**
@@ -547,12 +553,43 @@ func _end_turn() -> void:
 	if m == null or dream_screen != null or save_panel != null: return
 	m.end_turn()
 	_refresh()
+	_maybe_pass_screen()
+
+
+## คนจริงในโต๊ะมีกี่คน — อ่านจากแมตช์ ไม่ใช่จาก `_humans` เพราะโหลดไฟล์เซฟมาก็ต้องรู้
+func _human_count() -> int:
+	if m == null: return 0
+	var n := 0
+	for pl in m.players:
+		if not pl.is_ai: n += 1
+	return n
+
+
+## ม่านส่งเครื่อง — โผล่ก่อนตาของคนจริงทุกคนเมื่อโต๊ะมีคนจริงมากกว่าหนึ่ง
+## เล่นคนเดียวไม่มีม่านเลย ไม่มีใครให้ส่งเครื่องให้
+func _maybe_pass_screen() -> void:
+	if m == null or pass_screen != null: return
+	if _human_count() < 2: return
+	var p = m.get_current()
+	if p == null or p.is_ai: return
+	pass_screen = WQPassScreen.new()
+	pass_screen.ready_pressed.connect(_on_pass_ready)
+	add_child(pass_screen)
+	pass_screen.show_player(p)
+
+
+func _on_pass_ready() -> void:
+	_close_screen(pass_screen)
+	pass_screen = null
+	_refresh()
 
 
 ## ผู้เล่นออกจากสนามแข่งหนูได้แล้ว (`pending_dream` ตั้งตอนสิ้นเดือนใน `settle()`)
 ## ต้องเด้งหน้าทอยความฝันทันที ไม่ใช่ปล่อยให้เล่นต่อโดยไม่รู้ว่าตัวเองผ่านด่าน 1 ไปแล้ว
 func _check_pending_dream() -> void:
-	if m == null or dream_screen != null: return
+	# ม่านต้องมาก่อนเสมอ — ต้นแบบเว็บเช็คความฝันก่อนม่าน (`ui.html:437`) ผลคือการ์ด
+	# ความฝันของคุณเด้งใส่หน้าคนที่เพิ่งส่งเครื่องมาให้ ที่นี่รอให้เจ้าตัวกดพร้อมก่อน
+	if m == null or dream_screen != null or pass_screen != null: return
 	var p = m.get_current()
 	if p == null or p.is_ai or not p.pending_dream: return
 	dream_screen = WQDreamRoll.new()
@@ -573,8 +610,8 @@ func _on_dream_chosen(dream: Dictionary, retire: bool) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	# ยังไม่มีเกมให้จบตา หรือมีหน้าจออื่นเปิดค้างอยู่
-	if m == null or dream_screen != null or save_panel != null: return
+	# ยังไม่มีเกมให้จบตา หรือมีหน้าจออื่นเปิดค้างอยู่ (ม่านส่งเครื่องก็นับ — เคาะทะลุไม่ได้)
+	if m == null or dream_screen != null or save_panel != null or pass_screen != null: return
 	if e is InputEventKey and e.pressed and e.keycode == KEY_SPACE:
 		_end_turn()
 
